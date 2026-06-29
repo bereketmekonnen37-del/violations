@@ -1,0 +1,181 @@
+import * as XLSX from 'xlsx';
+import type {
+  UnfilteredContinuousFile,
+  UnfilteredFile,
+  UnfilteredNightFile,
+} from '../types';
+import { buildDriverLookup, type DriverNameLookup } from './driverLookup';
+import type { DriverRecord } from '../types';
+import {
+  CONTINUOUS_MIN_SECONDS,
+  NIGHTS_MIN_SECONDS,
+  SPEED_MIN_SECONDS,
+  parseDurationSeconds,
+} from './duration';
+
+export interface MasterFleetRow {
+  vid: string;
+  driverName: string;
+  speed: number;
+  nights: number;
+  continuous: number;
+  total: number;
+}
+
+const normalizeVidKey = (vid: string): string =>
+  String(vid ?? '').replace(/[^0-9a-zA-Z]+/g, '').toLowerCase();
+
+const cleanVidDisplay = (vid: string): string => String(vid ?? '').trim();
+
+interface AggregateInput {
+  speedFiles: UnfilteredFile[];
+  nightFiles: UnfilteredNightFile[];
+  continuousFiles: UnfilteredContinuousFile[];
+  driverRecords: DriverRecord[];
+}
+
+interface Bucket {
+  vid: string;
+  vidKey: string;
+  fallbackName: string;
+  speed: number;
+  nights: number;
+  continuous: number;
+}
+
+const getBucket = (
+  buckets: Map<string, Bucket>,
+  vid: string,
+  fallbackName: string,
+): Bucket | null => {
+  const vidKey = normalizeVidKey(vid);
+  if (!vidKey) return null;
+  let b = buckets.get(vidKey);
+  if (!b) {
+    b = {
+      vid: cleanVidDisplay(vid),
+      vidKey,
+      fallbackName: '',
+      speed: 0,
+      nights: 0,
+      continuous: 0,
+    };
+    buckets.set(vidKey, b);
+  }
+  if (!b.fallbackName && fallbackName) b.fallbackName = fallbackName;
+  return b;
+};
+
+export const aggregateMasterFleet = ({
+  speedFiles,
+  nightFiles,
+  continuousFiles,
+  driverRecords,
+}: AggregateInput): MasterFleetRow[] => {
+  const resolve: DriverNameLookup = buildDriverLookup(driverRecords);
+  const buckets = new Map<string, Bucket>();
+
+  speedFiles.forEach((file) => {
+    file.drivers.forEach((driver) => {
+      const b = getBucket(buckets, driver.vid, driver.driverName);
+      if (!b) return;
+      driver.events.forEach((event) => {
+        const seconds = parseDurationSeconds(event.duration);
+        if (Number.isFinite(seconds) && seconds >= SPEED_MIN_SECONDS) {
+          b.speed += 1;
+        }
+      });
+    });
+  });
+
+  nightFiles.forEach((file) => {
+    file.drivers.forEach((driver) => {
+      const b = getBucket(buckets, driver.vid, driver.driverName);
+      if (!b) return;
+      driver.rows.forEach((row) => {
+        const seconds = parseDurationSeconds(row.duration);
+        if (Number.isFinite(seconds) && seconds >= NIGHTS_MIN_SECONDS) {
+          b.nights += 1;
+        }
+      });
+    });
+  });
+
+  continuousFiles.forEach((file) => {
+    file.drivers.forEach((driver) => {
+      const b = getBucket(buckets, driver.vid, driver.driverName);
+      if (!b) return;
+      driver.rows.forEach((row) => {
+        const seconds = parseDurationSeconds(row.duration);
+        if (Number.isFinite(seconds) && seconds >= CONTINUOUS_MIN_SECONDS) {
+          b.continuous += 1;
+        }
+      });
+    });
+  });
+
+  const rows: MasterFleetRow[] = [];
+  buckets.forEach((b) => {
+    const total = b.speed + b.nights + b.continuous;
+    if (total === 0) return;
+    rows.push({
+      vid: b.vid,
+      driverName: resolve(b.vid) || b.fallbackName || '',
+      speed: b.speed,
+      nights: b.nights,
+      continuous: b.continuous,
+      total,
+    });
+  });
+
+  return rows.sort((a, b) => {
+    if (b.total !== a.total) return b.total - a.total;
+    return a.vid.localeCompare(b.vid);
+  });
+};
+
+const MASTER_COLUMNS = [
+  'VID',
+  'Driver Name',
+  'Nights',
+  'Speed',
+  'Continuous',
+  'Total',
+] as const;
+
+interface SheetRow {
+  VID: string;
+  'Driver Name': string;
+  Nights: number;
+  Speed: number;
+  Continuous: number;
+  Total: number;
+}
+
+export const downloadMasterFleetCsv = (
+  rows: MasterFleetRow[],
+  filename = `fleetwatch-master-fleet-${new Date().toISOString().slice(0, 10)}.csv`,
+): number => {
+  const sheetRows: SheetRow[] = rows.map((r) => ({
+    VID: r.vid,
+    'Driver Name': r.driverName,
+    Nights: r.nights,
+    Speed: r.speed,
+    Continuous: r.continuous,
+    Total: r.total,
+  }));
+  const ws = XLSX.utils.json_to_sheet(sheetRows, {
+    header: MASTER_COLUMNS as unknown as string[],
+  });
+  const csv = XLSX.utils.sheet_to_csv(ws);
+  const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  return rows.length;
+};
