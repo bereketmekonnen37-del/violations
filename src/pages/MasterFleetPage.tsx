@@ -18,7 +18,9 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { StatCard } from '../components/ui/StatCard';
 import {
   aggregateMasterFleet,
+  collectFilteredEvents,
   downloadMasterFleetCsv,
+  type FilteredEvents,
   type MasterFleetRow,
 } from '../lib/masterFleet';
 import {
@@ -132,6 +134,22 @@ export const MasterFleetPage = () => {
     [speedFiles, nightFiles, continuousFiles, driverRecords],
   );
 
+  const filteredEvents = useMemo(
+    () =>
+      collectFilteredEvents({
+        speedFiles,
+        nightFiles,
+        continuousFiles,
+        driverRecords,
+      }),
+    [speedFiles, nightFiles, continuousFiles, driverRecords],
+  );
+
+  const [activeTab, setActiveTab] = useState<'speed' | 'nights' | 'continuous'>(
+    'speed',
+  );
+  const [eventQuery, setEventQuery] = useState('');
+
   const totals = useMemo(
     () =>
       rows.reduce(
@@ -240,6 +258,14 @@ export const MasterFleetPage = () => {
             </div>
           </div>
 
+          <FilteredEventsPanel
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            query={eventQuery}
+            setQuery={setEventQuery}
+            events={filteredEvents}
+          />
+
           <div className="surface mt-8 rounded-2xl p-5 sm:p-7">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -327,6 +353,289 @@ export const MasterFleetPage = () => {
           </div>
         </>
       )}
+    </div>
+  );
+};
+
+type EventTab = 'speed' | 'nights' | 'continuous';
+
+const TAB_META: Record<
+  EventTab,
+  { label: string; icon: typeof Gauge; threshold: number }
+> = {
+  speed: { label: 'Speed', icon: Gauge, threshold: SPEED_MIN_SECONDS },
+  nights: { label: 'Nights', icon: Moon, threshold: NIGHTS_MIN_SECONDS },
+  continuous: {
+    label: 'Continuous',
+    icon: RouteIcon,
+    threshold: CONTINUOUS_MIN_SECONDS,
+  },
+};
+
+const matchesQuery = (q: string, ...fields: string[]): boolean => {
+  if (!q) return true;
+  const needle = q.toLowerCase();
+  return fields.some((f) => (f ?? '').toLowerCase().includes(needle));
+};
+
+interface FilteredEventsPanelProps {
+  activeTab: EventTab;
+  setActiveTab: (tab: EventTab) => void;
+  query: string;
+  setQuery: (q: string) => void;
+  events: FilteredEvents;
+}
+
+const FilteredEventsPanel = ({
+  activeTab,
+  setActiveTab,
+  query,
+  setQuery,
+  events,
+}: FilteredEventsPanelProps) => {
+  const counts: Record<EventTab, number> = {
+    speed: events.speed.length,
+    nights: events.nights.length,
+    continuous: events.continuous.length,
+  };
+
+  const speedRows = events.speed.filter((e) =>
+    matchesQuery(query, e.vid, e.driverName, e.overspeedPosition, e.duration),
+  );
+  const nightRows = events.nights.filter((e) =>
+    matchesQuery(query, e.vid, e.driverName, e.timeA, e.duration),
+  );
+  const contRows = events.continuous.filter((e) =>
+    matchesQuery(query, e.vid, e.driverName, e.timeA, e.duration),
+  );
+
+  return (
+    <div className="surface mt-8 rounded-2xl p-5 sm:p-7">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-base font-semibold text-ink-900 dark:text-white">
+            Filtered events (passing thresholds)
+          </h3>
+          <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
+            Switch tabs to verify which raw events were counted into each
+            category.
+          </p>
+        </div>
+        <div className="relative sm:w-72">
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
+          />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search VID, driver, time, location"
+            className="input-base !pl-9"
+          />
+        </div>
+      </div>
+
+      <div className="mt-4 inline-flex rounded-xl border border-ink-100 bg-ink-50 p-1 dark:border-ink-800 dark:bg-ink-900">
+        {(Object.keys(TAB_META) as EventTab[]).map((t) => {
+          const { label, icon: Icon } = TAB_META[t];
+          const active = t === activeTab;
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setActiveTab(t)}
+              className={
+                'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ' +
+                (active
+                  ? 'bg-white text-ink-900 shadow-card dark:bg-ink-950 dark:text-white'
+                  : 'text-ink-500 hover:text-ink-900 dark:text-ink-400 dark:hover:text-white')
+              }
+            >
+              <Icon size={13} />
+              {label}
+              <span
+                className={
+                  'ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ' +
+                  (active
+                    ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-900'
+                    : 'bg-ink-200/70 text-ink-600 dark:bg-ink-800 dark:text-ink-300')
+                }
+              >
+                {counts[t]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="mt-3 text-[11px] text-ink-500 dark:text-ink-400">
+        Threshold: {formatThreshold(TAB_META[activeTab].threshold)} · Showing{' '}
+        {activeTab === 'speed'
+          ? speedRows.length
+          : activeTab === 'nights'
+            ? nightRows.length
+            : contRows.length}{' '}
+        of {counts[activeTab]}
+      </p>
+
+      <div className="mt-4 max-h-[420px] overflow-auto rounded-xl border border-ink-100 dark:border-ink-800">
+        {activeTab === 'speed' && (
+          <table className="min-w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-ink-50 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-500 shadow-[0_1px_0_rgba(0,0,0,0.05)] dark:bg-ink-900 dark:text-ink-400">
+              <tr>
+                <th className="px-4 py-3">VID</th>
+                <th className="px-4 py-3">Driver</th>
+                <th className="px-4 py-3">Start</th>
+                <th className="px-4 py-3">End</th>
+                <th className="px-4 py-3">Duration</th>
+                <th className="px-4 py-3">Top speed</th>
+                <th className="px-4 py-3">Position</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
+              {speedRows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-8 text-center text-sm text-ink-500 dark:text-ink-400"
+                  >
+                    No speed events passed the threshold.
+                  </td>
+                </tr>
+              ) : (
+                speedRows.map((e) => (
+                  <tr key={e.id} className="bg-white dark:bg-ink-900">
+                    <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
+                      {e.vid}
+                    </td>
+                    <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                      {e.driverName || <span className="text-ink-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
+                      {e.start}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
+                      {e.end}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
+                      {e.duration}
+                    </td>
+                    <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                      {e.topSpeed}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-ink-700 dark:text-ink-200">
+                      {e.overspeedPosition || (
+                        <span className="text-ink-400">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        )}
+
+        {activeTab === 'nights' && (
+          <table className="min-w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-ink-50 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-500 shadow-[0_1px_0_rgba(0,0,0,0.05)] dark:bg-ink-900 dark:text-ink-400">
+              <tr>
+                <th className="px-4 py-3">VID</th>
+                <th className="px-4 py-3">Driver</th>
+                <th className="px-4 py-3">Time A</th>
+                <th className="px-4 py-3">Time B</th>
+                <th className="px-4 py-3">Duration</th>
+                <th className="px-4 py-3">Length</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
+              {nightRows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-4 py-8 text-center text-sm text-ink-500 dark:text-ink-400"
+                  >
+                    No night events passed the threshold.
+                  </td>
+                </tr>
+              ) : (
+                nightRows.map((e) => (
+                  <tr key={e.id} className="bg-white dark:bg-ink-900">
+                    <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
+                      {e.vid}
+                    </td>
+                    <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                      {e.driverName || <span className="text-ink-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
+                      {e.timeA}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
+                      {e.timeB}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
+                      {e.duration}
+                    </td>
+                    <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                      {e.length || <span className="text-ink-400">—</span>}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        )}
+
+        {activeTab === 'continuous' && (
+          <table className="min-w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-ink-50 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-500 shadow-[0_1px_0_rgba(0,0,0,0.05)] dark:bg-ink-900 dark:text-ink-400">
+              <tr>
+                <th className="px-4 py-3">VID</th>
+                <th className="px-4 py-3">Driver</th>
+                <th className="px-4 py-3">Time A</th>
+                <th className="px-4 py-3">Time B</th>
+                <th className="px-4 py-3">Duration</th>
+                <th className="px-4 py-3">Length</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
+              {contRows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-4 py-8 text-center text-sm text-ink-500 dark:text-ink-400"
+                  >
+                    No continuous events passed the threshold.
+                  </td>
+                </tr>
+              ) : (
+                contRows.map((e) => (
+                  <tr key={e.id} className="bg-white dark:bg-ink-900">
+                    <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
+                      {e.vid}
+                    </td>
+                    <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                      {e.driverName || <span className="text-ink-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
+                      {e.timeA}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
+                      {e.timeB}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
+                      {e.duration}
+                    </td>
+                    <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                      {e.length || <span className="text-ink-400">—</span>}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 };

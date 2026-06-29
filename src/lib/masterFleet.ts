@@ -22,6 +22,49 @@ export interface MasterFleetRow {
   total: number;
 }
 
+export interface FilteredSpeedEvent {
+  id: string;
+  vid: string;
+  driverName: string;
+  period: string;
+  start: string;
+  end: string;
+  duration: string;
+  durationSeconds: number;
+  topSpeed: string;
+  overspeedPosition: string;
+}
+
+export interface FilteredNightEvent {
+  id: string;
+  vid: string;
+  driverName: string;
+  period: string;
+  timeA: string;
+  timeB: string;
+  duration: string;
+  durationSeconds: number;
+  length: string;
+}
+
+export interface FilteredContinuousEvent {
+  id: string;
+  vid: string;
+  driverName: string;
+  period: string;
+  timeA: string;
+  timeB: string;
+  duration: string;
+  durationSeconds: number;
+  length: string;
+}
+
+export interface FilteredEvents {
+  speed: FilteredSpeedEvent[];
+  nights: FilteredNightEvent[];
+  continuous: FilteredContinuousEvent[];
+}
+
 const normalizeVidKey = (vid: string): string =>
   String(vid ?? '').replace(/[^0-9a-zA-Z]+/g, '').toLowerCase();
 
@@ -132,6 +175,96 @@ export const aggregateMasterFleet = ({
     if (b.total !== a.total) return b.total - a.total;
     return a.vid.localeCompare(b.vid);
   });
+};
+
+export const collectFilteredEvents = ({
+  speedFiles,
+  nightFiles,
+  continuousFiles,
+  driverRecords,
+}: AggregateInput): FilteredEvents => {
+  const resolve = buildDriverLookup(driverRecords);
+  const speed: FilteredSpeedEvent[] = [];
+  const nights: FilteredNightEvent[] = [];
+  const continuous: FilteredContinuousEvent[] = [];
+
+  speedFiles.forEach((file) => {
+    file.drivers.forEach((driver) => {
+      const vid = cleanVidDisplay(driver.vid);
+      const driverName = resolve(vid) || driver.driverName;
+      driver.events.forEach((event) => {
+        const seconds = parseDurationSeconds(event.duration);
+        if (Number.isFinite(seconds) && seconds >= SPEED_MIN_SECONDS) {
+          speed.push({
+            id: event.id,
+            vid,
+            driverName,
+            period: driver.period,
+            start: event.start,
+            end: event.end,
+            duration: event.duration,
+            durationSeconds: seconds,
+            topSpeed: event.topSpeed,
+            overspeedPosition: event.overspeedPosition,
+          });
+        }
+      });
+    });
+  });
+
+  nightFiles.forEach((file) => {
+    file.drivers.forEach((driver) => {
+      const vid = cleanVidDisplay(driver.vid);
+      const driverName = resolve(vid) || driver.driverName;
+      driver.rows.forEach((row) => {
+        const seconds = parseDurationSeconds(row.duration);
+        if (Number.isFinite(seconds) && seconds >= NIGHTS_MIN_SECONDS) {
+          nights.push({
+            id: row.id,
+            vid,
+            driverName,
+            period: driver.period,
+            timeA: row.timeA,
+            timeB: row.timeB,
+            duration: row.duration,
+            durationSeconds: seconds,
+            length: row.length,
+          });
+        }
+      });
+    });
+  });
+
+  continuousFiles.forEach((file) => {
+    file.drivers.forEach((driver) => {
+      const vid = cleanVidDisplay(driver.vid);
+      const driverName = resolve(vid) || driver.driverName;
+      driver.rows.forEach((row) => {
+        const seconds = parseDurationSeconds(row.duration);
+        if (Number.isFinite(seconds) && seconds >= CONTINUOUS_MIN_SECONDS) {
+          continuous.push({
+            id: row.id,
+            vid,
+            driverName,
+            period: driver.period,
+            timeA: row.timeA,
+            timeB: row.timeB,
+            duration: row.duration,
+            durationSeconds: seconds,
+            length: row.length,
+          });
+        }
+      });
+    });
+  });
+
+  const byDurationDesc = <T extends { durationSeconds: number }>(a: T, b: T) =>
+    b.durationSeconds - a.durationSeconds;
+  speed.sort(byDurationDesc);
+  nights.sort(byDurationDesc);
+  continuous.sort(byDurationDesc);
+
+  return { speed, nights, continuous };
 };
 
 const MASTER_COLUMNS = [
