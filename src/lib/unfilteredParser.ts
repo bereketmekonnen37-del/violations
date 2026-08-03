@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import { newId } from './utils';
-import { formatJsDate, formatSerialIfNumeric } from './excelDate';
+import { formatLocalDate, formatSerialIfNumeric } from './excelDate';
 import type {
   DriverBlock,
   OverspeedEvent,
@@ -19,7 +19,7 @@ export const detectUnfilteredKind = (file: File): UnfilteredFileKind | null => {
 /* ──────────────────── helpers ──────────────────── */
 
 const cleanText = (raw: unknown): string => {
-  if (raw instanceof Date) return formatJsDate(raw);
+  if (raw instanceof Date) return formatLocalDate(raw);
   const s = String(raw ?? '');
   return s
     .replace(/ /g, ' ')
@@ -175,7 +175,7 @@ const normalizeDuration = (s: string): string => {
 
 const xlsxToRows = async (file: File): Promise<string[][]> => {
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  const wb = XLSX.read(buf, { type: 'array' });
   const all: string[][] = [];
   wb.SheetNames.forEach((name) => {
     const ws = wb.Sheets[name];

@@ -65,6 +65,18 @@ export interface FilteredEvents {
   continuous: FilteredContinuousEvent[];
 }
 
+export interface EventThresholds {
+  speed: number;
+  nights: number;
+  continuous: number;
+}
+
+export const DEFAULT_THRESHOLDS: EventThresholds = {
+  speed: SPEED_MIN_SECONDS,
+  nights: NIGHTS_MIN_SECONDS,
+  continuous: CONTINUOUS_MIN_SECONDS,
+};
+
 const normalizeVidKey = (vid: string): string =>
   String(vid ?? '').replace(/[^0-9a-zA-Z]+/g, '').toLowerCase();
 
@@ -75,6 +87,7 @@ interface AggregateInput {
   nightFiles: UnfilteredNightFile[];
   continuousFiles: UnfilteredContinuousFile[];
   driverRecords: DriverRecord[];
+  thresholds?: EventThresholds;
 }
 
 interface Bucket {
@@ -114,6 +127,7 @@ export const aggregateMasterFleet = ({
   nightFiles,
   continuousFiles,
   driverRecords,
+  thresholds = DEFAULT_THRESHOLDS,
 }: AggregateInput): MasterFleetRow[] => {
   const resolve: DriverNameLookup = buildDriverLookup(driverRecords);
   const buckets = new Map<string, Bucket>();
@@ -124,7 +138,7 @@ export const aggregateMasterFleet = ({
       if (!b) return;
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
-        if (Number.isFinite(seconds) && seconds >= SPEED_MIN_SECONDS) {
+        if (Number.isFinite(seconds) && seconds >= thresholds.speed) {
           b.speed += 1;
         }
       });
@@ -137,7 +151,7 @@ export const aggregateMasterFleet = ({
       if (!b) return;
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (Number.isFinite(seconds) && seconds >= NIGHTS_MIN_SECONDS) {
+        if (Number.isFinite(seconds) && seconds >= thresholds.nights) {
           b.nights += 1;
         }
       });
@@ -150,7 +164,7 @@ export const aggregateMasterFleet = ({
       if (!b) return;
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (Number.isFinite(seconds) && seconds >= CONTINUOUS_MIN_SECONDS) {
+        if (Number.isFinite(seconds) && seconds >= thresholds.continuous) {
           b.continuous += 1;
         }
       });
@@ -182,6 +196,7 @@ export const collectFilteredEvents = ({
   nightFiles,
   continuousFiles,
   driverRecords,
+  thresholds = DEFAULT_THRESHOLDS,
 }: AggregateInput): FilteredEvents => {
   const resolve = buildDriverLookup(driverRecords);
   const speed: FilteredSpeedEvent[] = [];
@@ -194,7 +209,7 @@ export const collectFilteredEvents = ({
       const driverName = resolve(vid) || driver.driverName;
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
-        if (Number.isFinite(seconds) && seconds >= SPEED_MIN_SECONDS) {
+        if (Number.isFinite(seconds) && seconds >= thresholds.speed) {
           speed.push({
             id: event.id,
             vid,
@@ -218,7 +233,7 @@ export const collectFilteredEvents = ({
       const driverName = resolve(vid) || driver.driverName;
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (Number.isFinite(seconds) && seconds >= NIGHTS_MIN_SECONDS) {
+        if (Number.isFinite(seconds) && seconds >= thresholds.nights) {
           nights.push({
             id: row.id,
             vid,
@@ -241,7 +256,7 @@ export const collectFilteredEvents = ({
       const driverName = resolve(vid) || driver.driverName;
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (Number.isFinite(seconds) && seconds >= CONTINUOUS_MIN_SECONDS) {
+        if (Number.isFinite(seconds) && seconds >= thresholds.continuous) {
           continuous.push({
             id: row.id,
             vid,

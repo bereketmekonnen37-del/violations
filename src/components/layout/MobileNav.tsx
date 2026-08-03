@@ -37,7 +37,13 @@ export const MobileNav = () => {
   const role = useAppSelector((s) => s.auth.user?.role);
   const items = role === 'boss' ? BOSS : STAFF;
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-ink-100 bg-white/95 backdrop-blur dark:border-ink-800 dark:bg-ink-950/95 lg:hidden">
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 backdrop-blur lg:hidden"
+      style={{
+        background: 'var(--color-bg-card)',
+        borderTop: '1px solid var(--color-brand-navy-line)',
+      }}
+    >
       <ul className="no-scrollbar flex gap-1 overflow-x-auto px-2 py-2">
         {items.map((i) => (
           <li key={i.to} className="shrink-0">
@@ -47,9 +53,7 @@ export const MobileNav = () => {
               className={({ isActive }) =>
                 cn(
                   'flex min-w-[70px] flex-col items-center gap-1 rounded-xl px-2 py-2 text-[10px] font-medium transition',
-                  isActive
-                    ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-900'
-                    : 'text-ink-500 dark:text-ink-400',
+                  isActive ? 'mobile-nav-active' : 'mobile-nav-idle',
                 )
               }
             >
@@ -59,6 +63,17 @@ export const MobileNav = () => {
           </li>
         ))}
       </ul>
+      <style>{`
+        .mobile-nav-idle {
+          color: var(--color-text-primary);
+          background: transparent;
+        }
+        .mobile-nav-active {
+          color: #ffffff;
+          background: var(--color-brand-red);
+          box-shadow: 0 4px 12px rgba(220, 53, 69, 0.25);
+        }
+      `}</style>
     </nav>
   );
 };

@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import { newId } from './utils';
-import { formatJsDate, formatSerialIfNumeric } from './excelDate';
+import { formatLocalDate, formatSerialIfNumeric } from './excelDate';
 import type {
   NightDriverBlock,
   NightRow,
@@ -17,7 +17,7 @@ export const detectNightsKind = (file: File): UnfilteredFileKind | null => {
 };
 
 const cleanText = (raw: unknown): string => {
-  if (raw instanceof Date) return formatJsDate(raw);
+  if (raw instanceof Date) return formatLocalDate(raw);
   return String(raw ?? '')
     .replace(/ /g, ' ')
     .replace(/[°º]/g, '')
@@ -187,7 +187,12 @@ const buildRow = (
 
 const xlsxToRows = async (file: File): Promise<string[][]> => {
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  // Do NOT pass cellDates:true — that makes SheetJS build JS Date objects
+  // via the local-time constructor, which combined with UTC-accessor
+  // formatting produces a timezone offset shift on the way out. Leaving
+  // the option off keeps date cells as raw Excel serial numbers; we then
+  // format them via XLSX.SSF (timezone-agnostic) in formatSerialIfNumeric.
+  const wb = XLSX.read(buf, { type: 'array' });
   const all: string[][] = [];
   wb.SheetNames.forEach((name) => {
     const ws = wb.Sheets[name];
@@ -195,6 +200,7 @@ const xlsxToRows = async (file: File): Promise<string[][]> => {
       header: 1,
       defval: '',
       blankrows: false,
+      raw: true,
     });
     rows.forEach((r) => {
       const arr = (Array.isArray(r) ? r : [r]).map((c) => cleanText(c));

@@ -6,9 +6,13 @@ import {
   IdCard,
   Layers,
   Medal,
+  Minus,
   Moon,
+  Plus,
+  RotateCcw,
   Route as RouteIcon,
   Search,
+  SlidersHorizontal,
   Trophy,
   Users,
 } from 'lucide-react';
@@ -20,14 +24,11 @@ import {
   aggregateMasterFleet,
   collectFilteredEvents,
   downloadMasterFleetCsv,
+  DEFAULT_THRESHOLDS,
+  type EventThresholds,
   type FilteredEvents,
   type MasterFleetRow,
 } from '../lib/masterFleet';
-import {
-  CONTINUOUS_MIN_SECONDS,
-  NIGHTS_MIN_SECONDS,
-  SPEED_MIN_SECONDS,
-} from '../lib/duration';
 
 const formatThreshold = (seconds: number): string => {
   if (seconds % 3600 === 0) return `${seconds / 3600}h`;
@@ -122,6 +123,7 @@ export const MasterFleetPage = () => {
   const continuousFiles = useAppSelector((s) => s.unfilteredContinuous.files);
   const driverRecords = useAppSelector((s) => s.drivers.records);
   const [query, setQuery] = useState('');
+  const [thresholds, setThresholds] = useState<EventThresholds>(DEFAULT_THRESHOLDS);
 
   const rows = useMemo(
     () =>
@@ -130,8 +132,9 @@ export const MasterFleetPage = () => {
         nightFiles,
         continuousFiles,
         driverRecords,
+        thresholds,
       }),
-    [speedFiles, nightFiles, continuousFiles, driverRecords],
+    [speedFiles, nightFiles, continuousFiles, driverRecords, thresholds],
   );
 
   const filteredEvents = useMemo(
@@ -141,8 +144,9 @@ export const MasterFleetPage = () => {
         nightFiles,
         continuousFiles,
         driverRecords,
+        thresholds,
       }),
-    [speedFiles, nightFiles, continuousFiles, driverRecords],
+    [speedFiles, nightFiles, continuousFiles, driverRecords, thresholds],
   );
 
   const [activeTab, setActiveTab] = useState<'speed' | 'nights' | 'continuous'>(
@@ -186,12 +190,12 @@ export const MasterFleetPage = () => {
         eyebrow="Manager workspace"
         title="Master fleet"
         subtitle={`Combined ranking by VID across Speed (≥ ${formatThreshold(
-          SPEED_MIN_SECONDS,
+          thresholds.speed,
         )}), Nights (≥ ${formatThreshold(
-          NIGHTS_MIN_SECONDS,
+          thresholds.nights,
         )}) and Continuous (≥ ${formatThreshold(
-          CONTINUOUS_MIN_SECONDS,
-        )}). Shorter events are filtered out.`}
+          thresholds.continuous,
+        )}). Adjust the thresholds below to filter differently.`}
         actions={
           <button
             type="button"
@@ -228,20 +232,28 @@ export const MasterFleetPage = () => {
             description="Upload Speed, Nights and Continuous files first. Master fleet will rank drivers by combined VID matches once data is in."
           />
         </div>
-      ) : rows.length === 0 ? (
-        <div className="mt-8">
-          <EmptyState
-            icon={Users}
-            title="No events pass the thresholds"
-            description={`Nothing met the minimum durations — Speed ≥ ${formatThreshold(
-              SPEED_MIN_SECONDS,
-            )}, Nights ≥ ${formatThreshold(
-              NIGHTS_MIN_SECONDS,
-            )}, Continuous ≥ ${formatThreshold(CONTINUOUS_MIN_SECONDS)}.`}
-          />
-        </div>
       ) : (
         <>
+          <ThresholdControls
+            thresholds={thresholds}
+            onChange={setThresholds}
+            onReset={() => setThresholds(DEFAULT_THRESHOLDS)}
+          />
+
+          {rows.length === 0 ? (
+            <div className="mt-8">
+              <EmptyState
+                icon={Users}
+                title="No events pass the thresholds"
+                description={`Nothing met the minimum durations — Speed ≥ ${formatThreshold(
+                  thresholds.speed,
+                )}, Nights ≥ ${formatThreshold(
+                  thresholds.nights,
+                )}, Continuous ≥ ${formatThreshold(thresholds.continuous)}.`}
+              />
+            </div>
+          ) : (
+            <>
           <div className="mt-8">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
@@ -264,6 +276,7 @@ export const MasterFleetPage = () => {
             query={eventQuery}
             setQuery={setEventQuery}
             events={filteredEvents}
+            thresholds={thresholds}
           />
 
           <div className="surface mt-8 rounded-2xl p-5 sm:p-7">
@@ -351,6 +364,8 @@ export const MasterFleetPage = () => {
               </table>
             </div>
           </div>
+            </>
+          )}
         </>
       )}
     </div>
@@ -359,17 +374,10 @@ export const MasterFleetPage = () => {
 
 type EventTab = 'speed' | 'nights' | 'continuous';
 
-const TAB_META: Record<
-  EventTab,
-  { label: string; icon: typeof Gauge; threshold: number }
-> = {
-  speed: { label: 'Speed', icon: Gauge, threshold: SPEED_MIN_SECONDS },
-  nights: { label: 'Nights', icon: Moon, threshold: NIGHTS_MIN_SECONDS },
-  continuous: {
-    label: 'Continuous',
-    icon: RouteIcon,
-    threshold: CONTINUOUS_MIN_SECONDS,
-  },
+const TAB_META: Record<EventTab, { label: string; icon: typeof Gauge }> = {
+  speed: { label: 'Speed', icon: Gauge },
+  nights: { label: 'Nights', icon: Moon },
+  continuous: { label: 'Continuous', icon: RouteIcon },
 };
 
 const matchesQuery = (q: string, ...fields: string[]): boolean => {
@@ -384,6 +392,7 @@ interface FilteredEventsPanelProps {
   query: string;
   setQuery: (q: string) => void;
   events: FilteredEvents;
+  thresholds: EventThresholds;
 }
 
 const FilteredEventsPanel = ({
@@ -392,6 +401,7 @@ const FilteredEventsPanel = ({
   query,
   setQuery,
   events,
+  thresholds,
 }: FilteredEventsPanelProps) => {
   const counts: Record<EventTab, number> = {
     speed: events.speed.length,
@@ -470,7 +480,7 @@ const FilteredEventsPanel = ({
       </div>
 
       <p className="mt-3 text-[11px] text-ink-500 dark:text-ink-400">
-        Threshold: {formatThreshold(TAB_META[activeTab].threshold)} · Showing{' '}
+        Threshold: {formatThreshold(thresholds[activeTab])} · Showing{' '}
         {activeTab === 'speed'
           ? speedRows.length
           : activeTab === 'nights'
@@ -637,5 +647,249 @@ const FilteredEventsPanel = ({
         )}
       </div>
     </div>
+  );
+};
+
+interface ThresholdControlsProps {
+  thresholds: EventThresholds;
+  onChange: (t: EventThresholds) => void;
+  onReset: () => void;
+}
+
+const splitHM = (seconds: number): { h: number; m: number } => ({
+  h: Math.floor(seconds / 3600),
+  m: Math.floor((seconds % 3600) / 60),
+});
+
+const ThresholdControls = ({
+  thresholds,
+  onChange,
+  onReset,
+}: ThresholdControlsProps) => {
+  const isDefault =
+    thresholds.speed === DEFAULT_THRESHOLDS.speed &&
+    thresholds.nights === DEFAULT_THRESHOLDS.nights &&
+    thresholds.continuous === DEFAULT_THRESHOLDS.continuous;
+
+  const setKey = (key: keyof EventThresholds, next: number) =>
+    onChange({ ...thresholds, [key]: Math.max(0, next) });
+
+  return (
+    <div className="surface mt-6 rounded-2xl p-5 sm:p-7">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div
+          className="flex items-center gap-2 text-sm font-semibold"
+          style={{ color: 'var(--color-text-primary)' }}
+        >
+          <SlidersHorizontal size={15} /> Manual filter thresholds
+        </div>
+        <div className="flex items-center gap-3">
+          <p
+            className="text-[11px]"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            Set the minimum duration for each event type. Anything shorter is
+            filtered out.
+          </p>
+          {!isDefault && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="btn-ghost !py-1 !px-2 text-xs"
+            >
+              <RotateCcw size={12} /> Reset
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <DurationField
+          icon={Gauge}
+          label="Speed"
+          seconds={thresholds.speed}
+          onChange={(v) => setKey('speed', v)}
+        />
+        <DurationField
+          icon={Moon}
+          label="Nights"
+          seconds={thresholds.nights}
+          onChange={(v) => setKey('nights', v)}
+        />
+        <DurationField
+          icon={RouteIcon}
+          label="Continuous"
+          seconds={thresholds.continuous}
+          onChange={(v) => setKey('continuous', v)}
+        />
+      </div>
+    </div>
+  );
+};
+
+interface DurationFieldProps {
+  icon: typeof Gauge;
+  label: string;
+  seconds: number;
+  onChange: (seconds: number) => void;
+}
+
+const DurationField = ({
+  icon: Icon,
+  label,
+  seconds,
+  onChange,
+}: DurationFieldProps) => {
+  const { h, m } = splitHM(seconds);
+  const setHM = (nextH: number, nextM: number) => {
+    const clampedH = Math.max(0, Math.min(72, nextH));
+    const clampedM = Math.max(0, Math.min(59, nextM));
+    onChange(clampedH * 3600 + clampedM * 60);
+  };
+  return (
+    <div
+      className="rounded-xl p-3"
+      style={{
+        background: '#ffffff',
+        border: '1px solid var(--color-brand-navy-line)',
+      }}
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <span
+          className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          <Icon size={12} /> {label} minimum
+        </span>
+        <span
+          className="font-mono text-[11px]"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          ≥ {formatThreshold(seconds)}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <NumberStepper
+          label="Hours"
+          value={h}
+          min={0}
+          max={72}
+          onChange={(v) => setHM(v, m)}
+        />
+        <NumberStepper
+          label="Minutes"
+          value={m}
+          min={0}
+          max={59}
+          onChange={(v) => setHM(h, v)}
+        />
+      </div>
+    </div>
+  );
+};
+
+interface NumberStepperProps {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+}
+
+/**
+ * Number field with explicit +/- buttons. The text input can be blank
+ * while the user is typing (no forced 0); on blur an empty value is
+ * committed as `min`.
+ */
+const NumberStepper = ({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: NumberStepperProps) => {
+  const [text, setText] = useState<string>(String(value));
+  const [lastValue, setLastValue] = useState<number>(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setText(String(value));
+  }
+
+  const commit = (raw: string) => {
+    const trimmed = raw.trim();
+    if (trimmed === '') {
+      onChange(min);
+      setText(String(min));
+      return;
+    }
+    const n = Math.floor(Number(trimmed));
+    if (!Number.isFinite(n)) {
+      setText(String(value));
+      return;
+    }
+    const clamped = Math.max(min, Math.min(max, n));
+    onChange(clamped);
+    setText(String(clamped));
+  };
+
+  const bump = (delta: number) => {
+    const clamped = Math.max(min, Math.min(max, value + delta));
+    onChange(clamped);
+  };
+
+  return (
+    <label className="block">
+      <span
+        className="text-[10px] font-semibold uppercase tracking-wider"
+        style={{ color: 'var(--color-text-muted)' }}
+      >
+        {label}
+      </span>
+      <div
+        className="mt-1 flex items-stretch overflow-hidden rounded-xl"
+        style={{ border: '1px solid var(--color-brand-navy-line)' }}
+      >
+        <button
+          type="button"
+          onClick={() => bump(-1)}
+          disabled={value <= min}
+          aria-label={`Decrease ${label.toLowerCase()}`}
+          className="flex w-9 shrink-0 items-center justify-center text-sm transition disabled:opacity-40"
+          style={{
+            background: 'var(--color-bg-card)',
+            color: 'var(--color-text-primary)',
+          }}
+        >
+          <Minus size={14} />
+        </button>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={min}
+          max={max}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={(e) => commit(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          }}
+          className="min-w-0 flex-1 border-0 bg-white px-2 py-2 text-center text-sm outline-none"
+          style={{ color: 'var(--color-text-primary)' }}
+        />
+        <button
+          type="button"
+          onClick={() => bump(1)}
+          disabled={value >= max}
+          aria-label={`Increase ${label.toLowerCase()}`}
+          className="flex w-9 shrink-0 items-center justify-center text-sm transition disabled:opacity-40"
+          style={{
+            background: 'var(--color-bg-card)',
+            color: 'var(--color-text-primary)',
+          }}
+        >
+          <Plus size={14} />
+        </button>
+      </div>
+    </label>
   );
 };

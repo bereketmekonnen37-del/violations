@@ -8,14 +8,12 @@ export const useTheme = () => {
   const mode = useAppSelector((s) => s.theme.mode);
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (mode === 'dark') root.classList.add('dark');
-    else root.classList.remove('dark');
-    window.localStorage.setItem('fw_theme', mode);
+    document.documentElement.classList.remove('dark');
+    window.localStorage.setItem('fw_theme', 'light');
   }, [mode]);
 
   return {
-    mode,
+    mode: 'light' as const,
     toggle: () => dispatch(toggleTheme()),
     set: (t: Theme) => dispatch(setTheme(t)),
   };

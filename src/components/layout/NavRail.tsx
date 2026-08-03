@@ -59,7 +59,10 @@ export const NavRail = () => {
 
   return (
     <aside
-      style={{ background: '#0a0a0a' }}
+      style={{
+        background: 'var(--color-bg-card)',
+        borderRight: '1px solid var(--color-brand-navy-line)',
+      }}
       className={cn(
         'sticky top-0 hidden h-screen shrink-0 flex-col lg:flex transition-all duration-300',
         collapsed ? 'w-[80px]' : 'w-[280px]',
@@ -67,22 +70,22 @@ export const NavRail = () => {
     >
       {/* ── Header ──────────────────────────────────────────── */}
       <div
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
+        style={{ borderBottom: '1px solid var(--color-brand-navy-line)' }}
         className="flex h-16 shrink-0 items-center justify-between px-4"
       >
         {collapsed ? <Logo withText={false} /> : <Logo />}
         <button
           onClick={() => setCollapsed((c) => !c)}
           aria-label="Toggle navigation"
-          style={{ color: 'rgba(255,255,255,0.4)' }}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition hover:bg-white/10 hover:!text-white"
+          style={{ color: 'var(--color-text-muted)' }}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition hover:bg-black/5"
         >
           {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
         </button>
       </div>
 
       {/* ── Nav links ───────────────────────────────────────── */}
-      <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
+      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {items.map((item) => (
           <NavLink
             key={item.to}
@@ -92,10 +95,8 @@ export const NavRail = () => {
             className={({ isActive }) =>
               cn(
                 'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
-                isActive
-                  ? 'bg-white text-[#0a0a0a] shadow-lg'
-                  : 'text-white/55 hover:bg-white/10 hover:text-white',
                 collapsed && 'justify-center px-2',
+                isActive ? 'nav-link-active' : 'nav-link-idle',
               )
             }
           >
@@ -105,127 +106,45 @@ export const NavRail = () => {
         ))}
       </nav>
 
-      {/* ── Abstract bottom panel with Sign-out ──────────────── */}
-      {!collapsed && (
-        <div
-          className="relative shrink-0 overflow-hidden"
-          style={{ minHeight: '300px' }}
+      {/* ── Sign-out footer ─────────────────────────────────── */}
+      <div
+        className="shrink-0 p-3"
+        style={{ borderTop: '1px solid var(--color-brand-navy-line)' }}
+      >
+        <button
+          type="button"
+          onClick={onSignOut}
+          title={collapsed ? 'Sign out' : undefined}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition',
+            collapsed && 'justify-center px-2',
+          )}
+          style={{
+            background: 'var(--color-brand-red)',
+            color: '#ffffff',
+            boxShadow: '0 4px 12px rgba(220, 53, 69, 0.25)',
+          }}
         >
-          {/* Masked gradient layer — fades smoothly to transparent at the top
-              so there is no visible rectangle edge against the rail */}
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              inset: 0,
-              pointerEvents: 'none',
-              WebkitMaskImage:
-                'radial-gradient(140% 100% at 50% 115%, #000 35%, rgba(0,0,0,0.85) 55%, rgba(0,0,0,0.45) 78%, transparent 100%)',
-              maskImage:
-                'radial-gradient(140% 100% at 50% 115%, #000 35%, rgba(0,0,0,0.85) 55%, rgba(0,0,0,0.45) 78%, transparent 100%)',
-              WebkitMaskRepeat: 'no-repeat',
-              maskRepeat: 'no-repeat',
-            }}
-          >
-            {/* Layered radial gradients — no straight direction, abstract feel */}
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                background: `
-                  radial-gradient(120% 80% at 18% 32%, rgba(37,99,235,0.85) 0%, transparent 50%),
-                  radial-gradient(95% 70% at 88% 48%, rgba(168,85,247,0.75) 0%, transparent 55%),
-                  radial-gradient(85% 65% at 28% 82%, rgba(22,163,74,0.65) 0%, transparent 55%),
-                  radial-gradient(75% 60% at 82% 92%, rgba(220,38,38,0.70) 0%, transparent 58%),
-                  radial-gradient(55% 45% at 55% 65%, rgba(245,158,11,0.40) 0%, transparent 62%)
-                `,
-              }}
-            />
+          <LogOut size={16} className="shrink-0" />
+          {!collapsed && <span>Sign out</span>}
+        </button>
+      </div>
 
-            {/* Scattered blur blobs for an organic, painterly look */}
-            <div
-              style={{
-                position: 'absolute',
-                top: '20px',
-                left: '-18px',
-                width: '150px',
-                height: '150px',
-                borderRadius: '50%',
-                background: 'rgba(37,99,235,0.75)',
-                filter: 'blur(40px)',
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                top: '70px',
-                right: '-22px',
-                width: '130px',
-                height: '130px',
-                borderRadius: '50%',
-                background: 'rgba(168,85,247,0.70)',
-                filter: 'blur(34px)',
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '70px',
-                left: '38%',
-                width: '100px',
-                height: '100px',
-                borderRadius: '50%',
-                background: 'rgba(22,163,74,0.65)',
-                filter: 'blur(28px)',
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                bottom: '10px',
-                right: '18%',
-                width: '120px',
-                height: '120px',
-                borderRadius: '50%',
-                background: 'rgba(220,38,38,0.65)',
-                filter: 'blur(32px)',
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                top: '150px',
-                left: '30%',
-                width: '80px',
-                height: '80px',
-                borderRadius: '50%',
-                background: 'rgba(245,158,11,0.50)',
-                filter: 'blur(22px)',
-              }}
-            />
-          </div>
-
-          {/* Content layer — push sign-out to the bottom */}
-          <div
-            className="relative z-10 flex h-full min-h-[300px] flex-col justify-end p-4"
-          >
-            <button
-              type="button"
-              onClick={onSignOut}
-              style={{
-                backgroundColor: '#dc2626',
-                color: '#ffffff',
-                boxShadow:
-                  '0 6px 18px rgba(220,38,38,0.45), 0 0 0 1px rgba(255,255,255,0.08) inset',
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold tracking-tight transition hover:brightness-110 active:brightness-95"
-            >
-              <LogOut size={16} />
-              Sign out
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Scoped active/idle nav-link styles */}
+      <style>{`
+        .nav-link-idle {
+          color: var(--color-text-primary);
+          background: transparent;
+        }
+        .nav-link-idle:hover {
+          background: rgba(11, 18, 32, 0.05);
+        }
+        .nav-link-active {
+          color: #ffffff;
+          background: var(--color-brand-red);
+          box-shadow: 0 4px 12px rgba(220, 53, 69, 0.25);
+        }
+      `}</style>
     </aside>
   );
 };

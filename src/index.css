@@ -2,6 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* ── Brand Colors ────────────────────────────────────────── */
+  --color-brand-red: #dc3545;
+  --color-brand-red-hover: #b02a37;
+  --color-brand-red-alt: #e14e5d;
+  --color-brand-red-dark: #7a1d25;
+  --color-brand-red-muted: #f5c2c7;
+
+  --color-brand-blue: #1e85ae;
+  --color-brand-blue-light: #87ceeb;
+  --color-brand-blue-hover: #166580;
+
+  --color-brand-accent: #f5b841;
+  --color-brand-accent-hover: #dca032;
+  --color-brand-accent-soft: #fce4a6;
+
+  --color-brand-navy: #0b1e3f;
+  --color-brand-navy-soft: #1c2f56;
+  --color-brand-navy-line: #d6dfef;
+
+  /* ── Backgrounds ─────────────────────────────────────────── */
+  --color-bg-main: #ffffff;
+  --color-bg-light: #ebeef1;
+  --color-bg-card: #ebeef1;
+  --color-bg-transparent-search: rgba(11, 18, 32, 0.05);
+
+  /* ── Grays ───────────────────────────────────────────────── */
+  --color-gray-light: #f1f5f9;
+  --color-gray-light-hover: #e5e7eb;
+  --color-gray-dark: #6b7280;
+  --color-gray-select-bg: #e5e7eb;
+
+  /* ── Reds / Destructive ──────────────────────────────────── */
+  --color-red: #dc3545;
+  --color-red-dark: #b02a37;
+  --color-red-light: #f5c2c7;
+  --color-pink-light: #fee2e2;
+  --color-logout: #dc3545;
+
+  /* ── Text ─────────────────────────────────────────────────
+     On light theme, "white" tokens become the dark body text tokens
+     so content remains legible against white/near-white surfaces. */
+  --color-text-primary: #0b1220;
+  --color-text-secondary: #1f2937;
+  --color-text-muted: #4b5563;
+
+  /* ── Misc / Accent ───────────────────────────────────────── */
+  --color-border-accent: #1e85ae;
+  --color-input: #e5e7eb;
+  --color-select-text: #6b7280;
+}
+
 @layer base {
   html,
   body,
@@ -10,19 +62,16 @@
   }
 
   body {
-    @apply bg-white text-ink-900 antialiased;
+    background: var(--color-bg-main);
+    color: var(--color-text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     font-feature-settings: 'cv11', 'ss01', 'ss03';
   }
 
-  html.dark body {
-    @apply bg-ink-950 text-ink-100;
-  }
-
   ::selection {
-    @apply bg-ink-900 text-white;
-  }
-  html.dark ::selection {
-    @apply bg-white text-ink-900;
+    background: var(--color-brand-red);
+    color: #ffffff;
   }
 
   /* Scrollbar */
@@ -34,52 +83,152 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-ink-200 rounded-full;
+    background: var(--color-brand-navy-line);
+    border-radius: 9999px;
   }
-  html.dark ::-webkit-scrollbar-thumb {
-    @apply bg-ink-700;
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-gray-select-bg);
+  }
+
+  /* Keep browser default number-input spinners visible so users can
+     click to +/- through values on light fields. */
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: auto;
+    margin: 0;
+    opacity: 1;
   }
 }
 
 @layer components {
+  /* Primary card surface — sits on the white content canvas */
   .surface {
-    @apply bg-white border border-ink-100 dark:bg-ink-900 dark:border-ink-800;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-brand-navy-line);
+    color: var(--color-text-primary);
   }
+
+  /* Nested surface — a card *inside* a .surface. White so it lifts
+     off the bg-card parent. */
   .surface-2 {
-    @apply bg-ink-50 border border-ink-100 dark:bg-ink-900 dark:border-ink-800;
+    background: #ffffff;
+    border: 1px solid var(--color-brand-navy-line);
+    color: var(--color-text-primary);
   }
+
   .card-base {
-    @apply surface rounded-2xl shadow-card;
+    @apply rounded-2xl shadow-card;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-brand-navy-line);
+    color: var(--color-text-primary);
   }
+
+  /* Inputs: always white bg, always dark text — legible on both
+     white content areas and bg-card surfaces */
   .input-base {
-    @apply w-full rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm
-           placeholder:text-ink-400 outline-none transition
-           focus:border-ink-900 focus:ring-2 focus:ring-ink-900/10
-           dark:border-ink-700 dark:bg-ink-900 dark:placeholder:text-ink-500
-           dark:focus:border-white dark:focus:ring-white/10;
+    width: 100%;
+    background: #ffffff;
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-brand-navy-line);
+    border-radius: 0.75rem;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    outline: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
   }
+  .input-base::placeholder {
+    color: var(--color-text-muted);
+    opacity: 0.75;
+  }
+  .input-base:focus {
+    border-color: var(--color-brand-blue);
+    box-shadow: 0 0 0 3px rgba(30, 133, 174, 0.15);
+  }
+
+  /* Primary CTA — brand red with white text */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl
-           bg-ink-900 px-4 py-2.5 text-sm font-medium text-white
-           transition hover:bg-ink-800 active:bg-ink-700
-           disabled:cursor-not-allowed disabled:opacity-50
-           dark:bg-white dark:text-ink-900 dark:hover:bg-ink-100;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #ffffff;
+    background: var(--color-brand-red);
+    border: 1px solid transparent;
+    transition: background-color 150ms ease, box-shadow 150ms ease,
+      transform 100ms ease;
   }
+  .btn-primary:hover {
+    background: var(--color-brand-red-hover);
+  }
+  .btn-primary:active {
+    background: var(--color-brand-red-dark);
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Secondary CTA — deep blue with white text (per palette pairing) */
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl
-           border border-ink-200 bg-white px-4 py-2.5 text-sm font-medium text-ink-900
-           transition hover:bg-ink-50
-           dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100 dark:hover:bg-ink-800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #ffffff;
+    background: var(--color-brand-blue);
+    border: 1px solid transparent;
+    transition: background-color 150ms ease, box-shadow 150ms ease;
   }
+  .btn-secondary:hover {
+    background: var(--color-brand-blue-hover);
+  }
+  .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Ghost/tertiary — transparent, dark text, subtle hover */
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2
-           text-sm font-medium text-ink-700 transition hover:bg-ink-100
-           dark:text-ink-300 dark:hover:bg-ink-800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    background: transparent;
+    border: 1px solid transparent;
+    transition: background-color 150ms ease;
   }
+  .btn-ghost:hover {
+    background: var(--color-bg-transparent-search);
+  }
+
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-ink-200
-           bg-white px-2.5 py-1 text-xs font-medium text-ink-700
-           dark:border-ink-700 dark:bg-ink-900 dark:text-ink-300;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    background: #ffffff;
+    border: 1px solid var(--color-brand-navy-line);
   }
 }
 
