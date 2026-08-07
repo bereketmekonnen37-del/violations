@@ -12,6 +12,12 @@ import {
   SPEED_MIN_SECONDS,
   parseDurationSeconds,
 } from './duration';
+import {
+  blobHasAllowedTag,
+  buildAllowedTagSet,
+  buildAllowedVidSet,
+  normalizeVid,
+} from './locationRules';
 
 export interface MasterFleetRow {
   vid: string;
@@ -20,6 +26,10 @@ export interface MasterFleetRow {
   nights: number;
   continuous: number;
   total: number;
+  /** VID appears in the boss's allowed list. */
+  allowedVid: boolean;
+  /** Speed events that were counted despite occurring in an allowed location. */
+  speedInAllowedLocations: number;
 }
 
 export interface FilteredSpeedEvent {
@@ -33,6 +43,12 @@ export interface FilteredSpeedEvent {
   durationSeconds: number;
   topSpeed: string;
   overspeedPosition: string;
+  allowedVid: boolean;
+  allowedLocation: boolean;
+}
+
+export interface FilteredNightAndContFlags {
+  allowedVid: boolean;
 }
 
 export interface FilteredNightEvent {
@@ -45,6 +61,7 @@ export interface FilteredNightEvent {
   duration: string;
   durationSeconds: number;
   length: string;
+  allowedVid: boolean;
 }
 
 export interface FilteredContinuousEvent {
@@ -57,6 +74,7 @@ export interface FilteredContinuousEvent {
   duration: string;
   durationSeconds: number;
   length: string;
+  allowedVid: boolean;
 }
 
 export interface FilteredEvents {
@@ -77,8 +95,7 @@ export const DEFAULT_THRESHOLDS: EventThresholds = {
   continuous: CONTINUOUS_MIN_SECONDS,
 };
 
-const normalizeVidKey = (vid: string): string =>
-  String(vid ?? '').replace(/[^0-9a-zA-Z]+/g, '').toLowerCase();
+const normalizeVidKey = (vid: string): string => normalizeVid(vid);
 
 const cleanVidDisplay = (vid: string): string => String(vid ?? '').trim();
 
@@ -88,6 +105,8 @@ interface AggregateInput {
   continuousFiles: UnfilteredContinuousFile[];
   driverRecords: DriverRecord[];
   thresholds?: EventThresholds;
+  allowedVids?: string[];
+  allowedLocations?: string[];
 }
 
 interface Bucket {
@@ -97,6 +116,7 @@ interface Bucket {
   speed: number;
   nights: number;
   continuous: number;
+  speedInAllowedLocations: number;
 }
 
 const getBucket = (
@@ -115,6 +135,7 @@ const getBucket = (
       speed: 0,
       nights: 0,
       continuous: 0,
+      speedInAllowedLocations: 0,
     };
     buckets.set(vidKey, b);
   }
@@ -128,9 +149,13 @@ export const aggregateMasterFleet = ({
   continuousFiles,
   driverRecords,
   thresholds = DEFAULT_THRESHOLDS,
+  allowedVids = [],
+  allowedLocations = [],
 }: AggregateInput): MasterFleetRow[] => {
   const resolve: DriverNameLookup = buildDriverLookup(driverRecords);
   const buckets = new Map<string, Bucket>();
+  const allowedVidSet = buildAllowedVidSet(allowedVids);
+  const allowedTagSet = buildAllowedTagSet(allowedLocations);
 
   speedFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
@@ -140,6 +165,12 @@ export const aggregateMasterFleet = ({
         const seconds = parseDurationSeconds(event.duration);
         if (Number.isFinite(seconds) && seconds >= thresholds.speed) {
           b.speed += 1;
+          if (
+            allowedTagSet.size > 0 &&
+            blobHasAllowedTag(event.overspeedPosition, allowedTagSet)
+          ) {
+            b.speedInAllowedLocations += 1;
+          }
         }
       });
     });
@@ -182,6 +213,8 @@ export const aggregateMasterFleet = ({
       nights: b.nights,
       continuous: b.continuous,
       total,
+      allowedVid: allowedVidSet.has(b.vidKey),
+      speedInAllowedLocations: b.speedInAllowedLocations,
     });
   });
 
@@ -197,8 +230,14 @@ export const collectFilteredEvents = ({
   continuousFiles,
   driverRecords,
   thresholds = DEFAULT_THRESHOLDS,
+  allowedVids = [],
+  allowedLocations = [],
 }: AggregateInput): FilteredEvents => {
   const resolve = buildDriverLookup(driverRecords);
+  const allowedVidSet = buildAllowedVidSet(allowedVids);
+  const allowedTagSet = buildAllowedTagSet(allowedLocations);
+  const isAllowedVid = (vid: string): boolean =>
+    allowedVidSet.size > 0 && allowedVidSet.has(normalizeVid(vid));
   const speed: FilteredSpeedEvent[] = [];
   const nights: FilteredNightEvent[] = [];
   const continuous: FilteredContinuousEvent[] = [];
@@ -207,6 +246,7 @@ export const collectFilteredEvents = ({
     file.drivers.forEach((driver) => {
       const vid = cleanVidDisplay(driver.vid);
       const driverName = resolve(vid) || driver.driverName;
+      const allowedVid = isAllowedVid(vid);
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
         if (Number.isFinite(seconds) && seconds >= thresholds.speed) {
@@ -221,6 +261,10 @@ export const collectFilteredEvents = ({
             durationSeconds: seconds,
             topSpeed: event.topSpeed,
             overspeedPosition: event.overspeedPosition,
+            allowedVid,
+            allowedLocation:
+              allowedTagSet.size > 0 &&
+              blobHasAllowedTag(event.overspeedPosition, allowedTagSet),
           });
         }
       });
@@ -231,6 +275,7 @@ export const collectFilteredEvents = ({
     file.drivers.forEach((driver) => {
       const vid = cleanVidDisplay(driver.vid);
       const driverName = resolve(vid) || driver.driverName;
+      const allowedVid = isAllowedVid(vid);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (Number.isFinite(seconds) && seconds >= thresholds.nights) {
@@ -244,6 +289,7 @@ export const collectFilteredEvents = ({
             duration: row.duration,
             durationSeconds: seconds,
             length: row.length,
+            allowedVid,
           });
         }
       });
@@ -254,6 +300,7 @@ export const collectFilteredEvents = ({
     file.drivers.forEach((driver) => {
       const vid = cleanVidDisplay(driver.vid);
       const driverName = resolve(vid) || driver.driverName;
+      const allowedVid = isAllowedVid(vid);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (Number.isFinite(seconds) && seconds >= thresholds.continuous) {
@@ -267,6 +314,7 @@ export const collectFilteredEvents = ({
             duration: row.duration,
             durationSeconds: seconds,
             length: row.length,
+            allowedVid,
           });
         }
       });
@@ -289,6 +337,8 @@ const MASTER_COLUMNS = [
   'Speed',
   'Continuous',
   'Total',
+  'Allowed VID',
+  'Speed in Allowed Zones',
 ] as const;
 
 interface SheetRow {
@@ -298,6 +348,8 @@ interface SheetRow {
   Speed: number;
   Continuous: number;
   Total: number;
+  'Allowed VID': string;
+  'Speed in Allowed Zones': number;
 }
 
 export const downloadMasterFleetCsv = (
@@ -311,6 +363,8 @@ export const downloadMasterFleetCsv = (
     Speed: r.speed,
     Continuous: r.continuous,
     Total: r.total,
+    'Allowed VID': r.allowedVid ? 'YES' : '',
+    'Speed in Allowed Zones': r.speedInAllowedLocations,
   }));
   const ws = XLSX.utils.json_to_sheet(sheetRows, {
     header: MASTER_COLUMNS as unknown as string[],

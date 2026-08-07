@@ -6,6 +6,7 @@ import { DriversDataPage } from '../pages/DriversDataPage';
 import { FileDetailsPage } from '../pages/FileDetailsPage';
 import { LoginPage } from '../pages/LoginPage';
 import { MasterFleetPage } from '../pages/MasterFleetPage';
+import { RulesPage } from '../pages/RulesPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { UnfilteredContinuousPage } from '../pages/UnfilteredContinuousPage';
 import { UnfilteredNightsPage } from '../pages/UnfilteredNightsPage';
@@ -66,6 +67,14 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute allow={['boss']}>
               <MasterFleetPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/rules"
+          element={
+            <ProtectedRoute allow={['boss']}>
+              <RulesPage />
             </ProtectedRoute>
           }
         />

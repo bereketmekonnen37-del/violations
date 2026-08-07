@@ -1,18 +1,17 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Crown,
   Download,
   Gauge,
   IdCard,
   Layers,
+  MapPin,
   Medal,
-  Minus,
   Moon,
-  Plus,
-  RotateCcw,
   Route as RouteIcon,
   Search,
-  SlidersHorizontal,
+  ShieldCheck,
   Trophy,
   Users,
 } from 'lucide-react';
@@ -24,7 +23,6 @@ import {
   aggregateMasterFleet,
   collectFilteredEvents,
   downloadMasterFleetCsv,
-  DEFAULT_THRESHOLDS,
   type EventThresholds,
   type FilteredEvents,
   type MasterFleetRow,
@@ -122,8 +120,10 @@ export const MasterFleetPage = () => {
   const nightFiles = useAppSelector((s) => s.unfilteredNights.files);
   const continuousFiles = useAppSelector((s) => s.unfilteredContinuous.files);
   const driverRecords = useAppSelector((s) => s.drivers.records);
+  const thresholds = useAppSelector((s) => s.rules.thresholds);
+  const allowedVids = useAppSelector((s) => s.rules.allowedVids);
+  const allowedLocations = useAppSelector((s) => s.rules.allowedLocations);
   const [query, setQuery] = useState('');
-  const [thresholds, setThresholds] = useState<EventThresholds>(DEFAULT_THRESHOLDS);
 
   const rows = useMemo(
     () =>
@@ -133,8 +133,18 @@ export const MasterFleetPage = () => {
         continuousFiles,
         driverRecords,
         thresholds,
+        allowedVids,
+        allowedLocations,
       }),
-    [speedFiles, nightFiles, continuousFiles, driverRecords, thresholds],
+    [
+      speedFiles,
+      nightFiles,
+      continuousFiles,
+      driverRecords,
+      thresholds,
+      allowedVids,
+      allowedLocations,
+    ],
   );
 
   const filteredEvents = useMemo(
@@ -145,8 +155,18 @@ export const MasterFleetPage = () => {
         continuousFiles,
         driverRecords,
         thresholds,
+        allowedVids,
+        allowedLocations,
       }),
-    [speedFiles, nightFiles, continuousFiles, driverRecords, thresholds],
+    [
+      speedFiles,
+      nightFiles,
+      continuousFiles,
+      driverRecords,
+      thresholds,
+      allowedVids,
+      allowedLocations,
+    ],
   );
 
   const [activeTab, setActiveTab] = useState<'speed' | 'nights' | 'continuous'>(
@@ -195,21 +215,26 @@ export const MasterFleetPage = () => {
           thresholds.nights,
         )}) and Continuous (≥ ${formatThreshold(
           thresholds.continuous,
-        )}). Adjust the thresholds below to filter differently.`}
+        )}). Edit thresholds and whitelists in Rules.`}
         actions={
-          <button
-            type="button"
-            onClick={() => downloadMasterFleetCsv(rows)}
-            disabled={rows.length === 0}
-            className="btn-primary"
-          >
-            <Download size={16} /> Download master fleet CSV
-            {rows.length > 0 && (
-              <span className="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold dark:bg-ink-900/20">
-                {rows.length}
-              </span>
-            )}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to="/rules" className="btn-ghost">
+              <ShieldCheck size={16} /> Rules
+            </Link>
+            <button
+              type="button"
+              onClick={() => downloadMasterFleetCsv(rows)}
+              disabled={rows.length === 0}
+              className="btn-primary"
+            >
+              <Download size={16} /> Download master fleet CSV
+              {rows.length > 0 && (
+                <span className="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold dark:bg-ink-900/20">
+                  {rows.length}
+                </span>
+              )}
+            </button>
+          </div>
         }
       />
 
@@ -234,11 +259,30 @@ export const MasterFleetPage = () => {
         </div>
       ) : (
         <>
-          <ThresholdControls
-            thresholds={thresholds}
-            onChange={setThresholds}
-            onReset={() => setThresholds(DEFAULT_THRESHOLDS)}
-          />
+          {(allowedVids.length > 0 || allowedLocations.length > 0) && (
+            <div className="surface mt-6 flex flex-wrap items-center gap-3 rounded-2xl p-4 sm:p-5">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+                <ShieldCheck size={14} /> Active whitelists
+              </span>
+              {allowedVids.length > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800">
+                  {allowedVids.length} VID{allowedVids.length === 1 ? '' : 's'}
+                </span>
+              )}
+              {allowedLocations.length > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800">
+                  <MapPin size={11} /> {allowedLocations.length} location
+                  {allowedLocations.length === 1 ? '' : 's'}
+                </span>
+              )}
+              <Link
+                to="/rules"
+                className="ml-auto text-[11px] font-semibold text-ink-500 hover:text-ink-900 dark:text-ink-400 dark:hover:text-white"
+              >
+                Manage in Rules →
+              </Link>
+            </div>
+          )}
 
           {rows.length === 0 ? (
             <div className="mt-8">
@@ -331,8 +375,17 @@ export const MasterFleetPage = () => {
                   ) : (
                     filtered.map((r) => {
                       const rank = rows.indexOf(r) + 1;
+                      const isFlagged =
+                        r.allowedVid || r.speedInAllowedLocations > 0;
                       return (
-                        <tr key={r.vid} className="bg-white dark:bg-ink-900">
+                        <tr
+                          key={r.vid}
+                          className={
+                            r.allowedVid
+                              ? 'bg-red-50/60 dark:bg-red-950/20'
+                              : 'bg-white dark:bg-ink-900'
+                          }
+                        >
                           <td className="px-4 py-2.5 font-mono text-xs text-ink-500 dark:text-ink-400">
                             {rank}
                           </td>
@@ -340,9 +393,31 @@ export const MasterFleetPage = () => {
                             {r.vid}
                           </td>
                           <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
-                            {r.driverName || (
-                              <span className="text-ink-400">—</span>
-                            )}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span>
+                                {r.driverName || (
+                                  <span className="text-ink-400">—</span>
+                                )}
+                              </span>
+                              {r.allowedVid && (
+                                <span
+                                  title="This VID is on the allowed list"
+                                  className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-900/60 dark:text-red-100 dark:ring-red-800"
+                                >
+                                  <ShieldCheck size={10} /> Allowed VID
+                                </span>
+                              )}
+                              {r.speedInAllowedLocations > 0 && (
+                                <span
+                                  title={`${r.speedInAllowedLocations} speed event(s) occurred in an allowed location`}
+                                  className="inline-flex items-center gap-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800"
+                                >
+                                  <MapPin size={10} /> {r.speedInAllowedLocations} in allowed zone
+                                  {r.speedInAllowedLocations === 1 ? '' : 's'}
+                                </span>
+                              )}
+                              {!isFlagged && null}
+                            </div>
                           </td>
                           <td className="px-4 py-2.5 text-right font-mono text-ink-800 dark:text-ink-100">
                             {r.nights}
@@ -515,9 +590,26 @@ const FilteredEventsPanel = ({
                 </tr>
               ) : (
                 speedRows.map((e) => (
-                  <tr key={e.id} className="bg-white dark:bg-ink-900">
+                  <tr
+                    key={e.id}
+                    className={
+                      e.allowedVid || e.allowedLocation
+                        ? 'bg-red-50/60 dark:bg-red-950/20'
+                        : 'bg-white dark:bg-ink-900'
+                    }
+                  >
                     <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
-                      {e.vid}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{e.vid}</span>
+                        {e.allowedVid && (
+                          <span
+                            title="This VID is on the allowed list"
+                            className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-900/60 dark:text-red-100 dark:ring-red-800"
+                          >
+                            <ShieldCheck size={10} /> Allowed
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
                       {e.driverName || <span className="text-ink-400">—</span>}
@@ -535,9 +627,21 @@ const FilteredEventsPanel = ({
                       {e.topSpeed}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-ink-700 dark:text-ink-200">
-                      {e.overspeedPosition || (
-                        <span className="text-ink-400">—</span>
-                      )}
+                      <div className="flex flex-col gap-1">
+                        {e.overspeedPosition ? (
+                          <span>{e.overspeedPosition}</span>
+                        ) : (
+                          <span className="text-ink-400">—</span>
+                        )}
+                        {e.allowedLocation && (
+                          <span
+                            title="This event contains a coordinate in an allowed location"
+                            className="inline-flex w-fit items-center gap-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800"
+                          >
+                            <MapPin size={10} /> Allowed location
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -570,9 +674,23 @@ const FilteredEventsPanel = ({
                 </tr>
               ) : (
                 nightRows.map((e) => (
-                  <tr key={e.id} className="bg-white dark:bg-ink-900">
+                  <tr
+                    key={e.id}
+                    className={
+                      e.allowedVid
+                        ? 'bg-red-50/60 dark:bg-red-950/20'
+                        : 'bg-white dark:bg-ink-900'
+                    }
+                  >
                     <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
-                      {e.vid}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{e.vid}</span>
+                        {e.allowedVid && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-900/60 dark:text-red-100 dark:ring-red-800">
+                            <ShieldCheck size={10} /> Allowed
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
                       {e.driverName || <span className="text-ink-400">—</span>}
@@ -620,9 +738,23 @@ const FilteredEventsPanel = ({
                 </tr>
               ) : (
                 contRows.map((e) => (
-                  <tr key={e.id} className="bg-white dark:bg-ink-900">
+                  <tr
+                    key={e.id}
+                    className={
+                      e.allowedVid
+                        ? 'bg-red-50/60 dark:bg-red-950/20'
+                        : 'bg-white dark:bg-ink-900'
+                    }
+                  >
                     <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
-                      {e.vid}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{e.vid}</span>
+                        {e.allowedVid && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-900/60 dark:text-red-100 dark:ring-red-800">
+                            <ShieldCheck size={10} /> Allowed
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
                       {e.driverName || <span className="text-ink-400">—</span>}
@@ -650,246 +782,3 @@ const FilteredEventsPanel = ({
   );
 };
 
-interface ThresholdControlsProps {
-  thresholds: EventThresholds;
-  onChange: (t: EventThresholds) => void;
-  onReset: () => void;
-}
-
-const splitHM = (seconds: number): { h: number; m: number } => ({
-  h: Math.floor(seconds / 3600),
-  m: Math.floor((seconds % 3600) / 60),
-});
-
-const ThresholdControls = ({
-  thresholds,
-  onChange,
-  onReset,
-}: ThresholdControlsProps) => {
-  const isDefault =
-    thresholds.speed === DEFAULT_THRESHOLDS.speed &&
-    thresholds.nights === DEFAULT_THRESHOLDS.nights &&
-    thresholds.continuous === DEFAULT_THRESHOLDS.continuous;
-
-  const setKey = (key: keyof EventThresholds, next: number) =>
-    onChange({ ...thresholds, [key]: Math.max(0, next) });
-
-  return (
-    <div className="surface mt-6 rounded-2xl p-5 sm:p-7">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div
-          className="flex items-center gap-2 text-sm font-semibold"
-          style={{ color: 'var(--color-text-primary)' }}
-        >
-          <SlidersHorizontal size={15} /> Manual filter thresholds
-        </div>
-        <div className="flex items-center gap-3">
-          <p
-            className="text-[11px]"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            Set the minimum duration for each event type. Anything shorter is
-            filtered out.
-          </p>
-          {!isDefault && (
-            <button
-              type="button"
-              onClick={onReset}
-              className="btn-ghost !py-1 !px-2 text-xs"
-            >
-              <RotateCcw size={12} /> Reset
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-        <DurationField
-          icon={Gauge}
-          label="Speed"
-          seconds={thresholds.speed}
-          onChange={(v) => setKey('speed', v)}
-        />
-        <DurationField
-          icon={Moon}
-          label="Nights"
-          seconds={thresholds.nights}
-          onChange={(v) => setKey('nights', v)}
-        />
-        <DurationField
-          icon={RouteIcon}
-          label="Continuous"
-          seconds={thresholds.continuous}
-          onChange={(v) => setKey('continuous', v)}
-        />
-      </div>
-    </div>
-  );
-};
-
-interface DurationFieldProps {
-  icon: typeof Gauge;
-  label: string;
-  seconds: number;
-  onChange: (seconds: number) => void;
-}
-
-const DurationField = ({
-  icon: Icon,
-  label,
-  seconds,
-  onChange,
-}: DurationFieldProps) => {
-  const { h, m } = splitHM(seconds);
-  const setHM = (nextH: number, nextM: number) => {
-    const clampedH = Math.max(0, Math.min(72, nextH));
-    const clampedM = Math.max(0, Math.min(59, nextM));
-    onChange(clampedH * 3600 + clampedM * 60);
-  };
-  return (
-    <div
-      className="rounded-xl p-3"
-      style={{
-        background: '#ffffff',
-        border: '1px solid var(--color-brand-navy-line)',
-      }}
-    >
-      <div className="mb-2 flex items-center justify-between">
-        <span
-          className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
-          <Icon size={12} /> {label} minimum
-        </span>
-        <span
-          className="font-mono text-[11px]"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
-          ≥ {formatThreshold(seconds)}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <NumberStepper
-          label="Hours"
-          value={h}
-          min={0}
-          max={72}
-          onChange={(v) => setHM(v, m)}
-        />
-        <NumberStepper
-          label="Minutes"
-          value={m}
-          min={0}
-          max={59}
-          onChange={(v) => setHM(h, v)}
-        />
-      </div>
-    </div>
-  );
-};
-
-interface NumberStepperProps {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  onChange: (value: number) => void;
-}
-
-/**
- * Number field with explicit +/- buttons. The text input can be blank
- * while the user is typing (no forced 0); on blur an empty value is
- * committed as `min`.
- */
-const NumberStepper = ({
-  label,
-  value,
-  min,
-  max,
-  onChange,
-}: NumberStepperProps) => {
-  const [text, setText] = useState<string>(String(value));
-  const [lastValue, setLastValue] = useState<number>(value);
-  if (value !== lastValue) {
-    setLastValue(value);
-    setText(String(value));
-  }
-
-  const commit = (raw: string) => {
-    const trimmed = raw.trim();
-    if (trimmed === '') {
-      onChange(min);
-      setText(String(min));
-      return;
-    }
-    const n = Math.floor(Number(trimmed));
-    if (!Number.isFinite(n)) {
-      setText(String(value));
-      return;
-    }
-    const clamped = Math.max(min, Math.min(max, n));
-    onChange(clamped);
-    setText(String(clamped));
-  };
-
-  const bump = (delta: number) => {
-    const clamped = Math.max(min, Math.min(max, value + delta));
-    onChange(clamped);
-  };
-
-  return (
-    <label className="block">
-      <span
-        className="text-[10px] font-semibold uppercase tracking-wider"
-        style={{ color: 'var(--color-text-muted)' }}
-      >
-        {label}
-      </span>
-      <div
-        className="mt-1 flex items-stretch overflow-hidden rounded-xl"
-        style={{ border: '1px solid var(--color-brand-navy-line)' }}
-      >
-        <button
-          type="button"
-          onClick={() => bump(-1)}
-          disabled={value <= min}
-          aria-label={`Decrease ${label.toLowerCase()}`}
-          className="flex w-9 shrink-0 items-center justify-center text-sm transition disabled:opacity-40"
-          style={{
-            background: 'var(--color-bg-card)',
-            color: 'var(--color-text-primary)',
-          }}
-        >
-          <Minus size={14} />
-        </button>
-        <input
-          type="number"
-          inputMode="numeric"
-          min={min}
-          max={max}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onBlur={(e) => commit(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-          }}
-          className="min-w-0 flex-1 border-0 bg-white px-2 py-2 text-center text-sm outline-none"
-          style={{ color: 'var(--color-text-primary)' }}
-        />
-        <button
-          type="button"
-          onClick={() => bump(1)}
-          disabled={value >= max}
-          aria-label={`Increase ${label.toLowerCase()}`}
-          className="flex w-9 shrink-0 items-center justify-center text-sm transition disabled:opacity-40"
-          style={{
-            background: 'var(--color-bg-card)',
-            color: 'var(--color-text-primary)',
-          }}
-        >
-          <Plus size={14} />
-        </button>
-      </div>
-    </label>
-  );
-};
