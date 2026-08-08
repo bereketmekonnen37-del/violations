@@ -145,12 +145,14 @@ export const DriversDataUpload = ({ user }: Props) => {
             <Users size={20} />
           </div>
           <p className="text-sm font-semibold text-ink-900 dark:text-white">
-            Drop your drivers list (VID + Driver Name)
+            Drop your drivers list (Transporter · Drivers Name · VID)
           </p>
           <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-            We accept any spreadsheet with two columns:{' '}
-            <code className="font-mono">VID</code> and{' '}
-            <code className="font-mono">Driver Name</code>.
+            Expected columns:{' '}
+            <code className="font-mono">Transporter</code>,{' '}
+            <code className="font-mono">Drivers Name</code>,{' '}
+            <code className="font-mono">VID No.</code>. Plate / phone /
+            remark are ignored.
           </p>
           <button
             type="button"

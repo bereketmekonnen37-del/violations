@@ -4,7 +4,11 @@ import type {
   UnfilteredFile,
   UnfilteredNightFile,
 } from '../types';
-import { buildDriverLookup, type DriverNameLookup } from './driverLookup';
+import {
+  buildDriverProfileLookup,
+  NOT_FOUND,
+  type DriverProfileLookup,
+} from './driverLookup';
 import type { DriverRecord } from '../types';
 import {
   CONTINUOUS_MIN_SECONDS,
@@ -22,6 +26,7 @@ import {
 export interface MasterFleetRow {
   vid: string;
   driverName: string;
+  transporter: string;
   speed: number;
   nights: number;
   continuous: number;
@@ -36,6 +41,7 @@ export interface FilteredSpeedEvent {
   id: string;
   vid: string;
   driverName: string;
+  transporter: string;
   period: string;
   start: string;
   end: string;
@@ -55,6 +61,7 @@ export interface FilteredNightEvent {
   id: string;
   vid: string;
   driverName: string;
+  transporter: string;
   period: string;
   timeA: string;
   timeB: string;
@@ -68,6 +75,7 @@ export interface FilteredContinuousEvent {
   id: string;
   vid: string;
   driverName: string;
+  transporter: string;
   period: string;
   timeA: string;
   timeB: string;
@@ -113,6 +121,7 @@ interface Bucket {
   vid: string;
   vidKey: string;
   fallbackName: string;
+  fallbackTransporter: string;
   speed: number;
   nights: number;
   continuous: number;
@@ -123,6 +132,7 @@ const getBucket = (
   buckets: Map<string, Bucket>,
   vid: string,
   fallbackName: string,
+  fallbackTransporter: string,
 ): Bucket | null => {
   const vidKey = normalizeVidKey(vid);
   if (!vidKey) return null;
@@ -132,6 +142,7 @@ const getBucket = (
       vid: cleanVidDisplay(vid),
       vidKey,
       fallbackName: '',
+      fallbackTransporter: '',
       speed: 0,
       nights: 0,
       continuous: 0,
@@ -140,8 +151,15 @@ const getBucket = (
     buckets.set(vidKey, b);
   }
   if (!b.fallbackName && fallbackName) b.fallbackName = fallbackName;
+  if (!b.fallbackTransporter && fallbackTransporter)
+    b.fallbackTransporter = fallbackTransporter;
   return b;
 };
+
+const sourceTransporter = (driver: {
+  transporter?: string;
+  driverName?: string;
+}): string => driver.transporter || driver.driverName || '';
 
 export const aggregateMasterFleet = ({
   speedFiles,
@@ -152,14 +170,19 @@ export const aggregateMasterFleet = ({
   allowedVids = [],
   allowedLocations = [],
 }: AggregateInput): MasterFleetRow[] => {
-  const resolve: DriverNameLookup = buildDriverLookup(driverRecords);
+  const resolve: DriverProfileLookup = buildDriverProfileLookup(driverRecords);
   const buckets = new Map<string, Bucket>();
   const allowedVidSet = buildAllowedVidSet(allowedVids);
   const allowedTagSet = buildAllowedTagSet(allowedLocations);
 
   speedFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
-      const b = getBucket(buckets, driver.vid, driver.driverName);
+      const b = getBucket(
+        buckets,
+        driver.vid,
+        driver.driverName,
+        sourceTransporter(driver),
+      );
       if (!b) return;
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
@@ -178,7 +201,12 @@ export const aggregateMasterFleet = ({
 
   nightFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
-      const b = getBucket(buckets, driver.vid, driver.driverName);
+      const b = getBucket(
+        buckets,
+        driver.vid,
+        driver.driverName,
+        sourceTransporter(driver),
+      );
       if (!b) return;
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
@@ -191,7 +219,12 @@ export const aggregateMasterFleet = ({
 
   continuousFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
-      const b = getBucket(buckets, driver.vid, driver.driverName);
+      const b = getBucket(
+        buckets,
+        driver.vid,
+        driver.driverName,
+        sourceTransporter(driver),
+      );
       if (!b) return;
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
@@ -206,9 +239,11 @@ export const aggregateMasterFleet = ({
   buckets.forEach((b) => {
     const total = b.speed + b.nights + b.continuous;
     if (total === 0) return;
+    const profile = resolve(b.vid);
     rows.push({
       vid: b.vid,
-      driverName: resolve(b.vid) || b.fallbackName || '',
+      driverName: profile.driverName || NOT_FOUND,
+      transporter: profile.transporter || b.fallbackTransporter || '',
       speed: b.speed,
       nights: b.nights,
       continuous: b.continuous,
@@ -233,7 +268,7 @@ export const collectFilteredEvents = ({
   allowedVids = [],
   allowedLocations = [],
 }: AggregateInput): FilteredEvents => {
-  const resolve = buildDriverLookup(driverRecords);
+  const resolve = buildDriverProfileLookup(driverRecords);
   const allowedVidSet = buildAllowedVidSet(allowedVids);
   const allowedTagSet = buildAllowedTagSet(allowedLocations);
   const isAllowedVid = (vid: string): boolean =>
@@ -245,7 +280,9 @@ export const collectFilteredEvents = ({
   speedFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
       const vid = cleanVidDisplay(driver.vid);
-      const driverName = resolve(vid) || driver.driverName;
+      const profile = resolve(vid);
+      const driverName = profile.driverName || NOT_FOUND;
+      const transporter = profile.transporter || sourceTransporter(driver);
       const allowedVid = isAllowedVid(vid);
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
@@ -254,6 +291,7 @@ export const collectFilteredEvents = ({
             id: event.id,
             vid,
             driverName,
+            transporter,
             period: driver.period,
             start: event.start,
             end: event.end,
@@ -274,7 +312,9 @@ export const collectFilteredEvents = ({
   nightFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
       const vid = cleanVidDisplay(driver.vid);
-      const driverName = resolve(vid) || driver.driverName;
+      const profile = resolve(vid);
+      const driverName = profile.driverName || NOT_FOUND;
+      const transporter = profile.transporter || sourceTransporter(driver);
       const allowedVid = isAllowedVid(vid);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
@@ -283,6 +323,7 @@ export const collectFilteredEvents = ({
             id: row.id,
             vid,
             driverName,
+            transporter,
             period: driver.period,
             timeA: row.timeA,
             timeB: row.timeB,
@@ -299,7 +340,9 @@ export const collectFilteredEvents = ({
   continuousFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
       const vid = cleanVidDisplay(driver.vid);
-      const driverName = resolve(vid) || driver.driverName;
+      const profile = resolve(vid);
+      const driverName = profile.driverName || NOT_FOUND;
+      const transporter = profile.transporter || sourceTransporter(driver);
       const allowedVid = isAllowedVid(vid);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
@@ -308,6 +351,7 @@ export const collectFilteredEvents = ({
             id: row.id,
             vid,
             driverName,
+            transporter,
             period: driver.period,
             timeA: row.timeA,
             timeB: row.timeB,
@@ -333,6 +377,7 @@ export const collectFilteredEvents = ({
 const MASTER_COLUMNS = [
   'VID',
   'Driver Name',
+  'Transporter',
   'Nights',
   'Speed',
   'Continuous',
@@ -344,6 +389,7 @@ const MASTER_COLUMNS = [
 interface SheetRow {
   VID: string;
   'Driver Name': string;
+  Transporter: string;
   Nights: number;
   Speed: number;
   Continuous: number;
@@ -358,7 +404,8 @@ export const downloadMasterFleetCsv = (
 ): number => {
   const sheetRows: SheetRow[] = rows.map((r) => ({
     VID: r.vid,
-    'Driver Name': r.driverName,
+    'Driver Name': r.driverName || NOT_FOUND,
+    Transporter: r.transporter,
     Nights: r.nights,
     Speed: r.speed,
     Continuous: r.continuous,
@@ -370,7 +417,7 @@ export const downloadMasterFleetCsv = (
     header: MASTER_COLUMNS as unknown as string[],
   });
   const csv = XLSX.utils.sheet_to_csv(ws);
-  const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -381,3 +428,97 @@ export const downloadMasterFleetCsv = (
   setTimeout(() => URL.revokeObjectURL(url), 1500);
   return rows.length;
 };
+
+const triggerCsvDownload = (csv: string, filename: string) => {
+  const blob = new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+};
+
+export const downloadFilteredSpeedCsv = (
+  rows: FilteredSpeedEvent[],
+  filename = `fleetwatch-filtered-speed-${new Date().toISOString().slice(0, 10)}.csv`,
+): void => {
+  const ws = XLSX.utils.json_to_sheet(
+    rows.map((e) => ({
+      VID: e.vid,
+      'Driver Name': e.driverName,
+      Transporter: e.transporter,
+      Period: e.period,
+      Start: e.start,
+      End: e.end,
+      Duration: e.duration,
+      'Top Speed': e.topSpeed,
+      'Overspeed Position': e.overspeedPosition,
+      'Allowed VID': e.allowedVid ? 'YES' : '',
+      'Allowed Location': e.allowedLocation ? 'YES' : '',
+    })),
+    {
+      header: [
+        'VID', 'Driver Name', 'Transporter', 'Period',
+        'Start', 'End', 'Duration', 'Top Speed',
+        'Overspeed Position', 'Allowed VID', 'Allowed Location',
+      ],
+    },
+  );
+  triggerCsvDownload(XLSX.utils.sheet_to_csv(ws), filename);
+};
+
+export const downloadFilteredNightsCsv = (
+  rows: FilteredNightEvent[],
+  filename = `fleetwatch-filtered-nights-${new Date().toISOString().slice(0, 10)}.csv`,
+): void => {
+  const ws = XLSX.utils.json_to_sheet(
+    rows.map((e) => ({
+      VID: e.vid,
+      'Driver Name': e.driverName,
+      Transporter: e.transporter,
+      Period: e.period,
+      'Time A': e.timeA,
+      'Time B': e.timeB,
+      Duration: e.duration,
+      Length: e.length,
+      'Allowed VID': e.allowedVid ? 'YES' : '',
+    })),
+    {
+      header: [
+        'VID', 'Driver Name', 'Transporter', 'Period',
+        'Time A', 'Time B', 'Duration', 'Length', 'Allowed VID',
+      ],
+    },
+  );
+  triggerCsvDownload(XLSX.utils.sheet_to_csv(ws), filename);
+};
+
+export const downloadFilteredContinuousCsv = (
+  rows: FilteredContinuousEvent[],
+  filename = `fleetwatch-filtered-continuous-${new Date().toISOString().slice(0, 10)}.csv`,
+): void => {
+  const ws = XLSX.utils.json_to_sheet(
+    rows.map((e) => ({
+      VID: e.vid,
+      'Driver Name': e.driverName,
+      Transporter: e.transporter,
+      Period: e.period,
+      'Time A': e.timeA,
+      'Time B': e.timeB,
+      Duration: e.duration,
+      Length: e.length,
+      'Allowed VID': e.allowedVid ? 'YES' : '',
+    })),
+    {
+      header: [
+        'VID', 'Driver Name', 'Transporter', 'Period',
+        'Time A', 'Time B', 'Duration', 'Length', 'Allowed VID',
+      ],
+    },
+  );
+  triggerCsvDownload(XLSX.utils.sheet_to_csv(ws), filename);
+};
+

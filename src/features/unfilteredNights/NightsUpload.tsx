@@ -10,7 +10,11 @@ import {
 } from 'lucide-react';
 import { useAppDispatch } from '../../app/store';
 import { addNightFile } from './unfilteredNightsSlice';
-import { detectNightsKind, parseNightsFile } from '../../lib/nightsParser';
+import {
+  detectNightsKind,
+  detectNightsSource,
+  parseNightsFile,
+} from '../../lib/nightsParser';
 import { cn, newId } from '../../lib/utils';
 import type { UnfilteredFileKind, User } from '../../types';
 
@@ -65,6 +69,7 @@ export const NightsUpload = ({ user }: Props) => {
     try {
       const drivers = await parseNightsFile(file, kind);
       const totalRows = drivers.reduce((s, d) => s + d.rows.length, 0);
+      const source = detectNightsSource(kind);
       dispatch(
         addNightFile({
           id: newId(),
@@ -73,12 +78,13 @@ export const NightsUpload = ({ user }: Props) => {
           uploaderId: user.id,
           uploaderName: user.name,
           fileType: kind,
+          source,
           drivers,
           totalRows,
         }),
       );
       setOkMsg(
-        `Parsed ${drivers.length} driver${drivers.length === 1 ? '' : 's'} · ${totalRows} night row${totalRows === 1 ? '' : 's'}.`,
+        `Parsed ${drivers.length} driver${drivers.length === 1 ? '' : 's'} · ${totalRows} night row${totalRows === 1 ? '' : 's'} (${source}).`,
       );
       setFile(null);
       setKind(null);
@@ -146,8 +152,9 @@ export const NightsUpload = ({ user }: Props) => {
             Drop your “Travel sheet (Unauthorized Time)” export
           </p>
           <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-            Repeated <code className="font-mono">Object / Group / Period</code> blocks
-            with Time A / Time B rows are supported.
+            <code className="font-mono">.xls</code> = Mela (Object / Group / Period
+            blocks) · <code className="font-mono">.xlsx</code> = Global (Vehicle /
+            Plate / Owner columns).
           </p>
           <button
             type="button"

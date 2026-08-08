@@ -11,6 +11,7 @@ import { useAppDispatch } from '../../app/store';
 import { addUnfilteredFile } from './unfilteredSlice';
 import {
   detectUnfilteredKind,
+  detectUnfilteredSource,
   parseUnfilteredFile,
 } from '../../lib/unfilteredParser';
 import { cn, newId } from '../../lib/utils';
@@ -71,6 +72,7 @@ export const UnfilteredUpload = ({ user, onUploaded }: Props) => {
     try {
       const drivers = await parseUnfilteredFile(file, kind);
       const totalEvents = drivers.reduce((s, d) => s + d.events.length, 0);
+      const source = detectUnfilteredSource(kind);
       dispatch(
         addUnfilteredFile({
           id: newId(),
@@ -79,6 +81,7 @@ export const UnfilteredUpload = ({ user, onUploaded }: Props) => {
           uploaderId: user.id,
           uploaderName: user.name,
           fileType: kind,
+          source,
           drivers,
           totalEvents,
         }),
@@ -86,7 +89,7 @@ export const UnfilteredUpload = ({ user, onUploaded }: Props) => {
       setOkMsg(
         `Parsed ${drivers.length} driver${drivers.length === 1 ? '' : 's'} · ${totalEvents} overspeed event${
           totalEvents === 1 ? '' : 's'
-        }.`,
+        } (${source}).`,
       );
       setFile(null);
       setKind(null);
@@ -155,8 +158,9 @@ export const UnfilteredUpload = ({ user, onUploaded }: Props) => {
             Drop your raw Excel/CSV export
           </p>
           <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-            Repeated <code className="font-mono">Object / Group / Period</code> blocks
-            with overspeed rows are supported.
+            <code className="font-mono">.xls</code> = Mela (Object / Group / Period
+            blocks) · <code className="font-mono">.xlsx</code> = Global (Vehicle /
+            Plate / Owner columns).
           </p>
           <button
             type="button"

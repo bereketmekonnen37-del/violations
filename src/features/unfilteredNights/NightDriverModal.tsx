@@ -4,12 +4,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Compass,
+  Gauge,
   IdCard,
   Map,
   Route,
   Timer,
   Truck,
   X,
+  Zap,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import type { AggregatedNightDriver } from './useUnfilteredNightsData';
@@ -57,7 +59,7 @@ export const NightDriverModal = ({ driver, onClose }: Props) => {
               Unauthorized travel — driver review
             </p>
             <h2 className="mt-1 truncate font-display text-xl font-semibold tracking-tight text-ink-900 dark:text-white sm:text-2xl">
-              {driver.driverName || 'Unknown driver'}
+              {driver.matchedDriverName || driver.driverName || 'Unknown driver'}
             </h2>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-500 dark:text-ink-400">
               <span className="inline-flex items-center gap-1.5">
@@ -172,6 +174,27 @@ export const NightDriverModal = ({ driver, onClose }: Props) => {
                     </p>
                   </div>
                 </div>
+
+                {(row.averageSpeed || row.maxSpeed) && (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-ink-100 bg-ink-50/60 p-4 dark:border-ink-800 dark:bg-ink-900">
+                      <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+                        <Gauge size={12} /> Average Speed
+                      </p>
+                      <p className="mt-1.5 text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
+                        {row.averageSpeed || '—'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-ink-100 bg-ink-50/60 p-4 dark:border-ink-800 dark:bg-ink-900">
+                      <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+                        <Zap size={12} /> Max Speed
+                      </p>
+                      <p className="mt-1.5 text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
+                        {row.maxSpeed || '—'}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {(row.positionA || row.positionB) && (
                   <div className="mt-3 flex items-center gap-2 rounded-xl border border-ink-100 bg-white p-3 text-xs dark:border-ink-800 dark:bg-ink-900">

@@ -5,6 +5,7 @@ import { formatLocalDate, formatSerialIfNumeric } from './excelDate';
 import type {
   ContinuousDriverBlock,
   ContinuousRow,
+  ContinuousSource,
   UnfilteredFileKind,
 } from '../types';
 
@@ -15,6 +16,16 @@ export const detectContinuousKind = (file: File): UnfilteredFileKind | null => {
   if (n.endsWith('.xls')) return 'xls';
   return null;
 };
+
+/**
+ * File-extension convention agreed with the team:
+ *   .xlsx → Global export  (Vehicle / Plate / Owner / Start Time … columns)
+ *   .xls  → Mela  export   (Travel Sheet with Object/Group/Period blocks)
+ *   .csv  → treated as Mela (matches the historical staff workflow)
+ */
+export const detectContinuousSource = (
+  kind: UnfilteredFileKind,
+): ContinuousSource => (kind === 'xlsx' ? 'global' : 'mela');
 
 const cleanText = (raw: unknown): string => {
   if (raw instanceof Date) return formatLocalDate(raw);
@@ -42,6 +53,30 @@ const extractTransporterFromObject = (raw: string): string => {
   const tag = cleanText(raw).match(/\(([^)]+)\)/);
   if (!tag) return '';
   return tag[1].replace(/\b(ET|et)\b/g, '').trim();
+};
+
+/**
+ * Mela `Object:` cell examples:
+ *   "2549-(3-49646 ET)"  → plate 3-49646
+ *   "2551 (3-66332 ET)"  → plate 3-66332
+ * The plate lives inside the parentheses; strip the ET/et suffix.
+ */
+const extractPlateFromObject = (raw: string): string =>
+  extractTransporterFromObject(raw);
+
+/**
+ * Global `Vehicle` / `Plate` cell example: "3-36542(2784)"
+ *   → plate "3-36542", vid "2784"
+ * Falls back gracefully when either side is missing.
+ */
+const extractPlateAndVidFromVehicle = (
+  raw: string,
+): { plate: string; vid: string } => {
+  const c = cleanText(raw);
+  const paren = c.match(/^(.*?)\s*\((\d+)\s*\)\s*$/);
+  if (paren) return { plate: paren[1].trim(), vid: paren[2].trim() };
+  const digits = c.match(/(\d{3,})/);
+  return { plate: c, vid: digits ? digits[1] : '' };
 };
 
 /* Inline label extractor — mirrors speed / nights parsers */
@@ -212,12 +247,14 @@ const csvToRows = (file: File): Promise<string[][]> =>
     });
   });
 
-const makeBlock = (): ContinuousDriverBlock => ({
+const makeBlock = (source: ContinuousSource): ContinuousDriverBlock => ({
   id: newId(),
   driverName: '',
   vid: '',
+  plate: '',
   period: '',
   transporter: '',
+  source,
   rows: [],
 });
 
@@ -242,15 +279,16 @@ export const parseContinuousRows = (
       const hasObject = labels.some((l) => l.kind === 'object');
       if (hasObject) {
         if (current) blocks.push(current);
-        current = makeBlock();
+        current = makeBlock('mela');
         activeCols = null;
       } else if (!current) {
-        current = makeBlock();
+        current = makeBlock('mela');
       }
       for (const l of labels) {
         if (!current) continue;
         if (l.kind === 'object') {
           current.vid = extractVidFromObject(l.value);
+          current.plate = extractPlateFromObject(l.value);
           current.transporter = extractTransporterFromObject(l.value);
         } else if (l.kind === 'group') {
           current.driverName = cleanText(l.value);
@@ -281,10 +319,102 @@ export const parseContinuousRows = (
   return blocks.filter((b) => b.driverName || b.vid);
 };
 
+/* ─────────────────────────── Global (.xlsx) format ─────────────────────────
+ * Header row: Vehicle | Plate | Owner | Start Time | End Time | Driving Time
+ *             | Distance | Average Speed | Max Speed | Start Location | End Location
+ * Each data row is one trip. We group rows by VID (fallback: plate + owner)
+ * so the boss UI can reuse the same driver-block model as the Mela path.
+ */
+const GLOBAL_ALIASES = {
+  vehicle: ['vehicle'],
+  plate: ['plate'],
+  owner: ['owner', 'driver', 'group'],
+  startTime: ['start time', 'time a', 'time from'],
+  endTime: ['end time', 'time b', 'time to'],
+  duration: ['driving time', 'duration'],
+  length: ['distance', 'length'],
+  startLocation: ['start location', 'position a', 'from'],
+  endLocation: ['end location', 'position b', 'to'],
+} as const;
+
+type GlobalField = keyof typeof GLOBAL_ALIASES;
+
+const findGlobalHeader = (
+  row: string[],
+): Partial<Record<GlobalField, number>> | null => {
+  const norm = row.map((c) => normalizeHeader(c));
+  const out: Partial<Record<GlobalField, number>> = {};
+  (Object.keys(GLOBAL_ALIASES) as GlobalField[]).forEach((field) => {
+    for (const alias of GLOBAL_ALIASES[field]) {
+      const idx = norm.indexOf(alias);
+      if (idx !== -1) {
+        out[field] = idx;
+        return;
+      }
+    }
+  });
+  if (out.startTime === undefined || out.endTime === undefined) return null;
+  if (out.vehicle === undefined && out.plate === undefined) return null;
+  return out;
+};
+
+export const parseGlobalRows = (
+  rows: string[][],
+): ContinuousDriverBlock[] => {
+  let cols: Partial<Record<GlobalField, number>> | null = null;
+  const byVid = new Map<string, ContinuousDriverBlock>();
+
+  for (const rawRow of rows) {
+    const row = rawRow.map((c) => cleanText(c));
+    if (isBlank(row)) continue;
+    if (!cols) {
+      cols = findGlobalHeader(row);
+      continue;
+    }
+    const pick = (k: GlobalField): string => {
+      const i = cols![k];
+      return i === undefined ? '' : cleanText(row[i] ?? '');
+    };
+    const timeA = formatSerialIfNumeric(pick('startTime'));
+    const timeB = formatSerialIfNumeric(pick('endTime'));
+    if (!timeA || !timeB) continue;
+
+    const vehicleCell = pick('vehicle') || pick('plate');
+    const { plate, vid } = extractPlateAndVidFromVehicle(vehicleCell);
+    const owner = pick('owner');
+    const key = vid || `${plate}|${owner}`.toLowerCase();
+    if (!key) continue;
+
+    let block = byVid.get(key);
+    if (!block) {
+      block = makeBlock('global');
+      block.vid = vid;
+      block.plate = plate;
+      block.driverName = owner;
+      block.transporter = plate;
+      byVid.set(key, block);
+    }
+
+    block.rows.push({
+      id: newId(),
+      timeA,
+      positionA: pick('startLocation'),
+      timeB,
+      positionB: pick('endLocation'),
+      duration: normalizeDuration(pick('duration')),
+      length: normalizeLength(pick('length')),
+    });
+  }
+
+  return Array.from(byVid.values()).filter((b) => b.rows.length > 0);
+};
+
 export const parseContinuousFile = async (
   file: File,
   kind: UnfilteredFileKind,
 ): Promise<ContinuousDriverBlock[]> => {
   const rows = kind === 'csv' ? await csvToRows(file) : await xlsxToRows(file);
-  return parseContinuousRows(rows);
+  return detectContinuousSource(kind) === 'global'
+    ? parseGlobalRows(rows)
+    : parseContinuousRows(rows);
 };

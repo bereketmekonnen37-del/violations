@@ -1,6 +1,16 @@
 import type { DriverRecord } from '../types';
 
+/** Sentinel used everywhere a VID has no matching row in the boss's list. */
+export const NOT_FOUND = 'Not found';
+
 export type DriverNameLookup = (vid: string) => string;
+
+export interface DriverProfile {
+  driverName: string;
+  transporter: string;
+}
+
+export type DriverProfileLookup = (vid: string) => DriverProfile;
 
 const normalizeVid = (vid: string): string =>
   String(vid ?? '')
@@ -16,4 +26,20 @@ export const buildDriverLookup = (records: DriverRecord[]): DriverNameLookup => 
     }
   });
   return (vid: string) => map.get(normalizeVid(vid)) ?? '';
+};
+
+export const buildDriverProfileLookup = (
+  records: DriverRecord[],
+): DriverProfileLookup => {
+  const map = new Map<string, DriverProfile>();
+  records.forEach((r) => {
+    const key = normalizeVid(r.vid);
+    if (!key || map.has(key)) return;
+    map.set(key, {
+      driverName: r.driverName ?? '',
+      transporter: r.transporter ?? '',
+    });
+  });
+  return (vid: string) =>
+    map.get(normalizeVid(vid)) ?? { driverName: '', transporter: '' };
 };

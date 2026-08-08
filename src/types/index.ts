@@ -79,8 +79,10 @@ export interface DriverBlock {
   id: string;
   driverName: string;
   vid: string;
+  plate: string;
   period: string;
   transporter: string;
+  source: ContinuousSource;
   events: OverspeedEvent[];
 }
 
@@ -93,6 +95,7 @@ export interface UnfilteredFile {
   uploaderId: string;
   uploaderName: string;
   fileType: UnfilteredFileKind;
+  source: ContinuousSource;
   drivers: DriverBlock[];
   totalEvents: number;
 }
@@ -111,14 +114,20 @@ export interface NightRow {
   positionB: string;
   duration: string;
   length: string;
+  /** Global export only — `Average Speed` column. */
+  averageSpeed?: string;
+  /** Global export only — `Max Speed` column. */
+  maxSpeed?: string;
 }
 
 export interface NightDriverBlock {
   id: string;
   driverName: string;
   vid: string;
+  plate: string;
   period: string;
   transporter: string;
+  source: ContinuousSource;
   rows: NightRow[];
 }
 
@@ -129,6 +138,7 @@ export interface UnfilteredNightFile {
   uploaderId: string;
   uploaderName: string;
   fileType: UnfilteredFileKind;
+  source: ContinuousSource;
   drivers: NightDriverBlock[];
   totalRows: number;
 }
@@ -149,12 +159,16 @@ export interface ContinuousRow {
   length: string;
 }
 
+export type ContinuousSource = 'mela' | 'global';
+
 export interface ContinuousDriverBlock {
   id: string;
   driverName: string;
   vid: string;
+  plate: string;
   period: string;
   transporter: string;
+  source: ContinuousSource;
   rows: ContinuousRow[];
 }
 
@@ -165,6 +179,7 @@ export interface UnfilteredContinuousFile {
   uploaderId: string;
   uploaderName: string;
   fileType: UnfilteredFileKind;
+  source: ContinuousSource;
   drivers: ContinuousDriverBlock[];
   totalRows: number;
 }
@@ -179,6 +194,7 @@ export interface DriverRecord {
   id: string;
   vid: string;
   driverName: string;
+  transporter: string;
 }
 
 export interface DriversDataState {

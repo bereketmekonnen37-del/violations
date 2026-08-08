@@ -26,9 +26,11 @@ import {
 } from '../features/unfilteredContinuous/useUnfilteredContinuousData';
 import {
   buildCleanContinuousRows,
+  buildMasterContinuousRows,
   downloadCleanContinuousCsv,
+  downloadMasterContinuousCsv,
 } from '../lib/continuousExportCsv';
-import { buildDriverLookup } from '../lib/driverLookup';
+import { buildDriverProfileLookup } from '../lib/driverLookup';
 import { formatDateTime } from '../lib/utils';
 
 const StaffView = () => {
@@ -80,7 +82,8 @@ const StaffView = () => {
                       </p>
                       <p className="mt-0.5 text-[11px] text-ink-500 dark:text-ink-400">
                         {formatDateTime(f.uploadDate)} · {f.drivers.length} drivers ·{' '}
-                        {f.totalRows} trips · {f.fileType.toUpperCase()}
+                        {f.totalRows} trips · {(f.source ?? 'mela').toUpperCase()} (
+                        {f.fileType.toUpperCase()})
                       </p>
                     </div>
                   </div>
@@ -118,18 +121,26 @@ const BossView = () => {
   } = useUnfilteredContinuousData(undefined, selectedFileId ?? undefined);
   const [openDriver, setOpenDriver] = useState<AggregatedContinuousDriver | null>(null);
   const driverRecords = useAppSelector((s) => s.drivers.records);
-  const resolveDriver = useMemo(
-    () => buildDriverLookup(driverRecords),
+  const resolveProfile = useMemo(
+    () => buildDriverProfileLookup(driverRecords),
     [driverRecords],
   );
 
   const cleanCount = useMemo(
-    () => buildCleanContinuousRows(files, resolveDriver).length,
-    [files, resolveDriver],
+    () => buildCleanContinuousRows(files, resolveProfile).length,
+    [files, resolveProfile],
+  );
+  const masterCount = useMemo(
+    () => buildMasterContinuousRows(allFiles, resolveProfile).length,
+    [allFiles, resolveProfile],
   );
   const onDownload = () => {
     if (files.length === 0) return;
-    downloadCleanContinuousCsv(files, resolveDriver);
+    downloadCleanContinuousCsv(files, resolveProfile);
+  };
+  const onDownloadMaster = () => {
+    if (allFiles.length === 0) return;
+    downloadMasterContinuousCsv(allFiles, resolveProfile);
   };
 
   if (!selectedFileId) {
@@ -138,7 +149,22 @@ const BossView = () => {
         <PageHeader
           eyebrow="Manager workspace"
           title="Unfiltered continuous"
-          subtitle="Pick an uploaded file to inspect its parsed drivers and download clean data."
+          subtitle="Pick an uploaded file to inspect it — or download the master sheet combining every upload (Mela + Global)."
+          actions={
+            <button
+              type="button"
+              onClick={onDownloadMaster}
+              disabled={allFiles.length === 0}
+              className="btn-primary"
+            >
+              <Download size={16} /> Download master sheet
+              {masterCount > 0 && (
+                <span className="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold dark:bg-ink-900/20">
+                  {masterCount}
+                </span>
+              )}
+            </button>
+          }
         />
         {allFiles.length === 0 ? (
           <EmptyState
@@ -151,7 +177,7 @@ const BossView = () => {
             icon={Route}
             files={allFiles.map((f) => ({
               id: f.id,
-              title: f.title,
+              title: `${f.title} · ${(f.source ?? 'mela').toUpperCase()}`,
               uploadDate: f.uploadDate,
               uploaderName: f.uploaderName,
               fileType: f.fileType,

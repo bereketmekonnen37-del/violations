@@ -1,9 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useAppSelector } from '../../app/store';
 import { buildFuse, tokensMatch } from '../../lib/fuseSearch';
+import {
+  buildDriverProfileLookup,
+  NOT_FOUND,
+  type DriverProfileLookup,
+} from '../../lib/driverLookup';
 import type {
   ContinuousDriverBlock,
   ContinuousRow,
+  ContinuousSource,
   UnfilteredContinuousFile,
 } from '../../types';
 
@@ -29,8 +35,11 @@ export interface AggregatedContinuousDriver {
   blockId: string;
   driverName: string;
   vid: string;
+  plate: string;
   period: string;
   transporter: string;
+  matchedDriverName: string;
+  source: ContinuousSource;
   rows: ContinuousRow[];
   fileTitle: string;
   fileId: string;
@@ -46,16 +55,27 @@ const parseTime = (s: string): number | null => {
   return Number.isNaN(d2.getTime()) ? null : d2.getTime();
 };
 
-const flatten = (files: UnfilteredContinuousFile[]): AggregatedContinuousDriver[] => {
+const flatten = (
+  files: UnfilteredContinuousFile[],
+  resolveProfile: DriverProfileLookup,
+): AggregatedContinuousDriver[] => {
   const out: AggregatedContinuousDriver[] = [];
   files.forEach((file) => {
+    // `source` was added later — persisted pre-migration files won't have it.
+    const fallback: ContinuousSource = file.source ?? 'mela';
     file.drivers.forEach((d: ContinuousDriverBlock) => {
+      const profile = resolveProfile(d.vid);
+      const transporter =
+        profile.transporter || d.transporter || d.driverName || '';
       out.push({
         blockId: d.id,
         driverName: d.driverName,
         vid: d.vid,
+        plate: d.plate ?? '',
         period: d.period,
-        transporter: d.transporter,
+        transporter,
+        matchedDriverName: profile.driverName || NOT_FOUND,
+        source: d.source ?? fallback,
         rows: d.rows,
         fileTitle: file.title,
         fileId: file.id,
@@ -71,6 +91,7 @@ export const useUnfilteredContinuousData = (
   fileId?: string,
 ) => {
   const allFiles = useAppSelector((s) => s.unfilteredContinuous.files);
+  const driverRecords = useAppSelector((s) => s.drivers.records);
   const files = useMemo(
     () =>
       allFiles.filter(
@@ -82,7 +103,12 @@ export const useUnfilteredContinuousData = (
 
   const [filters, setFilters] = useState<ContinuousFilters>(defaultFilters);
 
-  const drivers = useMemo(() => flatten(files), [files]);
+  const resolveProfile = useMemo(
+    () => buildDriverProfileLookup(driverRecords),
+    [driverRecords],
+  );
+
+  const drivers = useMemo(() => flatten(files, resolveProfile), [files, resolveProfile]);
 
   const transporters = useMemo(() => {
     const set = new Set<string>();

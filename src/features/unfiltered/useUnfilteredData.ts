@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useAppSelector } from '../../app/store';
 import { buildFuse, tokensMatch } from '../../lib/fuseSearch';
+import {
+  buildDriverProfileLookup,
+  NOT_FOUND,
+  type DriverProfileLookup,
+} from '../../lib/driverLookup';
 import type { DriverBlock, OverspeedEvent, UnfilteredFile } from '../../types';
 
 export interface UnfilteredFilters {
@@ -31,6 +36,7 @@ export interface AggregatedDriver {
   vid: string;
   period: string;
   transporter: string;
+  matchedDriverName: string;
   events: OverspeedEvent[];
   fileTitle: string;
   fileId: string;
@@ -47,16 +53,24 @@ const parseEventDate = (s: string): number | null => {
   return null;
 };
 
-const flattenDrivers = (files: UnfilteredFile[]): AggregatedDriver[] => {
+const flattenDrivers = (
+  files: UnfilteredFile[],
+  resolveProfile: DriverProfileLookup,
+): AggregatedDriver[] => {
   const out: AggregatedDriver[] = [];
   files.forEach((file) => {
     file.drivers.forEach((d: DriverBlock) => {
+      const profile = resolveProfile(d.vid);
+      // Source's Group/Owner is the transporter; boss list wins when present.
+      const transporter =
+        profile.transporter || d.transporter || d.driverName || '';
       out.push({
         blockId: d.id,
         driverName: d.driverName,
         vid: d.vid,
         period: d.period,
-        transporter: d.transporter,
+        transporter,
+        matchedDriverName: profile.driverName || NOT_FOUND,
         events: d.events,
         fileTitle: file.title,
         fileId: file.id,
@@ -69,6 +83,7 @@ const flattenDrivers = (files: UnfilteredFile[]): AggregatedDriver[] => {
 
 export const useUnfilteredData = (uploaderId?: string, fileId?: string) => {
   const allFiles = useAppSelector((s) => s.unfiltered.files);
+  const driverRecords = useAppSelector((s) => s.drivers.records);
   const files = useMemo(
     () =>
       allFiles.filter(
@@ -80,7 +95,12 @@ export const useUnfilteredData = (uploaderId?: string, fileId?: string) => {
 
   const [filters, setFilters] = useState<UnfilteredFilters>(defaultFilters);
 
-  const drivers = useMemo(() => flattenDrivers(files), [files]);
+  const resolveProfile = useMemo(
+    () => buildDriverProfileLookup(driverRecords),
+    [driverRecords],
+  );
+
+  const drivers = useMemo(() => flattenDrivers(files, resolveProfile), [files, resolveProfile]);
 
   const eventTypes = useMemo(() => {
     const set = new Set<string>();

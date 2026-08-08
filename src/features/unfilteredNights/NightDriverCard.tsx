@@ -29,7 +29,7 @@ export const NightDriverCard = ({ driver, onOpen }: Props) => {
           </div>
           <div className="min-w-0">
             <p className="truncate text-base font-semibold tracking-tight text-ink-900 dark:text-white">
-              {driver.driverName || 'Unknown driver'}
+              {driver.matchedDriverName || driver.driverName || 'Unknown driver'}
             </p>
             <p className="mt-0.5 text-xs text-ink-500 dark:text-ink-400">
               {driver.fileTitle}

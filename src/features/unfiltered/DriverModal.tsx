@@ -65,7 +65,7 @@ export const DriverModal = ({ driver, onClose }: Props) => {
               Driver review
             </p>
             <h2 className="mt-1 truncate font-display text-xl font-semibold tracking-tight text-ink-900 dark:text-white sm:text-2xl">
-              {driver.driverName || 'Unknown driver'}
+              {driver.matchedDriverName || driver.driverName || 'Unknown driver'}
             </h2>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-500 dark:text-ink-400">
               <span className="inline-flex items-center gap-1.5">

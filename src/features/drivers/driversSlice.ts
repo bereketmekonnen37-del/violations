@@ -40,12 +40,18 @@ const driversSlice = createSlice({
     },
     updateDriverRecord(
       state,
-      action: PayloadAction<{ id: string; vid: string; driverName: string }>,
+      action: PayloadAction<{
+        id: string;
+        vid: string;
+        driverName: string;
+        transporter: string;
+      }>,
     ) {
       const r = state.records.find((rec) => rec.id === action.payload.id);
       if (r) {
         r.vid = action.payload.vid;
         r.driverName = action.payload.driverName;
+        r.transporter = action.payload.transporter;
       }
     },
     addDriverRecord(state, action: PayloadAction<DriverRecord>) {

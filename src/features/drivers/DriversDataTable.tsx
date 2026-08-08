@@ -12,11 +12,13 @@ export const DriversDataTable = () => {
   const dispatch = useAppDispatch();
   const records = useAppSelector((s) => s.drivers.records);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draftVid, setDraftVid] = useState('');
+  const [draftTransporter, setDraftTransporter] = useState('');
   const [draftName, setDraftName] = useState('');
+  const [draftVid, setDraftVid] = useState('');
   const [query, setQuery] = useState('');
-  const [newVid, setNewVid] = useState('');
+  const [newTransporter, setNewTransporter] = useState('');
   const [newName, setNewName] = useState('');
+  const [newVid, setNewVid] = useState('');
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -24,38 +26,51 @@ export const DriversDataTable = () => {
     return records.filter(
       (r) =>
         r.vid.toLowerCase().includes(q) ||
-        r.driverName.toLowerCase().includes(q),
+        r.driverName.toLowerCase().includes(q) ||
+        (r.transporter ?? '').toLowerCase().includes(q),
     );
   }, [records, query]);
 
-  const startEdit = (id: string, vid: string, driverName: string) => {
+  const startEdit = (
+    id: string,
+    transporter: string,
+    driverName: string,
+    vid: string,
+  ) => {
     setEditingId(id);
-    setDraftVid(vid);
+    setDraftTransporter(transporter);
     setDraftName(driverName);
+    setDraftVid(vid);
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setDraftVid('');
+    setDraftTransporter('');
     setDraftName('');
+    setDraftVid('');
   };
 
   const saveEdit = () => {
     if (!editingId) return;
     const vid = draftVid.trim();
     const driverName = draftName.trim();
-    if (!vid || !driverName) return;
-    dispatch(updateDriverRecord({ id: editingId, vid, driverName }));
+    const transporter = draftTransporter.trim();
+    if (!vid) return;
+    dispatch(updateDriverRecord({ id: editingId, vid, driverName, transporter }));
     cancelEdit();
   };
 
   const handleAdd = () => {
     const vid = newVid.trim();
     const driverName = newName.trim();
-    if (!vid || !driverName) return;
-    dispatch(addDriverRecord({ id: newId(), vid, driverName }));
-    setNewVid('');
+    const transporter = newTransporter.trim();
+    if (!vid || (!driverName && !transporter)) return;
+    dispatch(
+      addDriverRecord({ id: newId(), vid, driverName, transporter }),
+    );
+    setNewTransporter('');
     setNewName('');
+    setNewVid('');
   };
 
   return (
@@ -66,7 +81,8 @@ export const DriversDataTable = () => {
             Drivers ({records.length})
           </h3>
           <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-            Edit, add or remove rows. Each VID maps to one driver name.
+            Each VID maps to one transporter and one driver. Used to enrich every
+            master and clean CSV export.
           </p>
         </div>
         <div className="relative sm:w-72">
@@ -78,31 +94,38 @@ export const DriversDataTable = () => {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search VID or driver name"
+            placeholder="Search VID, driver or transporter"
             className="input-base !pl-9"
           />
         </div>
       </div>
 
-      <div className="mt-5 flex flex-col gap-2 rounded-xl border border-dashed border-ink-200 bg-ink-50/60 p-3 dark:border-ink-700 dark:bg-ink-900/60 sm:flex-row sm:items-center">
+      <div className="mt-5 grid gap-2 rounded-xl border border-dashed border-ink-200 bg-ink-50/60 p-3 dark:border-ink-700 dark:bg-ink-900/60 sm:grid-cols-[1fr_1fr_180px_auto]">
         <input
           type="text"
-          value={newVid}
-          onChange={(e) => setNewVid(e.target.value)}
-          placeholder="VID (e.g. 1538)"
-          className="input-base sm:max-w-[180px]"
+          value={newTransporter}
+          onChange={(e) => setNewTransporter(e.target.value)}
+          placeholder="Transporter"
+          className="input-base"
         />
         <input
           type="text"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder="Driver name"
-          className="input-base flex-1"
+          placeholder="Drivers Name"
+          className="input-base"
+        />
+        <input
+          type="text"
+          value={newVid}
+          onChange={(e) => setNewVid(e.target.value)}
+          placeholder="VID (e.g. 2510)"
+          className="input-base"
         />
         <button
           type="button"
           onClick={handleAdd}
-          disabled={!newVid.trim() || !newName.trim()}
+          disabled={!newVid.trim() || (!newName.trim() && !newTransporter.trim())}
           className="btn-primary !px-4"
         >
           <Plus size={15} /> Add
@@ -113,8 +136,9 @@ export const DriversDataTable = () => {
         <table className="min-w-full text-sm">
           <thead className="bg-ink-50 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:bg-ink-900 dark:text-ink-400">
             <tr>
+              <th className="px-4 py-3">Transporter</th>
+              <th className="px-4 py-3">Drivers Name</th>
               <th className="px-4 py-3">VID</th>
-              <th className="px-4 py-3">Driver name</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -122,11 +146,11 @@ export const DriversDataTable = () => {
             {filtered.length === 0 ? (
               <tr>
                 <td
-                  colSpan={3}
+                  colSpan={4}
                   className="px-4 py-8 text-center text-sm text-ink-500 dark:text-ink-400"
                 >
                   {records.length === 0
-                    ? 'No drivers yet — upload a monthly list above or add a row.'
+                    ? 'No drivers yet — upload the boss list above or add a row.'
                     : 'No drivers match your search.'}
                 </td>
               </tr>
@@ -135,15 +159,17 @@ export const DriversDataTable = () => {
                 const editing = editingId === r.id;
                 return (
                   <tr key={r.id} className="bg-white dark:bg-ink-900">
-                    <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
+                    <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
                       {editing ? (
                         <input
-                          value={draftVid}
-                          onChange={(e) => setDraftVid(e.target.value)}
+                          value={draftTransporter}
+                          onChange={(e) => setDraftTransporter(e.target.value)}
                           className="input-base !py-1.5"
                         />
                       ) : (
-                        r.vid
+                        r.transporter || (
+                          <span className="text-ink-400">—</span>
+                        )
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
@@ -154,7 +180,20 @@ export const DriversDataTable = () => {
                           className="input-base !py-1.5"
                         />
                       ) : (
-                        r.driverName
+                        r.driverName || (
+                          <span className="text-ink-400">—</span>
+                        )
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
+                      {editing ? (
+                        <input
+                          value={draftVid}
+                          onChange={(e) => setDraftVid(e.target.value)}
+                          className="input-base !py-1.5"
+                        />
+                      ) : (
+                        r.vid
                       )}
                     </td>
                     <td className="px-4 py-2.5">
@@ -180,7 +219,14 @@ export const DriversDataTable = () => {
                           <>
                             <button
                               type="button"
-                              onClick={() => startEdit(r.id, r.vid, r.driverName)}
+                              onClick={() =>
+                                startEdit(
+                                  r.id,
+                                  r.transporter ?? '',
+                                  r.driverName,
+                                  r.vid,
+                                )
+                              }
                               className="btn-ghost !px-3 !py-1.5 text-xs"
                               aria-label="Edit"
                             >

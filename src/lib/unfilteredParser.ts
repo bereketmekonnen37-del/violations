@@ -3,6 +3,7 @@ import Papa from 'papaparse';
 import { newId } from './utils';
 import { formatLocalDate, formatSerialIfNumeric } from './excelDate';
 import type {
+  ContinuousSource,
   DriverBlock,
   OverspeedEvent,
   UnfilteredFileKind,
@@ -15,6 +16,11 @@ export const detectUnfilteredKind = (file: File): UnfilteredFileKind | null => {
   if (n.endsWith('.xls')) return 'xls';
   return null;
 };
+
+/** `.xlsx` = Global export, `.xls` / `.csv` = Mela export. */
+export const detectUnfilteredSource = (
+  kind: UnfilteredFileKind,
+): ContinuousSource => (kind === 'xlsx' ? 'global' : 'mela');
 
 /* ──────────────────── helpers ──────────────────── */
 
@@ -84,15 +90,26 @@ const extractVidFromObject = (raw: string): string => {
   return m ? m[1] : '';
 };
 
-const extractTransporterFromObject = (raw: string): string => {
-  const cleaned = cleanText(raw);
-  // Pattern like "1538-(3-81798 ET)" — pull the suffix tag if present.
-  const tag = cleaned.match(/\(([^)]+)\)/);
-  if (tag) {
-    const inner = tag[1].replace(/\b(ET|et)\b/g, '').trim();
-    return inner;
-  }
-  return '';
+/**
+ * Mela `Object:` cell — pattern "2607-(3-59466 ET)". Parens hold the plate.
+ */
+const extractPlateFromObject = (raw: string): string => {
+  const tag = cleanText(raw).match(/\(([^)]+)\)/);
+  if (!tag) return '';
+  return tag[1].replace(/\b(ET|et)\b/g, '').trim();
+};
+
+/**
+ * Global `Vehicle` / `Plate` cell — "3-36190(3229)" → plate "3-36190", vid "3229".
+ */
+const extractPlateAndVidFromVehicle = (
+  raw: string,
+): { plate: string; vid: string } => {
+  const c = cleanText(raw);
+  const paren = c.match(/^(.*?)\s*\((\d+)\s*\)\s*$/);
+  if (paren) return { plate: paren[1].trim(), vid: paren[2].trim() };
+  const digits = c.match(/(\d{3,})/);
+  return { plate: c, vid: digits ? digits[1] : '' };
 };
 
 const HEADER_ALIASES = {
@@ -246,12 +263,14 @@ const buildEvent = (
   };
 };
 
-const makeBlock = (): DriverBlock => ({
+const makeBlock = (source: ContinuousSource): DriverBlock => ({
   id: newId(),
   driverName: '',
   vid: '',
+  plate: '',
   period: '',
   transporter: '',
+  source,
   events: [],
 });
 
@@ -272,18 +291,23 @@ export const parseUnstructuredRows = (rows: string[][]): DriverBlock[] => {
       const hasObject = labels.some((l) => l.kind === 'object');
       if (hasObject) {
         if (current) blocks.push(current);
-        current = makeBlock();
+        current = makeBlock('mela');
         activeCols = null;
       } else if (!current) {
-        current = makeBlock();
+        current = makeBlock('mela');
       }
       for (const l of labels) {
         if (!current) continue;
         if (l.kind === 'object') {
           current.vid = extractVidFromObject(l.value);
-          current.transporter = extractTransporterFromObject(l.value);
+          current.plate = extractPlateFromObject(l.value);
         } else if (l.kind === 'group') {
-          current.driverName = cleanText(l.value);
+          const value = cleanText(l.value);
+          // `Group:` is the transporter in the master sheet, but the existing
+          // UI already renders `driverName` prominently — mirror it so neither
+          // surface loses signal.
+          current.driverName = value;
+          current.transporter = value;
         } else if (l.kind === 'period') {
           current.period = cleanText(l.value);
         }
@@ -320,6 +344,99 @@ export const parseUnstructuredRows = (rows: string[][]): DriverBlock[] => {
   );
 };
 
+/* ─────────────────────────── Global (.xlsx) format ─────────────────────────
+ * Header row: Vehicle | Plate | Owner | Start Time | Duration | Max Speed
+ *             | Location | Coordinates
+ * Each data row is one overspeed event. Rows are grouped by VID (fallback:
+ * plate + owner) into DriverBlocks so the boss UI can reuse the same model
+ * as the Mela path.
+ */
+const GLOBAL_ALIASES = {
+  vehicle: ['vehicle'],
+  plate: ['plate'],
+  owner: ['owner', 'driver', 'group'],
+  start: ['start time', 'start', 'begin'],
+  duration: ['duration', 'length', 'elapsed'],
+  maxSpeed: ['max speed', 'top speed', 'speed'],
+  location: ['location', 'place', 'address'],
+  coordinates: ['coordinates', 'gps', 'coords', 'latlng', 'lat lng'],
+} as const;
+
+type GlobalField = keyof typeof GLOBAL_ALIASES;
+
+const findGlobalHeader = (
+  row: string[],
+): Partial<Record<GlobalField, number>> | null => {
+  const norm = row.map((c) => normalizeHeader(c));
+  const out: Partial<Record<GlobalField, number>> = {};
+  (Object.keys(GLOBAL_ALIASES) as GlobalField[]).forEach((field) => {
+    for (const alias of GLOBAL_ALIASES[field]) {
+      const idx = norm.indexOf(alias);
+      if (idx !== -1) {
+        out[field] = idx;
+        return;
+      }
+    }
+  });
+  if (out.start === undefined) return null;
+  if (out.vehicle === undefined && out.plate === undefined) return null;
+  return out;
+};
+
+export const parseGlobalSpeedRows = (rows: string[][]): DriverBlock[] => {
+  let cols: Partial<Record<GlobalField, number>> | null = null;
+  const byKey = new Map<string, DriverBlock>();
+
+  for (const rawRow of rows) {
+    const row = rawRow.map((c) => cleanText(c));
+    if (isBlank(row)) continue;
+    if (!cols) {
+      cols = findGlobalHeader(row);
+      continue;
+    }
+    const pick = (k: GlobalField): string => {
+      const i = cols![k];
+      return i === undefined ? '' : cleanText(row[i] ?? '');
+    };
+    const start = formatSerialIfNumeric(pick('start'));
+    if (!start) continue;
+
+    const vehicleCell = pick('vehicle') || pick('plate');
+    const { plate, vid } = extractPlateAndVidFromVehicle(vehicleCell);
+    const owner = pick('owner');
+    const key = vid || `${plate}|${owner}`.toLowerCase();
+    if (!key) continue;
+
+    let block = byKey.get(key);
+    if (!block) {
+      block = makeBlock('global');
+      block.vid = vid;
+      block.plate = plate;
+      block.driverName = owner;
+      block.transporter = owner;
+      byKey.set(key, block);
+    }
+
+    const location = pick('location');
+    const gpsCoords = pick('coordinates');
+    block.events.push({
+      id: newId(),
+      start,
+      end: '',
+      duration: normalizeDuration(pick('duration')),
+      topSpeed: normalizeSpeed(pick('maxSpeed')),
+      overspeedPosition: location || gpsCoords,
+      location,
+      gpsCoords,
+      remarks: '',
+      eventType: 'Overspeed',
+      transporter: owner,
+    });
+  }
+
+  return Array.from(byKey.values()).filter((b) => b.events.length > 0);
+};
+
 /* ──────────────────── public API ──────────────────── */
 
 export const parseUnfilteredFile = async (
@@ -328,5 +445,7 @@ export const parseUnfilteredFile = async (
 ): Promise<DriverBlock[]> => {
   const rows =
     kind === 'csv' ? await csvToRows(file) : await xlsxToRows(file);
-  return parseUnstructuredRows(rows);
+  return detectUnfilteredSource(kind) === 'global'
+    ? parseGlobalSpeedRows(rows)
+    : parseUnstructuredRows(rows);
 };

@@ -28,16 +28,19 @@ export const ContinuousDriverCard = ({ driver, onOpen }: Props) => {
           </div>
           <div className="min-w-0">
             <p className="truncate text-base font-semibold tracking-tight text-ink-900 dark:text-white">
-              {driver.driverName || 'Unknown driver'}
+              {driver.matchedDriverName || driver.driverName || 'Unknown driver'}
             </p>
             <p className="mt-0.5 text-xs text-ink-500 dark:text-ink-400">
               {driver.fileTitle}
             </p>
           </div>
         </div>
-        <Badge tone={severity(count)}>
-          <Route size={11} /> {count} trip{count === 1 ? '' : 's'}
-        </Badge>
+        <div className="flex flex-col items-end gap-1.5">
+          <Badge tone={severity(count)}>
+            <Route size={11} /> {count} trip{count === 1 ? '' : 's'}
+          </Badge>
+          <Badge tone="neutral">{(driver.source ?? 'mela').toUpperCase()}</Badge>
+        </div>
       </div>
 
       <dl className="mt-5 space-y-2.5 text-xs">
@@ -48,6 +51,15 @@ export const ContinuousDriverCard = ({ driver, onOpen }: Props) => {
             {driver.vid || '—'}
           </dd>
         </div>
+        {driver.plate && (
+          <div className="flex items-center gap-2">
+            <IdCard size={13} className="text-ink-400" />
+            <dt className="w-20 text-ink-500 dark:text-ink-400">Plate</dt>
+            <dd className="font-mono text-ink-900 dark:text-white">
+              {driver.plate}
+            </dd>
+          </div>
+        )}
         <div className="flex items-start gap-2">
           <CalendarRange size={13} className="mt-0.5 text-ink-400" />
           <dt className="w-20 shrink-0 text-ink-500 dark:text-ink-400">Period</dt>

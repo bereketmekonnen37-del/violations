@@ -12,6 +12,7 @@ import { useAppDispatch } from '../../app/store';
 import { addContinuousFile } from './unfilteredContinuousSlice';
 import {
   detectContinuousKind,
+  detectContinuousSource,
   parseContinuousFile,
 } from '../../lib/continuousParser';
 import { cn, newId } from '../../lib/utils';
@@ -68,6 +69,7 @@ export const ContinuousUpload = ({ user }: Props) => {
     try {
       const drivers = await parseContinuousFile(file, kind);
       const totalRows = drivers.reduce((s, d) => s + d.rows.length, 0);
+      const source = detectContinuousSource(kind);
       dispatch(
         addContinuousFile({
           id: newId(),
@@ -76,12 +78,13 @@ export const ContinuousUpload = ({ user }: Props) => {
           uploaderId: user.id,
           uploaderName: user.name,
           fileType: kind,
+          source,
           drivers,
           totalRows,
         }),
       );
       setOkMsg(
-        `Parsed ${drivers.length} driver${drivers.length === 1 ? '' : 's'} · ${totalRows} continuous trip${totalRows === 1 ? '' : 's'}.`,
+        `Parsed ${drivers.length} driver${drivers.length === 1 ? '' : 's'} · ${totalRows} continuous trip${totalRows === 1 ? '' : 's'} (${source}).`,
       );
       setFile(null);
       setKind(null);
@@ -149,9 +152,9 @@ export const ContinuousUpload = ({ user }: Props) => {
             Drop your “Travel Sheet (Continuous Driving)” export
           </p>
           <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-            Repeated <code className="font-mono">Object / Group / Period</code> blocks
-            with Time A / Time B trip rows are supported. Sub-total summary rows are
-            skipped.
+            <code className="font-mono">.xls</code> = Mela (Object / Group / Period
+            blocks) · <code className="font-mono">.xlsx</code> = Global (Vehicle /
+            Plate / Owner columns). Sub-total summary rows are skipped.
           </p>
           <button
             type="button"

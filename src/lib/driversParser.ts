@@ -20,8 +20,34 @@ const cleanText = (raw: unknown): string =>
 const normalizeHeader = (s: string): string =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
-const VID_ALIASES = ['vid', 'vehicle id', 'vehicle', 'object', 'unit', 'plate', 'truck', 'truck no', 'vehicle no'];
-const NAME_ALIASES = ['driver', 'driver name', 'name', 'driver full name', 'full name'];
+const VID_ALIASES = [
+  'vid',
+  'vid no',
+  'vid number',
+  'vehicle id',
+  'vehicle',
+  'vehicle no',
+  'object',
+  'unit',
+  'truck',
+  'truck no',
+];
+const NAME_ALIASES = [
+  'drivers name',
+  'driver name',
+  'driver',
+  'name',
+  'driver full name',
+  'full name',
+];
+const TRANSPORTER_ALIASES = [
+  'transporter',
+  'transport',
+  'owner',
+  'group',
+  'company',
+  'carrier',
+];
 
 const findColumn = (headers: string[], aliases: string[]): number => {
   const norm = headers.map((h) => normalizeHeader(h));
@@ -80,6 +106,7 @@ export const parseDriverRecords = (rows: string[][]): DriverRecord[] => {
   let headerIdx = -1;
   let vidCol = -1;
   let nameCol = -1;
+  let transporterCol = -1;
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -90,15 +117,18 @@ export const parseDriverRecords = (rows: string[][]): DriverRecord[] => {
       headerIdx = i;
       vidCol = vc;
       nameCol = nc;
+      transporterCol = findColumn(row, TRANSPORTER_ALIASES);
       break;
     }
   }
 
   if (headerIdx === -1) {
-    // Fallback: assume column 0 = VID, column 1 = driver name.
+    // Fallback: assume column 0 = Transporter, column 1 = Driver Name,
+    // column 2 = VID (matches the boss template order).
     headerIdx = -1;
-    vidCol = 0;
+    transporterCol = 0;
     nameCol = 1;
+    vidCol = 2;
   }
 
   const out: DriverRecord[] = [];
@@ -108,10 +138,15 @@ export const parseDriverRecords = (rows: string[][]): DriverRecord[] => {
     if (!row) continue;
     const vid = extractVid(row[vidCol] ?? '');
     const driverName = cleanText(row[nameCol] ?? '');
-    if (!vid || !driverName) continue;
+    const transporter =
+      transporterCol >= 0 ? cleanText(row[transporterCol] ?? '') : '';
+    // Boss data occasionally has a VID with no driver assigned yet — still
+    // preserve the transporter mapping so downstream sheets can label the row.
+    if (!vid) continue;
+    if (!driverName && !transporter) continue;
     if (seen.has(vid)) continue;
     seen.add(vid);
-    out.push({ id: newId(), vid, driverName });
+    out.push({ id: newId(), vid, driverName, transporter });
   }
   return out;
 };

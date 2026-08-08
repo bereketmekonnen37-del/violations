@@ -23,6 +23,9 @@ import {
   aggregateMasterFleet,
   collectFilteredEvents,
   downloadMasterFleetCsv,
+  downloadFilteredSpeedCsv,
+  downloadFilteredNightsCsv,
+  downloadFilteredContinuousCsv,
   type EventThresholds,
   type FilteredEvents,
   type MasterFleetRow,
@@ -65,10 +68,16 @@ const TopOffenderCard = ({
             #{rank + 1} most flagged
           </p>
           <h3 className="mt-1 truncate font-display text-xl font-semibold tracking-tight text-ink-900 dark:text-white">
-            {row.driverName || 'Unknown driver'}
+            {row.driverName || 'Not found'}
           </h3>
           <p className="mt-0.5 inline-flex items-center gap-1.5 text-xs text-ink-600 dark:text-ink-300">
             <IdCard size={12} /> VID {row.vid}
+            {row.transporter && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="truncate">{row.transporter}</span>
+              </>
+            )}
           </p>
         </div>
         <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/80 text-ink-700 shadow-card dark:bg-ink-900/70 dark:text-ink-100">
@@ -356,6 +365,7 @@ export const MasterFleetPage = () => {
                     <th className="px-4 py-3">#</th>
                     <th className="px-4 py-3">VID</th>
                     <th className="px-4 py-3">Driver name</th>
+                    <th className="px-4 py-3">Transporter</th>
                     <th className="px-4 py-3 text-right">Nights</th>
                     <th className="px-4 py-3 text-right">Speed</th>
                     <th className="px-4 py-3 text-right">Continuous</th>
@@ -366,7 +376,7 @@ export const MasterFleetPage = () => {
                   {filtered.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={8}
                         className="px-4 py-8 text-center text-sm text-ink-500 dark:text-ink-400"
                       >
                         No drivers match your search.
@@ -394,7 +404,13 @@ export const MasterFleetPage = () => {
                           </td>
                           <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span>
+                              <span
+                                className={
+                                  r.driverName === 'Not found'
+                                    ? 'text-ink-400 italic'
+                                    : ''
+                                }
+                              >
                                 {r.driverName || (
                                   <span className="text-ink-400">—</span>
                                 )}
@@ -418,6 +434,11 @@ export const MasterFleetPage = () => {
                               )}
                               {!isFlagged && null}
                             </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                            {r.transporter || (
+                              <span className="text-ink-400">—</span>
+                            )}
                           </td>
                           <td className="px-4 py-2.5 text-right font-mono text-ink-800 dark:text-ink-100">
                             {r.nights}
@@ -506,18 +527,38 @@ const FilteredEventsPanel = ({
             category.
           </p>
         </div>
-        <div className="relative sm:w-72">
-          <Search
-            size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
-          />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search VID, driver, time, location"
-            className="input-base !pl-9"
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (activeTab === 'speed') downloadFilteredSpeedCsv(events.speed);
+              else if (activeTab === 'nights') downloadFilteredNightsCsv(events.nights);
+              else downloadFilteredContinuousCsv(events.continuous);
+            }}
+            disabled={counts[activeTab] === 0}
+            className="btn-primary !px-3 !py-1.5 !text-xs"
+          >
+            <Download size={13} />
+            Download {TAB_META[activeTab].label} CSV
+            {counts[activeTab] > 0 && (
+              <span className="ml-1 rounded-full bg-ink-900/10 px-1.5 py-0.5 text-[10px] font-semibold dark:bg-white/10">
+                {counts[activeTab]}
+              </span>
+            )}
+          </button>
+          <div className="relative sm:w-64">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
+            />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search VID, driver, time, location"
+              className="input-base !pl-9"
+            />
+          </div>
         </div>
       </div>
 
@@ -571,6 +612,7 @@ const FilteredEventsPanel = ({
               <tr>
                 <th className="px-4 py-3">VID</th>
                 <th className="px-4 py-3">Driver</th>
+                <th className="px-4 py-3">Transporter</th>
                 <th className="px-4 py-3">Start</th>
                 <th className="px-4 py-3">End</th>
                 <th className="px-4 py-3">Duration</th>
@@ -582,7 +624,7 @@ const FilteredEventsPanel = ({
               {speedRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-8 text-center text-sm text-ink-500 dark:text-ink-400"
                   >
                     No speed events passed the threshold.
@@ -613,6 +655,9 @@ const FilteredEventsPanel = ({
                     </td>
                     <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
                       {e.driverName || <span className="text-ink-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                      {e.transporter || <span className="text-ink-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
                       {e.start}
@@ -656,6 +701,7 @@ const FilteredEventsPanel = ({
               <tr>
                 <th className="px-4 py-3">VID</th>
                 <th className="px-4 py-3">Driver</th>
+                <th className="px-4 py-3">Transporter</th>
                 <th className="px-4 py-3">Time A</th>
                 <th className="px-4 py-3">Time B</th>
                 <th className="px-4 py-3">Duration</th>
@@ -666,7 +712,7 @@ const FilteredEventsPanel = ({
               {nightRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-8 text-center text-sm text-ink-500 dark:text-ink-400"
                   >
                     No night events passed the threshold.
@@ -695,6 +741,9 @@ const FilteredEventsPanel = ({
                     <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
                       {e.driverName || <span className="text-ink-400">—</span>}
                     </td>
+                    <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                      {e.transporter || <span className="text-ink-400">—</span>}
+                    </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
                       {e.timeA}
                     </td>
@@ -720,6 +769,7 @@ const FilteredEventsPanel = ({
               <tr>
                 <th className="px-4 py-3">VID</th>
                 <th className="px-4 py-3">Driver</th>
+                <th className="px-4 py-3">Transporter</th>
                 <th className="px-4 py-3">Time A</th>
                 <th className="px-4 py-3">Time B</th>
                 <th className="px-4 py-3">Duration</th>
@@ -730,7 +780,7 @@ const FilteredEventsPanel = ({
               {contRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-8 text-center text-sm text-ink-500 dark:text-ink-400"
                   >
                     No continuous events passed the threshold.
@@ -758,6 +808,9 @@ const FilteredEventsPanel = ({
                     </td>
                     <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
                       {e.driverName || <span className="text-ink-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                      {e.transporter || <span className="text-ink-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
                       {e.timeA}

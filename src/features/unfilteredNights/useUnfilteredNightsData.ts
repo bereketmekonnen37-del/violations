@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useAppSelector } from '../../app/store';
 import { buildFuse, tokensMatch } from '../../lib/fuseSearch';
+import {
+  buildDriverProfileLookup,
+  NOT_FOUND,
+  type DriverProfileLookup,
+} from '../../lib/driverLookup';
 import type {
   NightDriverBlock,
   NightRow,
@@ -31,6 +36,7 @@ export interface AggregatedNightDriver {
   vid: string;
   period: string;
   transporter: string;
+  matchedDriverName: string;
   rows: NightRow[];
   fileTitle: string;
   fileId: string;
@@ -46,16 +52,23 @@ const parseTime = (s: string): number | null => {
   return Number.isNaN(d2.getTime()) ? null : d2.getTime();
 };
 
-const flatten = (files: UnfilteredNightFile[]): AggregatedNightDriver[] => {
+const flatten = (
+  files: UnfilteredNightFile[],
+  resolveProfile: DriverProfileLookup,
+): AggregatedNightDriver[] => {
   const out: AggregatedNightDriver[] = [];
   files.forEach((file) => {
     file.drivers.forEach((d: NightDriverBlock) => {
+      const profile = resolveProfile(d.vid);
+      const transporter =
+        profile.transporter || d.transporter || d.driverName || '';
       out.push({
         blockId: d.id,
         driverName: d.driverName,
         vid: d.vid,
         period: d.period,
-        transporter: d.transporter,
+        transporter,
+        matchedDriverName: profile.driverName || NOT_FOUND,
         rows: d.rows,
         fileTitle: file.title,
         fileId: file.id,
@@ -68,6 +81,7 @@ const flatten = (files: UnfilteredNightFile[]): AggregatedNightDriver[] => {
 
 export const useUnfilteredNightsData = (uploaderId?: string, fileId?: string) => {
   const allFiles = useAppSelector((s) => s.unfilteredNights.files);
+  const driverRecords = useAppSelector((s) => s.drivers.records);
   const files = useMemo(
     () =>
       allFiles.filter(
@@ -79,7 +93,12 @@ export const useUnfilteredNightsData = (uploaderId?: string, fileId?: string) =>
 
   const [filters, setFilters] = useState<NightFilters>(defaultFilters);
 
-  const drivers = useMemo(() => flatten(files), [files]);
+  const resolveProfile = useMemo(
+    () => buildDriverProfileLookup(driverRecords),
+    [driverRecords],
+  );
+
+  const drivers = useMemo(() => flatten(files, resolveProfile), [files, resolveProfile]);
 
   const transporters = useMemo(() => {
     const set = new Set<string>();
