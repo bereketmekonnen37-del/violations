@@ -27,18 +27,37 @@ const DEMO_USERS: Array<User & { password: string }> = [
 export const useAuth = () => {
   const dispatch = useAppDispatch();
   const { user, isAuthenticated } = useAppSelector((s) => s.auth);
+  const managed = useAppSelector((s) => s.staffUsers.users);
 
   const login = async ({ email, password }: Credentials) => {
-    const found = DEMO_USERS.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password,
+    const normalized = email.trim().toLowerCase();
+
+    const demo = DEMO_USERS.find(
+      (u) => u.email.toLowerCase() === normalized && u.password === password,
     );
-    if (!found) {
-      throw new Error('Invalid email or password');
+    if (demo) {
+      const { password: _pw, ...safe } = demo;
+      void _pw;
+      dispatch(loginSuccess(safe));
+      return safe;
     }
-    const { password: _pw, ...safe } = found;
-    void _pw;
-    dispatch(loginSuccess(safe));
-    return safe;
+
+    const managedMatch = managed.find(
+      (u) => u.email.toLowerCase() === normalized && u.password === password,
+    );
+    if (managedMatch) {
+      const safe: User = {
+        id: managedMatch.id,
+        email: managedMatch.email,
+        name: managedMatch.name,
+        role: 'staff',
+        assignedTransporters: managedMatch.assignedTransporters,
+      };
+      dispatch(loginSuccess(safe));
+      return safe;
+    }
+
+    throw new Error('Invalid email or password');
   };
 
   return {

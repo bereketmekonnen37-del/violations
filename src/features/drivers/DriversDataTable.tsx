@@ -7,10 +7,19 @@ import {
   updateDriverRecord,
 } from './driversSlice';
 import { newId } from '../../lib/utils';
+import { useUserScope } from '../../hooks/useUserScope';
 
 export const DriversDataTable = () => {
   const dispatch = useAppDispatch();
-  const records = useAppSelector((s) => s.drivers.records);
+  const allRecords = useAppSelector((s) => s.drivers.records);
+  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const records = useMemo(
+    () =>
+      isTransporterStaff
+        ? allRecords.filter((r) => matchesTransporter(r.transporter))
+        : allRecords,
+    [allRecords, isTransporterStaff, matchesTransporter],
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTransporter, setDraftTransporter] = useState('');
   const [draftName, setDraftName] = useState('');

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useAppSelector } from '../../app/store';
+import { useUserScope } from '../../hooks/useUserScope';
 import { buildFuse, tokensMatch } from '../../lib/fuseSearch';
 import {
   buildDriverProfileLookup,
@@ -92,6 +93,7 @@ export const useUnfilteredContinuousData = (
 ) => {
   const allFiles = useAppSelector((s) => s.unfilteredContinuous.files);
   const driverRecords = useAppSelector((s) => s.drivers.records);
+  const { isTransporterStaff, matchesTransporter } = useUserScope();
   const files = useMemo(
     () =>
       allFiles.filter(
@@ -108,7 +110,11 @@ export const useUnfilteredContinuousData = (
     [driverRecords],
   );
 
-  const drivers = useMemo(() => flatten(files, resolveProfile), [files, resolveProfile]);
+  const drivers = useMemo(() => {
+    const flat = flatten(files, resolveProfile);
+    if (!isTransporterStaff) return flat;
+    return flat.filter((d) => matchesTransporter(d.transporter));
+  }, [files, resolveProfile, isTransporterStaff, matchesTransporter]);
 
   const transporters = useMemo(() => {
     const set = new Set<string>();

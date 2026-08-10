@@ -6,10 +6,22 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { formatDate } from '../lib/utils';
+import { useUserScope } from '../hooks/useUserScope';
 
 export const ViolationFilesPage = () => {
-  const files = useAppSelector((s) => s.uploads.files);
+  const allFiles = useAppSelector((s) => s.uploads.files);
+  const { isTransporterStaff, matchesTransporter } = useUserScope();
   const [query, setQuery] = useState('');
+
+  const files = useMemo(() => {
+    if (!isTransporterStaff) return allFiles;
+    return allFiles
+      .map((f) => {
+        const records = f.records.filter((r) => matchesTransporter(r.transporter));
+        return { ...f, records, rowCount: records.length };
+      })
+      .filter((f) => f.records.length > 0);
+  }, [allFiles, isTransporterStaff, matchesTransporter]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

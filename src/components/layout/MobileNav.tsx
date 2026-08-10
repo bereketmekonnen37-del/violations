@@ -9,12 +9,13 @@ import {
   Sparkles,
   Trophy,
   Upload,
+  UserCog,
   Users,
 } from 'lucide-react';
-import { useAppSelector } from '../../app/store';
 import { cn } from '../../lib/utils';
+import { useUserScope } from '../../hooks/useUserScope';
 
-const STAFF = [
+const LEGACY_STAFF = [
   { to: '/dashboard', label: 'Home', icon: LayoutDashboard },
   { to: '/upload', label: 'Upload', icon: Upload },
   { to: '/unfiltered', label: 'Speed', icon: Sparkles },
@@ -29,15 +30,20 @@ const BOSS = [
   { to: '/drivers-data', label: 'Drivers', icon: Users },
   { to: '/master-fleet', label: 'Master', icon: Trophy },
   { to: '/rules', label: 'Rules', icon: ShieldCheck },
+  { to: '/user-management', label: 'Users', icon: UserCog },
   { to: '/unfiltered', label: 'Speed', icon: Sparkles },
   { to: '/unfiltered-nights', label: 'Nights', icon: Moon },
   { to: '/unfiltered-continuous', label: 'Continuous', icon: Route },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
+const TRANSPORTER_STAFF = BOSS.filter(
+  (i) => i.to !== '/rules' && i.to !== '/user-management',
+);
+
 export const MobileNav = () => {
-  const role = useAppSelector((s) => s.auth.user?.role);
-  const items = role === 'boss' ? BOSS : STAFF;
+  const { isBoss, isTransporterStaff } = useUserScope();
+  const items = isBoss ? BOSS : isTransporterStaff ? TRANSPORTER_STAFF : LEGACY_STAFF;
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-40 backdrop-blur lg:hidden"

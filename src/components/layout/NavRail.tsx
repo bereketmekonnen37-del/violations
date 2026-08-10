@@ -13,12 +13,13 @@ import {
   Sparkles,
   Trophy,
   Upload,
+  UserCog,
   Users,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
-import { useAppSelector } from '../../app/store';
 import { useAuth } from '../../hooks/useAuth';
+import { useUserScope } from '../../hooks/useUserScope';
 import { Logo } from '../ui/Logo';
 
 interface Item {
@@ -27,7 +28,7 @@ interface Item {
   icon: LucideIcon;
 }
 
-const STAFF_ITEMS: Item[] = [
+const LEGACY_STAFF_ITEMS: Item[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/upload', label: 'Upload Data', icon: Upload },
   { to: '/unfiltered', label: 'Unfiltered Speed', icon: Sparkles },
@@ -42,16 +43,26 @@ const BOSS_ITEMS: Item[] = [
   { to: '/drivers-data', label: 'Drivers Data', icon: Users },
   { to: '/master-fleet', label: 'Master Fleet', icon: Trophy },
   { to: '/rules', label: 'Rules', icon: ShieldCheck },
+  { to: '/user-management', label: 'User Management', icon: UserCog },
   { to: '/unfiltered', label: 'Unfiltered Speed', icon: Sparkles },
   { to: '/unfiltered-nights', label: 'Unfiltered Nights', icon: Moon },
   { to: '/unfiltered-continuous', label: 'Unfiltered Continuous', icon: Route },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
+// Boss-created staff: same as boss, minus Rules and User Management.
+const TRANSPORTER_STAFF_ITEMS: Item[] = BOSS_ITEMS.filter(
+  (i) => i.to !== '/rules' && i.to !== '/user-management',
+);
+
 export const NavRail = () => {
-  const role = useAppSelector((s) => s.auth.user?.role);
+  const { isBoss, isTransporterStaff } = useUserScope();
   const [collapsed, setCollapsed] = useState(false);
-  const items = role === 'boss' ? BOSS_ITEMS : STAFF_ITEMS;
+  const items = isBoss
+    ? BOSS_ITEMS
+    : isTransporterStaff
+      ? TRANSPORTER_STAFF_ITEMS
+      : LEGACY_STAFF_ITEMS;
   const navigate = useNavigate();
   const { logout } = useAuth();
   const onSignOut = () => {

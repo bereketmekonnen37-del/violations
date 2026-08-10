@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom';
+import { useMemo } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
   ArrowUpRight,
+  BarChart3,
   FileStack,
   FileText,
   Truck,
@@ -15,15 +17,98 @@ import { StatCard } from '../components/ui/StatCard';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { formatDate, formatDateTime } from '../lib/utils';
+import { useUserScope } from '../hooks/useUserScope';
+import {
+  computeDashboardAnalytics,
+  fillDailyWindow,
+} from '../lib/dashboardAnalytics';
+import { filterFilesByTransporter } from '../lib/transporterScope';
+import { DailyViolationsChart } from '../features/dashboard/DailyViolationsChart';
+import { TopOffenderCards } from '../features/dashboard/TopOffenderCards';
+
+const DAILY_WINDOW = 14;
 
 export const DashboardPage = () => {
   const user = useAppSelector((s) => s.auth.user);
   const allFiles = useAppSelector((s) => s.uploads.files);
+  const rawSpeedFiles = useAppSelector((s) => s.unfiltered.files);
+  const rawNightFiles = useAppSelector((s) => s.unfilteredNights.files);
+  const rawContFiles = useAppSelector((s) => s.unfilteredContinuous.files);
+  const rawDriverRecords = useAppSelector((s) => s.drivers.records);
+  const thresholds = useAppSelector((s) => s.rules.thresholds);
+  const allowedVids = useAppSelector((s) => s.rules.allowedVids);
+  const allowedLocations = useAppSelector((s) => s.rules.allowedLocations);
+  const { isBoss, isTransporterStaff, matchesTransporter } = useUserScope();
+
+  const hasBossView = isBoss || isTransporterStaff;
+
+  const scopedFiles = hasBossView
+    ? allFiles
+    : allFiles.filter((f) => f.uploaderId === user?.id);
+
+  // For transporter staff, keep only files that contain at least one record
+  // from an assigned transporter, and filter down the records themselves.
+  const files = isTransporterStaff
+    ? scopedFiles
+        .map((f) => {
+          const records = f.records.filter((r) => matchesTransporter(r.transporter));
+          return { ...f, records, rowCount: records.length };
+        })
+        .filter((f) => f.records.length > 0)
+    : scopedFiles;
+
+  // Analytics: filter unfiltered files by transporter for scoped staff.
+  const speedFiles = useMemo(
+    () => filterFilesByTransporter(rawSpeedFiles, isTransporterStaff, matchesTransporter),
+    [rawSpeedFiles, isTransporterStaff, matchesTransporter],
+  );
+  const nightFiles = useMemo(
+    () => filterFilesByTransporter(rawNightFiles, isTransporterStaff, matchesTransporter),
+    [rawNightFiles, isTransporterStaff, matchesTransporter],
+  );
+  const continuousFiles = useMemo(
+    () => filterFilesByTransporter(rawContFiles, isTransporterStaff, matchesTransporter),
+    [rawContFiles, isTransporterStaff, matchesTransporter],
+  );
+  const driverRecords = useMemo(
+    () =>
+      isTransporterStaff
+        ? rawDriverRecords.filter((r) => matchesTransporter(r.transporter))
+        : rawDriverRecords,
+    [rawDriverRecords, isTransporterStaff, matchesTransporter],
+  );
+
+  const analytics = useMemo(
+    () =>
+      computeDashboardAnalytics({
+        speedFiles,
+        nightFiles,
+        continuousFiles,
+        driverRecords,
+        thresholds,
+        allowedVids,
+        allowedLocations,
+      }),
+    [
+      speedFiles,
+      nightFiles,
+      continuousFiles,
+      driverRecords,
+      thresholds,
+      allowedVids,
+      allowedLocations,
+    ],
+  );
+
+  const dailySeries = useMemo(
+    () => fillDailyWindow(analytics.daily, DAILY_WINDOW),
+    [analytics.daily],
+  );
+
+  const analyticsTotal =
+    analytics.totals.speed + analytics.totals.nights + analytics.totals.continuous;
 
   if (!user) return null;
-
-  const isBoss = user.role === 'boss';
-  const files = isBoss ? allFiles : allFiles.filter((f) => f.uploaderId === user.id);
 
   const totalViolations = files.reduce((sum, f) => sum + f.rowCount, 0);
   const drivers = new Set<string>();
@@ -40,15 +125,21 @@ export const DashboardPage = () => {
   return (
     <div className="mx-auto w-full max-w-7xl">
       <PageHeader
-        eyebrow={isBoss ? 'Overview' : 'Welcome'}
-        title={isBoss ? 'Fleet operations dashboard' : `Hello, ${user.name.split(' ')[0]}`}
+        eyebrow={hasBossView ? 'Overview' : 'Welcome'}
+        title={
+          hasBossView
+            ? 'Fleet operations dashboard'
+            : `Hello, ${user.name.split(' ')[0]}`
+        }
         subtitle={
-          isBoss
-            ? 'Real-time view of uploaded violation reports, drivers and transporters.'
+          hasBossView
+            ? isTransporterStaff
+              ? `Scoped to your transporters: ${user.assignedTransporters?.join(', ')}.`
+              : 'Real-time view of uploaded violation reports, drivers and transporters.'
             : 'Upload new violation reports and track your submission history.'
         }
         actions={
-          isBoss ? (
+          hasBossView ? (
             <Link to="/violations" className="btn-primary">
               View all files <ArrowRight size={16} />
             </Link>
@@ -87,6 +178,59 @@ export const DashboardPage = () => {
         />
       </div>
 
+      {hasBossView && (
+        <section className="mt-10">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
+              Top offenders
+            </h2>
+            <p className="text-sm text-ink-500 dark:text-ink-400">
+              Ranked from unfiltered Speed, Nights and Continuous uploads —
+              scored against the current threshold rules.
+            </p>
+          </div>
+          <TopOffenderCards top={analytics.top} />
+        </section>
+      )}
+
+      {hasBossView && (
+        <section className="mt-10">
+          <div className="surface rounded-2xl p-5 sm:p-7">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink-900 text-white dark:bg-white dark:text-ink-900">
+                  <BarChart3 size={18} />
+                </span>
+                <div>
+                  <h2 className="text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
+                    Daily violations trend
+                  </h2>
+                  <p className="text-sm text-ink-500 dark:text-ink-400">
+                    Last {DAILY_WINDOW} days · Speed, Nights and Continuous events
+                    counted against your rule thresholds.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded-full bg-red-50 px-2.5 py-1 font-semibold text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-800">
+                  {analytics.totals.speed} speed
+                </span>
+                <span className="rounded-full bg-indigo-50 px-2.5 py-1 font-semibold text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:ring-indigo-800">
+                  {analytics.totals.nights} nights
+                </span>
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 font-semibold text-amber-800 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-800">
+                  {analytics.totals.continuous} continuous
+                </span>
+                <span className="rounded-full bg-ink-900 px-2.5 py-1 font-semibold text-white dark:bg-white dark:text-ink-900">
+                  {analyticsTotal} total
+                </span>
+              </div>
+            </div>
+            <DailyViolationsChart data={dailySeries} />
+          </div>
+        </section>
+      )}
+
       <section className="mt-10">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -94,10 +238,10 @@ export const DashboardPage = () => {
               Recent uploads
             </h2>
             <p className="text-sm text-ink-500 dark:text-ink-400">
-              {isBoss ? 'Latest reports submitted to the platform.' : 'Your latest submissions.'}
+              {hasBossView ? 'Latest reports submitted to the platform.' : 'Your latest submissions.'}
             </p>
           </div>
-          {isBoss && files.length > 0 && (
+          {hasBossView && files.length > 0 && (
             <Link
               to="/violations"
               className="hidden text-sm font-medium text-ink-700 hover:text-ink-900 dark:text-ink-300 dark:hover:text-white sm:inline-flex sm:items-center sm:gap-1"
@@ -112,12 +256,12 @@ export const DashboardPage = () => {
             icon={FileText}
             title="No uploads yet"
             description={
-              isBoss
+              hasBossView
                 ? 'Once staff submit violation reports, they will appear here for review.'
                 : 'Upload your first CSV, XLSX or PDF to get started.'
             }
             action={
-              !isBoss && (
+              !hasBossView && (
                 <Link to="/upload" className="btn-primary">
                   <Upload size={16} /> Upload data
                 </Link>
@@ -148,7 +292,7 @@ export const DashboardPage = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone="neutral">{file.fileType.toUpperCase()}</Badge>
                     <Badge tone="info">{file.rowCount} records</Badge>
-                    {isBoss && (
+                    {hasBossView && (
                       <Link
                         to={`/violations/${file.id}`}
                         className="btn-secondary !py-1.5 !text-xs"
@@ -164,7 +308,7 @@ export const DashboardPage = () => {
         )}
       </section>
 
-      {isBoss && files.length > 0 && (
+      {hasBossView && files.length > 0 && (
         <section className="mt-10">
           <h2 className="mb-4 text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
             File summaries

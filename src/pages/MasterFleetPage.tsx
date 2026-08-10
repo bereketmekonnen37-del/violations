@@ -30,6 +30,8 @@ import {
   type FilteredEvents,
   type MasterFleetRow,
 } from '../lib/masterFleet';
+import { filterFilesByTransporter } from '../lib/transporterScope';
+import { useUserScope } from '../hooks/useUserScope';
 
 const formatThreshold = (seconds: number): string => {
   if (seconds % 3600 === 0) return `${seconds / 3600}h`;
@@ -125,14 +127,35 @@ const TopOffenderCard = ({
 };
 
 export const MasterFleetPage = () => {
-  const speedFiles = useAppSelector((s) => s.unfiltered.files);
-  const nightFiles = useAppSelector((s) => s.unfilteredNights.files);
-  const continuousFiles = useAppSelector((s) => s.unfilteredContinuous.files);
-  const driverRecords = useAppSelector((s) => s.drivers.records);
+  const rawSpeed = useAppSelector((s) => s.unfiltered.files);
+  const rawNights = useAppSelector((s) => s.unfilteredNights.files);
+  const rawCont = useAppSelector((s) => s.unfilteredContinuous.files);
+  const rawDriverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
   const allowedVids = useAppSelector((s) => s.rules.allowedVids);
   const allowedLocations = useAppSelector((s) => s.rules.allowedLocations);
+  const { isTransporterStaff, matchesTransporter } = useUserScope();
   const [query, setQuery] = useState('');
+
+  const speedFiles = useMemo(
+    () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesTransporter),
+    [rawSpeed, isTransporterStaff, matchesTransporter],
+  );
+  const nightFiles = useMemo(
+    () => filterFilesByTransporter(rawNights, isTransporterStaff, matchesTransporter),
+    [rawNights, isTransporterStaff, matchesTransporter],
+  );
+  const continuousFiles = useMemo(
+    () => filterFilesByTransporter(rawCont, isTransporterStaff, matchesTransporter),
+    [rawCont, isTransporterStaff, matchesTransporter],
+  );
+  const driverRecords = useMemo(
+    () =>
+      isTransporterStaff
+        ? rawDriverRecords.filter((r) => matchesTransporter(r.transporter))
+        : rawDriverRecords,
+    [rawDriverRecords, isTransporterStaff, matchesTransporter],
+  );
 
   const rows = useMemo(
     () =>
@@ -227,9 +250,11 @@ export const MasterFleetPage = () => {
         )}). Edit thresholds and whitelists in Rules.`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Link to="/rules" className="btn-ghost">
-              <ShieldCheck size={16} /> Rules
-            </Link>
+            {!isTransporterStaff && (
+              <Link to="/rules" className="btn-ghost">
+                <ShieldCheck size={16} /> Rules
+              </Link>
+            )}
             <button
               type="button"
               onClick={() => downloadMasterFleetCsv(rows)}
@@ -284,12 +309,14 @@ export const MasterFleetPage = () => {
                   {allowedLocations.length === 1 ? '' : 's'}
                 </span>
               )}
-              <Link
-                to="/rules"
-                className="ml-auto text-[11px] font-semibold text-ink-500 hover:text-ink-900 dark:text-ink-400 dark:hover:text-white"
-              >
-                Manage in Rules →
-              </Link>
+              {!isTransporterStaff && (
+                <Link
+                  to="/rules"
+                  className="ml-auto text-[11px] font-semibold text-ink-500 hover:text-ink-900 dark:text-ink-400 dark:hover:text-white"
+                >
+                  Manage in Rules →
+                </Link>
+              )}
             </div>
           )}
 

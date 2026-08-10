@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { CalendarRange, FileSpreadsheet, Trash2, Users } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -6,15 +7,25 @@ import { DriversDataUpload } from '../features/drivers/DriversDataUpload';
 import { DriversDataTable } from '../features/drivers/DriversDataTable';
 import { clearDrivers } from '../features/drivers/driversSlice';
 import { formatDateTime } from '../lib/utils';
+import { useUserScope } from '../hooks/useUserScope';
 
 export const DriversDataPage = () => {
   const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.auth.user);
   const drivers = useAppSelector((s) => s.drivers);
+  const { isTransporterStaff, matchesTransporter } = useUserScope();
+
+  const scopedRecords = useMemo(
+    () =>
+      isTransporterStaff
+        ? drivers.records.filter((r) => matchesTransporter(r.transporter))
+        : drivers.records,
+    [drivers.records, isTransporterStaff, matchesTransporter],
+  );
 
   if (!user) return null;
 
-  const hasData = drivers.records.length > 0;
+  const hasData = scopedRecords.length > 0;
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -23,7 +34,7 @@ export const DriversDataPage = () => {
         title="Drivers data"
         subtitle="Upload the monthly drivers list once. The mapping (VID → driver name) is used to enrich every Speed, Nights and Continuous CSV export."
         actions={
-          hasData ? (
+          hasData && !isTransporterStaff ? (
             <button
               type="button"
               onClick={() => {
@@ -42,7 +53,7 @@ export const DriversDataPage = () => {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
           label="Drivers on file"
-          value={drivers.records.length}
+          value={scopedRecords.length}
           icon={Users}
         />
         <StatCard
@@ -58,8 +69,14 @@ export const DriversDataPage = () => {
         />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.3fr]">
-        <DriversDataUpload user={user} />
+      <div
+        className={
+          isTransporterStaff
+            ? 'mt-6'
+            : 'mt-6 grid gap-6 lg:grid-cols-[1fr_1.3fr]'
+        }
+      >
+        {!isTransporterStaff && <DriversDataUpload user={user} />}
         <DriversDataTable />
       </div>
     </div>

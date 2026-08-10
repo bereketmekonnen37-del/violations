@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useAppSelector } from '../../app/store';
+import { useUserScope } from '../../hooks/useUserScope';
 import { buildFuse, tokensMatch } from '../../lib/fuseSearch';
 import {
   buildDriverProfileLookup,
@@ -84,6 +85,7 @@ const flattenDrivers = (
 export const useUnfilteredData = (uploaderId?: string, fileId?: string) => {
   const allFiles = useAppSelector((s) => s.unfiltered.files);
   const driverRecords = useAppSelector((s) => s.drivers.records);
+  const { isTransporterStaff, matchesTransporter } = useUserScope();
   const files = useMemo(
     () =>
       allFiles.filter(
@@ -100,7 +102,11 @@ export const useUnfilteredData = (uploaderId?: string, fileId?: string) => {
     [driverRecords],
   );
 
-  const drivers = useMemo(() => flattenDrivers(files, resolveProfile), [files, resolveProfile]);
+  const drivers = useMemo(() => {
+    const flat = flattenDrivers(files, resolveProfile);
+    if (!isTransporterStaff) return flat;
+    return flat.filter((d) => matchesTransporter(d.transporter));
+  }, [files, resolveProfile, isTransporterStaff, matchesTransporter]);
 
   const eventTypes = useMemo(() => {
     const set = new Set<string>();

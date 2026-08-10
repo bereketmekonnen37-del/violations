@@ -12,6 +12,7 @@ import { UnfilteredContinuousPage } from '../pages/UnfilteredContinuousPage';
 import { UnfilteredNightsPage } from '../pages/UnfilteredNightsPage';
 import { UnfilteredPage } from '../pages/UnfilteredPage';
 import { UploadPage } from '../pages/UploadPage';
+import { UserManagementPage } from '../pages/UserManagementPage';
 import { ViolationFilesPage } from '../pages/ViolationFilesPage';
 import { ProtectedRoute } from './ProtectedRoute';
 
@@ -33,7 +34,7 @@ export const AppRoutes = () => {
         <Route
           path="/upload"
           element={
-            <ProtectedRoute allow={['staff']}>
+            <ProtectedRoute allow={['staff']} denyTransporterStaff>
               <UploadPage />
             </ProtectedRoute>
           }
@@ -41,7 +42,7 @@ export const AppRoutes = () => {
         <Route
           path="/violations"
           element={
-            <ProtectedRoute allow={['boss']}>
+            <ProtectedRoute allow={['boss']} allowTransporterStaff>
               <ViolationFilesPage />
             </ProtectedRoute>
           }
@@ -49,7 +50,7 @@ export const AppRoutes = () => {
         <Route
           path="/violations/:fileId"
           element={
-            <ProtectedRoute allow={['boss']}>
+            <ProtectedRoute allow={['boss']} allowTransporterStaff>
               <FileDetailsPage />
             </ProtectedRoute>
           }
@@ -57,7 +58,7 @@ export const AppRoutes = () => {
         <Route
           path="/drivers-data"
           element={
-            <ProtectedRoute allow={['boss']}>
+            <ProtectedRoute allow={['boss']} allowTransporterStaff>
               <DriversDataPage />
             </ProtectedRoute>
           }
@@ -65,7 +66,7 @@ export const AppRoutes = () => {
         <Route
           path="/master-fleet"
           element={
-            <ProtectedRoute allow={['boss']}>
+            <ProtectedRoute allow={['boss']} allowTransporterStaff>
               <MasterFleetPage />
             </ProtectedRoute>
           }
@@ -75,6 +76,14 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute allow={['boss']}>
               <RulesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/user-management"
+          element={
+            <ProtectedRoute allow={['boss']}>
+              <UserManagementPage />
             </ProtectedRoute>
           }
         />

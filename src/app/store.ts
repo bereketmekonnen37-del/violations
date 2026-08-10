@@ -20,6 +20,7 @@ import unfilteredNightsReducer from '../features/unfilteredNights/unfilteredNigh
 import unfilteredContinuousReducer from '../features/unfilteredContinuous/unfilteredContinuousSlice';
 import driversReducer from '../features/drivers/driversSlice';
 import rulesReducer from '../features/rules/rulesSlice';
+import staffUsersReducer from '../features/staffUsers/staffUsersSlice';
 
 const rootReducer = combineReducers({
   auth: authReducer,
@@ -31,6 +32,7 @@ const rootReducer = combineReducers({
   unfilteredContinuous: unfilteredContinuousReducer,
   drivers: driversReducer,
   rules: rulesReducer,
+  staffUsers: staffUsersReducer,
 });
 
 const persistedReducer = persistReducer(
@@ -48,6 +50,7 @@ const persistedReducer = persistReducer(
       'unfilteredContinuous',
       'drivers',
       'rules',
+      'staffUsers',
     ],
   },
   rootReducer,

@@ -10,14 +10,20 @@ import { ViolationFilterBar } from '../features/violations/ViolationFilterBar';
 import { Pagination } from '../features/violations/Pagination';
 import { useViolationFilters } from '../features/violations/useViolationFilters';
 import { formatDate } from '../lib/utils';
+import { useUserScope } from '../hooks/useUserScope';
 
 const PAGE_SIZE = 20;
 
 export const FileDetailsPage = () => {
   const { fileId } = useParams<{ fileId: string }>();
   const file = useAppSelector((s) => s.uploads.files.find((f) => f.id === fileId));
+  const { isTransporterStaff, matchesTransporter } = useUserScope();
 
-  const records = file?.records ?? [];
+  const records = useMemo(() => {
+    const base = file?.records ?? [];
+    if (!isTransporterStaff) return base;
+    return base.filter((r) => matchesTransporter(r.transporter));
+  }, [file, isTransporterStaff, matchesTransporter]);
   const {
     filters,
     setFilters,

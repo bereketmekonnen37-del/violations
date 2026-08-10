@@ -6,6 +6,22 @@ export interface User {
   name: string;
   role: UserRole;
   avatar?: string;
+  /** Transporters this user is scoped to. Set for boss-created staff; undefined for boss or legacy uploader-staff. */
+  assignedTransporters?: string[];
+}
+
+/** Staff account managed by the boss from the User Management page. */
+export interface ManagedStaffUser {
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+  assignedTransporters: string[];
+  createdAt: string;
+}
+
+export interface StaffUsersState {
+  users: ManagedStaffUser[];
 }
 
 export type Theme = 'light' | 'dark';

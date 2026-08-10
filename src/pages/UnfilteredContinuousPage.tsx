@@ -31,7 +31,9 @@ import {
   downloadMasterContinuousCsv,
 } from '../lib/continuousExportCsv';
 import { buildDriverProfileLookup } from '../lib/driverLookup';
+import { filterFilesByTransporter } from '../lib/transporterScope';
 import { formatDateTime } from '../lib/utils';
+import { useUserScope } from '../hooks/useUserScope';
 
 const StaffView = () => {
   const dispatch = useAppDispatch();
@@ -107,7 +109,12 @@ const StaffView = () => {
 
 const BossView = () => {
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
-  const allFiles = useAppSelector((s) => s.unfilteredContinuous.files);
+  const rawFiles = useAppSelector((s) => s.unfilteredContinuous.files);
+  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const allFiles = useMemo(
+    () => filterFilesByTransporter(rawFiles, isTransporterStaff, matchesTransporter),
+    [rawFiles, isTransporterStaff, matchesTransporter],
+  );
   const {
     files,
     drivers,
@@ -272,6 +279,6 @@ const BossView = () => {
 };
 
 export const UnfilteredContinuousPage = () => {
-  const role = useAppSelector((s) => s.auth.user?.role);
-  return role === 'boss' ? <BossView /> : <StaffView />;
+  const { hasBossView } = useUserScope();
+  return hasBossView ? <BossView /> : <StaffView />;
 };
