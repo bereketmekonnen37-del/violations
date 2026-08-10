@@ -50,10 +50,19 @@ const BOSS_ITEMS: Item[] = [
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
-// Boss-created staff: same as boss, minus Rules and User Management.
-const TRANSPORTER_STAFF_ITEMS: Item[] = BOSS_ITEMS.filter(
-  (i) => i.to !== '/rules' && i.to !== '/user-management',
-);
+// Boss-created staff: shares Master Fleet with the boss, can upload their
+// own data, and browses the scoped views. No Rules, no User Management,
+// no Drivers Data (that upload is boss-only).
+const TRANSPORTER_STAFF_ITEMS: Item[] = [
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/upload', label: 'Upload Data', icon: Upload },
+  { to: '/violations', label: 'Filtered Violations', icon: FileStack },
+  { to: '/master-fleet', label: 'Master Fleet', icon: Trophy },
+  { to: '/unfiltered', label: 'Unfiltered Speed', icon: Sparkles },
+  { to: '/unfiltered-nights', label: 'Unfiltered Nights', icon: Moon },
+  { to: '/unfiltered-continuous', label: 'Unfiltered Continuous', icon: Route },
+  { to: '/settings', label: 'Settings', icon: Settings },
+];
 
 export const NavRail = () => {
   const { isBoss, isTransporterStaff } = useUserScope();

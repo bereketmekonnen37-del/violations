@@ -7,6 +7,10 @@ import {
   BarChart3,
   FileStack,
   FileText,
+  Gauge,
+  Moon,
+  Route as RouteIcon,
+  Trophy,
   Truck,
   Upload,
   Users,
@@ -23,6 +27,7 @@ import {
   fillDailyWindow,
 } from '../lib/dashboardAnalytics';
 import { filterFilesByTransporter } from '../lib/transporterScope';
+import { parseDurationSeconds } from '../lib/duration';
 import { DailyViolationsChart } from '../features/dashboard/DailyViolationsChart';
 import { TopOffenderCards } from '../features/dashboard/TopOffenderCards';
 
@@ -108,6 +113,70 @@ export const DashboardPage = () => {
   const analyticsTotal =
     analytics.totals.speed + analytics.totals.nights + analytics.totals.continuous;
 
+  // Per-assigned-transporter breakdown (transporter-staff view only).
+  // Counts follow the same rules the Master Fleet page uses: an event or
+  // row is counted only when its duration passes the corresponding
+  // threshold from the Rules page.
+  const transporterBreakdown = useMemo(() => {
+    if (!isTransporterStaff) return [];
+    const assigned = user?.assignedTransporters ?? [];
+    return assigned.map((t) => {
+      const norm = t.trim().toLowerCase();
+      let speedEvents = 0;
+      let nightRows = 0;
+      let continuousRows = 0;
+      let driverBlocks = 0;
+      speedFiles.forEach((f) =>
+        f.drivers.forEach((d) => {
+          if ((d.transporter ?? '').trim().toLowerCase() !== norm) return;
+          driverBlocks += 1;
+          d.events.forEach((e) => {
+            const s = parseDurationSeconds(e.duration);
+            if (Number.isFinite(s) && s >= thresholds.speed) speedEvents += 1;
+          });
+        }),
+      );
+      nightFiles.forEach((f) =>
+        f.drivers.forEach((d) => {
+          if ((d.transporter ?? '').trim().toLowerCase() !== norm) return;
+          d.rows.forEach((r) => {
+            const s = parseDurationSeconds(r.duration);
+            if (Number.isFinite(s) && s >= thresholds.nights) nightRows += 1;
+          });
+        }),
+      );
+      continuousFiles.forEach((f) =>
+        f.drivers.forEach((d) => {
+          if ((d.transporter ?? '').trim().toLowerCase() !== norm) return;
+          d.rows.forEach((r) => {
+            const s = parseDurationSeconds(r.duration);
+            if (Number.isFinite(s) && s >= thresholds.continuous) continuousRows += 1;
+          });
+        }),
+      );
+      const driverList = driverRecords.filter(
+        (r) => (r.transporter ?? '').trim().toLowerCase() === norm,
+      );
+      return {
+        name: t,
+        driverListCount: driverList.length,
+        driverBlocks,
+        speedEvents,
+        nightRows,
+        continuousRows,
+        total: speedEvents + nightRows + continuousRows,
+      };
+    });
+  }, [
+    isTransporterStaff,
+    user,
+    speedFiles,
+    nightFiles,
+    continuousFiles,
+    driverRecords,
+    thresholds,
+  ]);
+
   if (!user) return null;
 
   const totalViolations = files.reduce((sum, f) => sum + f.rowCount, 0);
@@ -125,24 +194,37 @@ export const DashboardPage = () => {
   return (
     <div className="mx-auto w-full max-w-7xl">
       <PageHeader
-        eyebrow={hasBossView ? 'Overview' : 'Welcome'}
+        eyebrow={
+          isBoss ? 'Overview' : isTransporterStaff ? 'Your workspace' : 'Welcome'
+        }
         title={
-          hasBossView
+          isBoss
             ? 'Fleet operations dashboard'
-            : `Hello, ${user.name.split(' ')[0]}`
+            : isTransporterStaff
+              ? `Hello, ${user.name.split(' ')[0]}`
+              : `Hello, ${user.name.split(' ')[0]}`
         }
         subtitle={
-          hasBossView
-            ? isTransporterStaff
-              ? `Scoped to your transporters: ${user.assignedTransporters?.join(', ')}.`
-              : 'Real-time view of uploaded violation reports, drivers and transporters.'
-            : 'Upload new violation reports and track your submission history.'
+          isBoss
+            ? 'Real-time view of uploaded violation reports, drivers and transporters.'
+            : isTransporterStaff
+              ? `You are scoped to ${user.assignedTransporters?.length ?? 0} transporter${(user.assignedTransporters?.length ?? 0) === 1 ? '' : 's'}. Upload new reports or jump to the master sheet.`
+              : 'Upload new violation reports and track your submission history.'
         }
         actions={
-          hasBossView ? (
+          isBoss ? (
             <Link to="/violations" className="btn-primary">
               View all files <ArrowRight size={16} />
             </Link>
+          ) : isTransporterStaff ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Link to="/upload" className="btn-ghost">
+                <Upload size={16} /> Upload data
+              </Link>
+              <Link to="/master-fleet" className="btn-primary">
+                <Trophy size={16} /> Master sheet
+              </Link>
+            </div>
           ) : (
             <Link to="/upload" className="btn-primary">
               <Upload size={16} /> Upload new data
@@ -178,7 +260,106 @@ export const DashboardPage = () => {
         />
       </div>
 
-      {hasBossView && (
+      {isTransporterStaff && (
+        <section className="mt-10">
+          <div className="mb-4 flex items-end justify-between">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
+                Your transporters
+              </h2>
+              <p className="text-sm text-ink-500 dark:text-ink-400">
+                Every upload here is filtered to just these transporters.
+              </p>
+            </div>
+            <Link
+              to="/master-fleet"
+              className="hidden text-sm font-medium text-ink-700 hover:text-ink-900 dark:text-ink-300 dark:hover:text-white sm:inline-flex sm:items-center sm:gap-1"
+            >
+              Open master sheet <ArrowUpRight size={14} />
+            </Link>
+          </div>
+
+          {transporterBreakdown.length === 0 ? (
+            <EmptyState
+              icon={Truck}
+              title="No transporters assigned"
+              description="Ask the boss to assign at least one transporter to your account."
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {transporterBreakdown.map((t) => (
+                <div
+                  key={t.name}
+                  className="surface relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-white via-white to-ink-50 dark:from-ink-900 dark:via-ink-900 dark:to-ink-950"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500 dark:text-ink-400">
+                        Transporter
+                      </p>
+                      <h3 className="mt-1 truncate font-display text-xl font-semibold tracking-tight text-ink-900 dark:text-white">
+                        {t.name}
+                      </h3>
+                    </div>
+                    <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink-900 text-white shadow-card dark:bg-white dark:text-ink-900">
+                      <Truck size={18} />
+                    </span>
+                  </div>
+
+                  {t.total === 0 && t.driverListCount === 0 ? (
+                    <p className="mt-4 text-xs italic text-ink-500 dark:text-ink-400">
+                      No data found for this transporter yet.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-xl border border-ink-100 bg-white/80 p-2.5 dark:border-ink-800 dark:bg-ink-900/70">
+                          <p className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-red-700 dark:text-red-300">
+                            <Gauge size={10} /> Speed
+                          </p>
+                          <p className="mt-0.5 text-lg font-semibold text-ink-900 dark:text-white">
+                            {t.speedEvents}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-ink-100 bg-white/80 p-2.5 dark:border-ink-800 dark:bg-ink-900/70">
+                          <p className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                            <Moon size={10} /> Nights
+                          </p>
+                          <p className="mt-0.5 text-lg font-semibold text-ink-900 dark:text-white">
+                            {t.nightRows}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-ink-100 bg-white/80 p-2.5 dark:border-ink-800 dark:bg-ink-900/70">
+                          <p className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                            <RouteIcon size={10} /> Cont.
+                          </p>
+                          <p className="mt-0.5 text-lg font-semibold text-ink-900 dark:text-white">
+                            {t.continuousRows}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between border-t border-ink-100 pt-3 text-xs text-ink-500 dark:border-ink-800 dark:text-ink-400">
+                        <span className="inline-flex items-center gap-1">
+                          <Users size={12} /> {t.driverListCount} in drivers list
+                        </span>
+                        <span>
+                          <span className="font-semibold text-ink-900 dark:text-white">
+                            {t.total}
+                          </span>{' '}
+                          events
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {isBoss && (
         <section className="mt-10">
           <div className="mb-4">
             <h2 className="text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
@@ -193,7 +374,7 @@ export const DashboardPage = () => {
         </section>
       )}
 
-      {hasBossView && (
+      {isBoss && (
         <section className="mt-10">
           <div className="surface rounded-2xl p-5 sm:p-7">
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

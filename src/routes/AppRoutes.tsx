@@ -34,7 +34,7 @@ export const AppRoutes = () => {
         <Route
           path="/upload"
           element={
-            <ProtectedRoute allow={['staff']} denyTransporterStaff>
+            <ProtectedRoute allow={['staff']}>
               <UploadPage />
             </ProtectedRoute>
           }
@@ -58,7 +58,7 @@ export const AppRoutes = () => {
         <Route
           path="/drivers-data"
           element={
-            <ProtectedRoute allow={['boss']} allowTransporterStaff>
+            <ProtectedRoute allow={['boss']}>
               <DriversDataPage />
             </ProtectedRoute>
           }
