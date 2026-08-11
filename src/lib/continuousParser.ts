@@ -49,20 +49,17 @@ const extractVidFromObject = (raw: string): string => {
   return m ? m[1] : '';
 };
 
-const extractTransporterFromObject = (raw: string): string => {
-  const tag = cleanText(raw).match(/\(([^)]+)\)/);
-  if (!tag) return '';
-  return tag[1].replace(/\b(ET|et)\b/g, '').trim();
-};
-
 /**
  * Mela `Object:` cell examples:
  *   "2549-(3-49646 ET)"  → plate 3-49646
  *   "2551 (3-66332 ET)"  → plate 3-66332
  * The plate lives inside the parentheses; strip the ET/et suffix.
  */
-const extractPlateFromObject = (raw: string): string =>
-  extractTransporterFromObject(raw);
+const extractPlateFromObject = (raw: string): string => {
+  const tag = cleanText(raw).match(/\(([^)]+)\)/);
+  if (!tag) return '';
+  return tag[1].replace(/\b(ET|et)\b/g, '').trim();
+};
 
 /**
  * Global `Vehicle` / `Plate` cell example: "3-36542(2784)"
@@ -289,9 +286,12 @@ export const parseContinuousRows = (
         if (l.kind === 'object') {
           current.vid = extractVidFromObject(l.value);
           current.plate = extractPlateFromObject(l.value);
-          current.transporter = extractTransporterFromObject(l.value);
         } else if (l.kind === 'group') {
-          current.driverName = cleanText(l.value);
+          const value = cleanText(l.value);
+          // `Group:` is the transporter on the master sheet. Mirror it into
+          // `driverName` too so the existing per-file UI keeps a label.
+          current.driverName = value;
+          current.transporter = value;
         } else if (l.kind === 'period') {
           current.period = cleanText(l.value);
         }
@@ -391,7 +391,9 @@ export const parseGlobalRows = (
       block.vid = vid;
       block.plate = plate;
       block.driverName = owner;
-      block.transporter = plate;
+      // Owner is the transporter label on the master sheet — matches the
+      // Mela path (`Group:` → transporter) and the nights/speed parsers.
+      block.transporter = owner;
       byVid.set(key, block);
     }
 

@@ -47,9 +47,9 @@ export const LoginPage = () => {
       {/* Left visual panel */}
       <section className="relative hidden overflow-hidden border-r border-ink-100 dark:border-ink-800 lg:block">
         <img
-          src="https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=1600&q=80"
+          src="/loginimg.jpg"
           alt="Professional truck driver in cabin"
-          className="absolute inset-0 h-full w-full object-cover grayscale"
+          className="absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0 bg-ink-950/45" />
         <div className="relative z-10 flex h-full flex-col justify-between p-10 text-white">

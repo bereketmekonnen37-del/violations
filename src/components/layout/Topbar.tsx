@@ -34,26 +34,26 @@ export const Topbar = () => {
         borderBottom: '1px solid var(--color-brand-navy-line)',
       }}
     >
-      <div className="lg:hidden">
+      <div className="flex items-center gap-4">
         <Logo />
-      </div>
-      <div className="hidden lg:block">
-        <p
-          className="text-[11px] font-medium uppercase tracking-wider"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
-          Workspace
-        </p>
-        <p
-          className="text-sm font-semibold tracking-tight"
-          style={{ color: 'var(--color-text-primary)' }}
-        >
-          {user?.role === 'boss'
-            ? 'Fleet Operations'
-            : (user?.assignedTransporters?.length ?? 0) > 0
-              ? `Transporter · ${user!.assignedTransporters!.join(', ')}`
-              : 'Operations Staff'}
-        </p>
+        <div className="hidden lg:block">
+          <p
+            className="text-[11px] font-medium uppercase tracking-wider"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            Workspace
+          </p>
+          <p
+            className="text-sm font-semibold tracking-tight"
+            style={{ color: 'var(--color-text-primary)' }}
+          >
+            {user?.role === 'boss'
+              ? 'Fleet Operations'
+              : (user?.assignedTransporters?.length ?? 0) > 0
+                ? `Transporter · ${user!.assignedTransporters!.join(', ')}`
+                : 'Operations Staff'}
+          </p>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">

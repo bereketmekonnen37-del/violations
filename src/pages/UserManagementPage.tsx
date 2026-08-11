@@ -1,5 +1,7 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
+  Check,
+  ChevronDown,
   Eye,
   EyeOff,
   KeyRound,
@@ -22,25 +24,47 @@ import {
   removeStaffUser,
   updateStaffUser,
 } from '../features/staffUsers/staffUsersSlice';
+import type {
+  DriverRecord,
+  UnfilteredContinuousFile,
+  UnfilteredFile,
+  UnfilteredNightFile,
+} from '../types';
 
+// Reject transporter values that look like a plate/VID rather than a real
+// carrier name. Plates in this dataset take shapes like "3-49646", "3-A31174",
+// "3A-42318", "-03-A31196", or bare 3+ digit VIDs. A real transporter (e.g.
+// "Biniyam") has alphabetic characters and no dash/digit-cluster pattern.
+const looksLikePlateOrVid = (raw: string): boolean => {
+  const s = raw.trim();
+  if (!s) return true;
+  if (/^-?\d+[-\s]?[A-Za-z]?\d*/.test(s) && /\d/.test(s) && /-/.test(s)) return true;
+  if (/^\d{3,}$/.test(s)) return true;
+  if (/^[0-9A-Z]{1,3}-[0-9A-Z]+$/i.test(s)) return true;
+  return false;
+};
+
+// Aggregate the transporter labels from every Speed, Nights and Continuous
+// upload — plus the driver-record list — so the dropdown shows the union of
+// every carrier we have data for, not just VIDs that passed a threshold. The
+// parsers now put the `Group:` value (or Global `Owner`) into the transporter
+// field for all three sources, so this pulls together every carrier the boss
+// ever uploaded a file for.
 const collectKnownTransporters = (
-  driverRecords: { transporter?: string }[],
-  uploadFiles: { records: { transporter?: string }[] }[],
-  unfilteredFiles: { drivers: { transporter?: string }[] }[],
-  nightFiles: { drivers: { transporter?: string }[] }[],
-  continuousFiles: { drivers: { transporter?: string }[] }[],
+  driverRecords: DriverRecord[],
+  speedFiles: UnfilteredFile[],
+  nightFiles: UnfilteredNightFile[],
+  continuousFiles: UnfilteredContinuousFile[],
 ): string[] => {
   const seen = new Map<string, string>();
-  const push = (value: string | undefined) => {
-    if (!value) return;
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    const key = trimmed.toLowerCase();
-    if (!seen.has(key)) seen.set(key, trimmed);
+  const push = (v: string | undefined) => {
+    const t = (v ?? '').trim();
+    if (!t || looksLikePlateOrVid(t)) return;
+    const key = t.toLowerCase();
+    if (!seen.has(key)) seen.set(key, t);
   };
   driverRecords.forEach((r) => push(r.transporter));
-  uploadFiles.forEach((f) => f.records.forEach((r) => push(r.transporter)));
-  unfilteredFiles.forEach((f) => f.drivers.forEach((d) => push(d.transporter)));
+  speedFiles.forEach((f) => f.drivers.forEach((d) => push(d.transporter)));
   nightFiles.forEach((f) => f.drivers.forEach((d) => push(d.transporter)));
   continuousFiles.forEach((f) => f.drivers.forEach((d) => push(d.transporter)));
   return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
@@ -50,7 +74,6 @@ interface FormState {
   name: string;
   email: string;
   password: string;
-  transportersInput: string;
   selected: string[];
 }
 
@@ -58,29 +81,26 @@ const emptyForm: FormState = {
   name: '',
   email: '',
   password: '',
-  transportersInput: '',
   selected: [],
 };
 
 export const UserManagementPage = () => {
   const dispatch = useAppDispatch();
   const staffUsers = useAppSelector((s) => s.staffUsers.users);
-  const driverRecords = useAppSelector((s) => s.drivers.records);
-  const uploadFiles = useAppSelector((s) => s.uploads.files);
   const unfilteredFiles = useAppSelector((s) => s.unfiltered.files);
   const nightFiles = useAppSelector((s) => s.unfilteredNights.files);
   const continuousFiles = useAppSelector((s) => s.unfilteredContinuous.files);
+  const driverRecords = useAppSelector((s) => s.drivers.records);
 
-  const knownTransporters = useMemo(
+  const transporterOptions = useMemo(
     () =>
       collectKnownTransporters(
         driverRecords,
-        uploadFiles,
         unfilteredFiles,
         nightFiles,
         continuousFiles,
       ),
-    [driverRecords, uploadFiles, unfilteredFiles, nightFiles, continuousFiles],
+    [driverRecords, unfilteredFiles, nightFiles, continuousFiles],
   );
 
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -98,40 +118,6 @@ export const UserManagementPage = () => {
         u.assignedTransporters.some((t) => t.toLowerCase().includes(q)),
     );
   }, [staffUsers, query]);
-
-  const toggleTransporter = (name: string) => {
-    setForm((f) => {
-      const exists = f.selected.some(
-        (x) => x.toLowerCase() === name.toLowerCase(),
-      );
-      return {
-        ...f,
-        selected: exists
-          ? f.selected.filter((x) => x.toLowerCase() !== name.toLowerCase())
-          : [...f.selected, name],
-      };
-    });
-  };
-
-  const addTypedTransporter = () => {
-    const t = form.transportersInput.trim();
-    if (!t) return;
-    setForm((f) => {
-      const exists = f.selected.some((x) => x.toLowerCase() === t.toLowerCase());
-      return {
-        ...f,
-        transportersInput: '',
-        selected: exists ? f.selected : [...f.selected, t],
-      };
-    });
-  };
-
-  const removeSelected = (name: string) => {
-    setForm((f) => ({
-      ...f,
-      selected: f.selected.filter((x) => x.toLowerCase() !== name.toLowerCase()),
-    }));
-  };
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -262,88 +248,17 @@ export const UserManagementPage = () => {
               Assigned transporters
             </label>
             <p className="mt-1 text-[11px] text-ink-500 dark:text-ink-400">
-              Pick from known transporters (detected from your uploaded data) or
-              type a name and press add.
+              Pick from transporters detected in your Speed, Nights and Continuous
+              uploads. The staff account will only see data for these transporters
+              on the Master Fleet page.
             </p>
-
-            <div className="mt-2 flex gap-2">
-              <input
-                type="text"
-                value={form.transportersInput}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, transportersInput: e.target.value }))
-                }
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addTypedTransporter();
-                  }
-                }}
-                placeholder="Type a transporter name"
-                className="input-base flex-1"
+            <div className="mt-2">
+              <TransporterMultiSelect
+                options={transporterOptions}
+                value={form.selected}
+                onChange={(next) => setForm((f) => ({ ...f, selected: next }))}
               />
-              <button
-                type="button"
-                onClick={addTypedTransporter}
-                className="btn-ghost"
-                disabled={!form.transportersInput.trim()}
-              >
-                <Plus size={15} /> Add
-              </button>
             </div>
-
-            {form.selected.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {form.selected.map((t) => (
-                  <span
-                    key={t}
-                    className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800"
-                  >
-                    <Truck size={11} />
-                    {t}
-                    <button
-                      type="button"
-                      onClick={() => removeSelected(t)}
-                      className="ml-0.5 rounded-full p-0.5 hover:bg-red-100 dark:hover:bg-red-900"
-                      aria-label={`Remove ${t}`}
-                    >
-                      <X size={11} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {knownTransporters.length > 0 && (
-              <div className="mt-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
-                  Detected transporters
-                </p>
-                <div className="mt-2 flex max-h-40 flex-wrap gap-1.5 overflow-auto rounded-xl border border-dashed border-ink-200 bg-ink-50/60 p-2 dark:border-ink-700 dark:bg-ink-900/60">
-                  {knownTransporters.map((t) => {
-                    const selected = form.selected.some(
-                      (x) => x.toLowerCase() === t.toLowerCase(),
-                    );
-                    return (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => toggleTransporter(t)}
-                        className={
-                          'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition ' +
-                          (selected
-                            ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-900'
-                            : 'bg-white text-ink-700 ring-1 ring-ink-200 hover:bg-ink-100 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800')
-                        }
-                      >
-                        <Truck size={11} />
-                        {t}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </div>
 
           {error && (
@@ -405,7 +320,7 @@ export const UserManagementPage = () => {
                     email={u.email}
                     password={u.password}
                     transporters={u.assignedTransporters}
-                    knownTransporters={knownTransporters}
+                    knownTransporters={transporterOptions}
                     onDelete={() => {
                       if (confirm(`Delete staff user ${u.email}?`)) {
                         dispatch(removeStaffUser(u.id));
@@ -419,6 +334,180 @@ export const UserManagementPage = () => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────────────────────
+   Searchable multi-select dropdown for transporters
+   ───────────────────────────────────────────────────────── */
+
+interface TransporterMultiSelectProps {
+  options: string[];
+  value: string[];
+  onChange: (next: string[]) => void;
+}
+
+const TransporterMultiSelect = ({
+  options,
+  value,
+  onChange,
+}: TransporterMultiSelectProps) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+
+  const selectedSet = useMemo(
+    () => new Set(value.map((v) => v.toLowerCase())),
+    [value],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) => o.toLowerCase().includes(q));
+  }, [options, query]);
+
+  const toggle = (t: string) => {
+    if (selectedSet.has(t.toLowerCase())) {
+      onChange(value.filter((x) => x.toLowerCase() !== t.toLowerCase()));
+    } else {
+      onChange([...value, t]);
+    }
+  };
+
+  const clearAll = () => onChange([]);
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="input-base flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span className="flex min-w-0 items-center gap-2 truncate">
+          <Truck size={14} className="shrink-0 text-ink-400" />
+          {value.length === 0 ? (
+            <span className="text-ink-400">Select transporters…</span>
+          ) : (
+            <span className="truncate text-ink-900 dark:text-white">
+              {value.length} selected
+            </span>
+          )}
+        </span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-ink-400 transition-transform ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {value.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {value.map((t) => (
+            <span
+              key={t}
+              className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800"
+            >
+              <Truck size={11} />
+              {t}
+              <button
+                type="button"
+                onClick={() => toggle(t)}
+                className="ml-0.5 rounded-full p-0.5 hover:bg-red-100 dark:hover:bg-red-900"
+                aria-label={`Remove ${t}`}
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <div
+          className="absolute z-40 mt-2 w-full overflow-hidden rounded-xl border border-ink-200 bg-white shadow-elev dark:border-ink-700 dark:bg-ink-900"
+        >
+          <div className="border-b border-ink-100 p-2 dark:border-ink-800">
+            <div className="relative">
+              <Search
+                size={14}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
+              />
+              <input
+                autoFocus
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search transporters"
+                className="input-base !py-2 !pl-9 text-sm"
+              />
+            </div>
+          </div>
+
+          <ul className="max-h-64 overflow-auto py-1">
+            {filtered.length === 0 ? (
+              <li className="px-4 py-3 text-xs italic text-ink-400">
+                {options.length === 0
+                  ? 'No transporters detected yet. Upload Speed, Nights or Continuous data first.'
+                  : 'No matches for your search.'}
+              </li>
+            ) : (
+              filtered.map((t) => {
+                const checked = selectedSet.has(t.toLowerCase());
+                return (
+                  <li key={t}>
+                    <button
+                      type="button"
+                      onClick={() => toggle(t)}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition hover:bg-ink-50 dark:hover:bg-ink-800"
+                    >
+                      <span
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                          checked
+                            ? 'border-red-600 bg-red-600 text-white'
+                            : 'border-ink-300 bg-white dark:border-ink-600 dark:bg-ink-900'
+                        }`}
+                        aria-hidden
+                      >
+                        {checked && <Check size={12} strokeWidth={3} />}
+                      </span>
+                      <Truck size={13} className="shrink-0 text-ink-400" />
+                      <span className="truncate text-ink-900 dark:text-white">
+                        {t}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+
+          {value.length > 0 && (
+            <div className="flex items-center justify-between border-t border-ink-100 px-3 py-2 dark:border-ink-800">
+              <span className="text-[11px] text-ink-500 dark:text-ink-400">
+                {value.length} selected
+              </span>
+              <button
+                type="button"
+                onClick={clearAll}
+                className="text-[11px] font-medium text-red-600 hover:underline dark:text-red-400"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -454,23 +543,6 @@ const StaffUserRow = ({
   const [draftPw, setDraftPw] = useState('');
   const [draftTransporters, setDraftTransporters] = useState<string[]>(transporters);
   const [showPw, setShowPw] = useState(false);
-  const [typed, setTyped] = useState('');
-
-  const toggle = (t: string) =>
-    setDraftTransporters((cur) =>
-      cur.some((x) => x.toLowerCase() === t.toLowerCase())
-        ? cur.filter((x) => x.toLowerCase() !== t.toLowerCase())
-        : [...cur, t],
-    );
-
-  const addTyped = () => {
-    const t = typed.trim();
-    if (!t) return;
-    setDraftTransporters((cur) =>
-      cur.some((x) => x.toLowerCase() === t.toLowerCase()) ? cur : [...cur, t],
-    );
-    setTyped('');
-  };
 
   const save = () => {
     onSave({
@@ -490,7 +562,6 @@ const StaffUserRow = ({
     setDraftPw('');
     setDraftTransporters(transporters);
     setShowPw(false);
-    setTyped('');
     setEditing(false);
   };
 
@@ -534,74 +605,13 @@ const StaffUserRow = ({
             <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
               Assigned transporters
             </p>
-            <div className="mt-2 flex gap-2">
-              <input
-                value={typed}
-                onChange={(e) => setTyped(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addTyped();
-                  }
-                }}
-                placeholder="Type to add"
-                className="input-base flex-1"
+            <div className="mt-2">
+              <TransporterMultiSelect
+                options={knownTransporters}
+                value={draftTransporters}
+                onChange={setDraftTransporters}
               />
-              <button
-                type="button"
-                onClick={addTyped}
-                className="btn-ghost"
-                disabled={!typed.trim()}
-              >
-                <Plus size={14} /> Add
-              </button>
             </div>
-            {draftTransporters.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {draftTransporters.map((t) => (
-                  <span
-                    key={t}
-                    className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800"
-                  >
-                    <Truck size={10} />
-                    {t}
-                    <button
-                      type="button"
-                      onClick={() => toggle(t)}
-                      className="ml-0.5 rounded-full p-0.5 hover:bg-red-100 dark:hover:bg-red-900"
-                      aria-label={`Remove ${t}`}
-                    >
-                      <X size={10} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            {knownTransporters.length > 0 && (
-              <div className="mt-2 flex max-h-32 flex-wrap gap-1.5 overflow-auto rounded-xl border border-dashed border-ink-200 bg-ink-50/60 p-2 dark:border-ink-700 dark:bg-ink-900/60">
-                {knownTransporters.map((t) => {
-                  const selected = draftTransporters.some(
-                    (x) => x.toLowerCase() === t.toLowerCase(),
-                  );
-                  return (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => toggle(t)}
-                      className={
-                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition ' +
-                        (selected
-                          ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-900'
-                          : 'bg-white text-ink-700 ring-1 ring-ink-200 hover:bg-ink-100 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800')
-                      }
-                    >
-                      <Truck size={10} />
-                      {t}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
 
           <div className="flex justify-end gap-2">
