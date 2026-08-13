@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/store';
 import { useAuth } from '../../hooks/useAuth';
 import { Avatar } from '../ui/Avatar';
-import { Logo } from '../ui/Logo';
 
 export const Topbar = () => {
   const { user, logout } = useAuth();
