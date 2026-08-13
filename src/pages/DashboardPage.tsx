@@ -41,7 +41,7 @@ export const DashboardPage = () => {
   const rawSpeedFiles = useAppSelector((s) => s.unfiltered.files);
   const rawNightFiles = useAppSelector((s) => s.unfilteredNights.files);
   const rawContFiles = useAppSelector((s) => s.unfilteredContinuous.files);
-  const rawDriverRecords = useAppSelector((s) => s.drivers.records);
+  const driverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocations = useAppSelector((s) => s.rules.allowedLocations);
@@ -77,14 +77,6 @@ export const DashboardPage = () => {
     () => filterFilesByTransporter(rawContFiles, isTransporterStaff, matchesTransporter),
     [rawContFiles, isTransporterStaff, matchesTransporter],
   );
-  const driverRecords = useMemo(
-    () =>
-      isTransporterStaff
-        ? rawDriverRecords.filter((r) => matchesTransporter(r.transporter))
-        : rawDriverRecords,
-    [rawDriverRecords, isTransporterStaff, matchesTransporter],
-  );
-
   const analytics = useMemo(
     () =>
       computeDashboardAnalytics({

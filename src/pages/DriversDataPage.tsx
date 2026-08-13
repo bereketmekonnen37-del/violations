@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { CalendarRange, FileSpreadsheet, Trash2, Users } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -13,19 +12,11 @@ export const DriversDataPage = () => {
   const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.auth.user);
   const drivers = useAppSelector((s) => s.drivers);
-  const { isTransporterStaff, matchesTransporter } = useUserScope();
-
-  const scopedRecords = useMemo(
-    () =>
-      isTransporterStaff
-        ? drivers.records.filter((r) => matchesTransporter(r.transporter))
-        : drivers.records,
-    [drivers.records, isTransporterStaff, matchesTransporter],
-  );
+  const { isTransporterStaff } = useUserScope();
 
   if (!user) return null;
 
-  const hasData = scopedRecords.length > 0;
+  const hasData = drivers.records.length > 0;
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -53,7 +44,7 @@ export const DriversDataPage = () => {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
           label="Drivers on file"
-          value={scopedRecords.length}
+          value={drivers.records.length}
           icon={Users}
         />
         <StatCard

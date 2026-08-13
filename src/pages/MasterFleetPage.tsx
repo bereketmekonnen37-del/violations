@@ -130,7 +130,7 @@ export const MasterFleetPage = () => {
   const rawSpeed = useAppSelector((s) => s.unfiltered.files);
   const rawNights = useAppSelector((s) => s.unfilteredNights.files);
   const rawCont = useAppSelector((s) => s.unfilteredContinuous.files);
-  const rawDriverRecords = useAppSelector((s) => s.drivers.records);
+  const driverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocations = useAppSelector((s) => s.rules.allowedLocations);
@@ -148,13 +148,6 @@ export const MasterFleetPage = () => {
   const continuousFiles = useMemo(
     () => filterFilesByTransporter(rawCont, isTransporterStaff, matchesTransporter),
     [rawCont, isTransporterStaff, matchesTransporter],
-  );
-  const driverRecords = useMemo(
-    () =>
-      isTransporterStaff
-        ? rawDriverRecords.filter((r) => matchesTransporter(r.transporter))
-        : rawDriverRecords,
-    [rawDriverRecords, isTransporterStaff, matchesTransporter],
   );
 
   const rows = useMemo(
