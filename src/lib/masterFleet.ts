@@ -21,6 +21,7 @@ import {
   buildAllowedTagSet,
   buildAllowedVidSet,
   normalizeVid,
+  positionHasAllowedTag,
 } from './locationRules';
 
 export interface MasterFleetRow {
@@ -68,7 +69,12 @@ export interface FilteredNightEvent {
   duration: string;
   durationSeconds: number;
   length: string;
+  /** Preferred display position (Position A → falls back to Position B). */
+  position: string;
+  positionA: string;
+  positionB: string;
   allowedVid: boolean;
+  allowedLocation: boolean;
 }
 
 export interface FilteredContinuousEvent {
@@ -82,7 +88,12 @@ export interface FilteredContinuousEvent {
   duration: string;
   durationSeconds: number;
   length: string;
+  /** Preferred display position (Position B → falls back to Position A). */
+  position: string;
+  positionA: string;
+  positionB: string;
   allowedVid: boolean;
+  allowedLocation: boolean;
 }
 
 export interface FilteredEvents {
@@ -319,6 +330,11 @@ export const collectFilteredEvents = ({
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (Number.isFinite(seconds) && seconds >= thresholds.nights) {
+          const position = row.positionA || row.positionB || '';
+          const allowedLocation =
+            allowedTagSet.size > 0 &&
+            (positionHasAllowedTag(row.positionA, allowedTagSet) ||
+              positionHasAllowedTag(row.positionB, allowedTagSet));
           nights.push({
             id: row.id,
             vid,
@@ -330,7 +346,11 @@ export const collectFilteredEvents = ({
             duration: row.duration,
             durationSeconds: seconds,
             length: row.length,
+            position,
+            positionA: row.positionA,
+            positionB: row.positionB,
             allowedVid,
+            allowedLocation,
           });
         }
       });
@@ -347,6 +367,11 @@ export const collectFilteredEvents = ({
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (Number.isFinite(seconds) && seconds >= thresholds.continuous) {
+          const position = row.positionB || row.positionA || '';
+          const allowedLocation =
+            allowedTagSet.size > 0 &&
+            (positionHasAllowedTag(row.positionB, allowedTagSet) ||
+              positionHasAllowedTag(row.positionA, allowedTagSet));
           continuous.push({
             id: row.id,
             vid,
@@ -358,7 +383,11 @@ export const collectFilteredEvents = ({
             duration: row.duration,
             durationSeconds: seconds,
             length: row.length,
+            position,
+            positionA: row.positionA,
+            positionB: row.positionB,
             allowedVid,
+            allowedLocation,
           });
         }
       });
@@ -483,13 +512,15 @@ export const downloadFilteredNightsCsv = (
       'Time A': e.timeA,
       'Time B': e.timeB,
       Duration: e.duration,
-      Length: e.length,
+      Position: e.position,
       'Allowed VID': e.allowedVid ? 'YES' : '',
+      'Allowed Location': e.allowedLocation ? 'YES' : '',
     })),
     {
       header: [
         'VID', 'Driver Name', 'Transporter', 'Period',
-        'Time A', 'Time B', 'Duration', 'Length', 'Allowed VID',
+        'Time A', 'Time B', 'Duration', 'Position',
+        'Allowed VID', 'Allowed Location',
       ],
     },
   );
@@ -510,12 +541,15 @@ export const downloadFilteredContinuousCsv = (
       'Time B': e.timeB,
       Duration: e.duration,
       Length: e.length,
+      Position: e.position,
       'Allowed VID': e.allowedVid ? 'YES' : '',
+      'Allowed Location': e.allowedLocation ? 'YES' : '',
     })),
     {
       header: [
         'VID', 'Driver Name', 'Transporter', 'Period',
-        'Time A', 'Time B', 'Duration', 'Length', 'Allowed VID',
+        'Time A', 'Time B', 'Duration', 'Length', 'Position',
+        'Allowed VID', 'Allowed Location',
       ],
     },
   );

@@ -536,10 +536,10 @@ const FilteredEventsPanel = ({
     matchesQuery(query, e.vid, e.driverName, e.overspeedPosition, e.duration),
   );
   const nightRows = events.nights.filter((e) =>
-    matchesQuery(query, e.vid, e.driverName, e.timeA, e.duration),
+    matchesQuery(query, e.vid, e.driverName, e.timeA, e.duration, e.position),
   );
   const contRows = events.continuous.filter((e) =>
-    matchesQuery(query, e.vid, e.driverName, e.timeA, e.duration),
+    matchesQuery(query, e.vid, e.driverName, e.timeA, e.duration, e.position),
   );
 
   return (
@@ -732,7 +732,7 @@ const FilteredEventsPanel = ({
                 <th className="px-4 py-3">Time A</th>
                 <th className="px-4 py-3">Time B</th>
                 <th className="px-4 py-3">Duration</th>
-                <th className="px-4 py-3">Length</th>
+                <th className="px-4 py-3">Position</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
@@ -750,7 +750,7 @@ const FilteredEventsPanel = ({
                   <tr
                     key={e.id}
                     className={
-                      e.allowedVid
+                      e.allowedVid || e.allowedLocation
                         ? 'bg-red-50/60 dark:bg-red-950/20'
                         : 'bg-white dark:bg-ink-900'
                     }
@@ -780,8 +780,22 @@ const FilteredEventsPanel = ({
                     <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
                       {e.duration}
                     </td>
-                    <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
-                      {e.length || <span className="text-ink-400">—</span>}
+                    <td className="px-4 py-2.5 text-xs text-ink-700 dark:text-ink-200">
+                      <div className="flex flex-col gap-1">
+                        {e.position ? (
+                          <span>{e.position}</span>
+                        ) : (
+                          <span className="text-ink-400">—</span>
+                        )}
+                        {e.allowedLocation && (
+                          <span
+                            title="This event's position matches an allowed location"
+                            className="inline-flex w-fit items-center gap-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800"
+                          >
+                            <MapPin size={10} /> Allowed location
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -801,13 +815,14 @@ const FilteredEventsPanel = ({
                 <th className="px-4 py-3">Time B</th>
                 <th className="px-4 py-3">Duration</th>
                 <th className="px-4 py-3">Length</th>
+                <th className="px-4 py-3">Position</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
               {contRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-8 text-center text-sm text-ink-500 dark:text-ink-400"
                   >
                     No continuous events passed the threshold.
@@ -818,7 +833,7 @@ const FilteredEventsPanel = ({
                   <tr
                     key={e.id}
                     className={
-                      e.allowedVid
+                      e.allowedVid || e.allowedLocation
                         ? 'bg-red-50/60 dark:bg-red-950/20'
                         : 'bg-white dark:bg-ink-900'
                     }
@@ -850,6 +865,23 @@ const FilteredEventsPanel = ({
                     </td>
                     <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
                       {e.length || <span className="text-ink-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-ink-700 dark:text-ink-200">
+                      <div className="flex flex-col gap-1">
+                        {e.position ? (
+                          <span>{e.position}</span>
+                        ) : (
+                          <span className="text-ink-400">—</span>
+                        )}
+                        {e.allowedLocation && (
+                          <span
+                            title="This event's position matches an allowed location"
+                            className="inline-flex w-fit items-center gap-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800"
+                          >
+                            <MapPin size={10} /> Allowed location
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

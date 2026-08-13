@@ -14,6 +14,7 @@ import { UnfilteredPage } from '../pages/UnfilteredPage';
 import { UploadPage } from '../pages/UploadPage';
 import { UserManagementPage } from '../pages/UserManagementPage';
 import { ViolationFilesPage } from '../pages/ViolationFilesPage';
+import { TransporterDetailPage } from '../pages/TransporterDetailPage';
 import { ProtectedRoute } from './ProtectedRoute';
 
 export const AppRoutes = () => {
@@ -68,6 +69,14 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute allow={['boss']} allowTransporterStaff>
               <MasterFleetPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/transporters/:transporter"
+          element={
+            <ProtectedRoute allow={['boss']} allowTransporterStaff>
+              <TransporterDetailPage />
             </ProtectedRoute>
           }
         />
