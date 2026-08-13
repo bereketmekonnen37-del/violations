@@ -31,6 +31,39 @@ import type {
   UnfilteredNightFile,
 } from '../types';
 
+// Baseline transporter roster provided by the boss. These always appear in
+// the assignment dropdown so staff can be scoped to a transporter even before
+// any Speed/Nights/Continuous upload has surfaced that carrier.
+const BASELINE_TRANSPORTERS: string[] = [
+  'Abayneh Kebede',
+  'Awash Zego',
+  'Ayal Tizazu',
+  'BEETAR Plc.',
+  'Binyam Mekbeb',
+  'Dagnachew Abebe',
+  'Dagnew Negash',
+  'FAMNET Plc.',
+  'Getenet Mohamed',
+  'Ghion Industrial Plc.',
+  'GMT Industrial Plc.',
+  'Golden N Blue',
+  'Habtom Abaddi',
+  'Hagos & Alemstaye',
+  'Hailu Kindya',
+  'Hidassie',
+  'Kehasie Lemlem',
+  'Khalid Mohammed',
+  'Kisadael Trading',
+  'Solomon Yohanes',
+  'Welde Michael Halefom',
+  'Wubejeg & Abrham',
+  'Yared Hadgu',
+  'Yaregal Mammo',
+  'Yohannes Demma',
+  'Yonas Mekonen',
+  'Zemen Business Group',
+];
+
 // Reject transporter values that look like a plate/VID rather than a real
 // carrier name. Plates in this dataset take shapes like "3-49646", "3-A31174",
 // "3A-42318", "-03-A31196", or bare 3+ digit VIDs. A real transporter (e.g.
@@ -63,6 +96,7 @@ const collectKnownTransporters = (
     const key = t.toLowerCase();
     if (!seen.has(key)) seen.set(key, t);
   };
+  BASELINE_TRANSPORTERS.forEach(push);
   driverRecords.forEach((r) => push(r.transporter));
   speedFiles.forEach((f) => f.drivers.forEach((d) => push(d.transporter)));
   nightFiles.forEach((f) => f.drivers.forEach((d) => push(d.transporter)));
