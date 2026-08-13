@@ -96,6 +96,34 @@ export const blobHasAllowedTag = (
   return false;
 };
 
+/**
+ * Broader match for the free-form Position A / Position B fields on the
+ * Nights and Continuous sheets. These may be:
+ *   - A coordinate line ("11.58 °, 43.07 ° - Djibouti")
+ *   - A plain text location ("Djibouti", "Metehara")
+ *   - Multi-line combinations of the above
+ * Returns true when any coordinate tag OR any plain-text line matches
+ * one of the allowed tags (case/whitespace-insensitive).
+ */
+export const positionHasAllowedTag = (
+  position: string,
+  allowed: Set<string>,
+): boolean => {
+  if (allowed.size === 0) return false;
+  const raw = String(position ?? '');
+  if (!raw.trim()) return false;
+  if (blobHasAllowedTag(raw, allowed)) return true;
+  const lines = raw.split(/\r?\n/);
+  for (const line of lines) {
+    const cleaned = line.trim();
+    if (!cleaned) continue;
+    // If the line parses as a coord, `blobHasAllowedTag` already handled it.
+    if (parseCoordLine(cleaned)) continue;
+    if (allowed.has(normalizeTag(cleaned))) return true;
+  }
+  return false;
+};
+
 /** Normalize a VID for equality comparison (strip punctuation, lowercase). */
 export const normalizeVid = (vid: string): string =>
   String(vid ?? '')

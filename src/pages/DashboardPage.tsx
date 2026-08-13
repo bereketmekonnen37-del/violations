@@ -30,6 +30,8 @@ import { filterFilesByTransporter } from '../lib/transporterScope';
 import { parseDurationSeconds } from '../lib/duration';
 import { DailyViolationsChart } from '../features/dashboard/DailyViolationsChart';
 import { TopOffenderCards } from '../features/dashboard/TopOffenderCards';
+import { TransporterAnalytics } from '../features/dashboard/TransporterAnalytics';
+import { computeTransporterAnalytics } from '../lib/transporterAnalytics';
 
 const DAILY_WINDOW = 14;
 
@@ -108,6 +110,28 @@ export const DashboardPage = () => {
   const dailySeries = useMemo(
     () => fillDailyWindow(analytics.daily, DAILY_WINDOW),
     [analytics.daily],
+  );
+
+  const transporterRows = useMemo(
+    () =>
+      computeTransporterAnalytics({
+        speedFiles,
+        nightFiles,
+        continuousFiles,
+        driverRecords,
+        thresholds,
+        allowedVids,
+        allowedLocations,
+      }),
+    [
+      speedFiles,
+      nightFiles,
+      continuousFiles,
+      driverRecords,
+      thresholds,
+      allowedVids,
+      allowedLocations,
+    ],
   );
 
   const analyticsTotal =
@@ -410,6 +434,16 @@ export const DashboardPage = () => {
             <DailyViolationsChart data={dailySeries} />
           </div>
         </section>
+      )}
+
+      {(isBoss || isTransporterStaff) && (
+        <TransporterAnalytics
+          rows={
+            isTransporterStaff
+              ? transporterRows.filter((r) => matchesTransporter(r.name))
+              : transporterRows
+          }
+        />
       )}
 
       <section className="mt-10">

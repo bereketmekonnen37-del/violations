@@ -35,7 +35,6 @@ export const Topbar = () => {
       }}
     >
       <div className="flex items-center gap-4">
-        <Logo />
         <div className="hidden lg:block">
           <p
             className="text-[11px] font-medium uppercase tracking-wider"
