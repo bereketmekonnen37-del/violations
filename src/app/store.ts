@@ -62,7 +62,7 @@ const migrations = {
         },
         allowedVids: undefined,
       },
-    } as PersistedState;
+    } as unknown as PersistedState;
   },
 };
 
