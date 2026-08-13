@@ -25,6 +25,7 @@ import {
   removeAllowedVid,
   resetThresholds,
   setThresholds,
+  type AllowedVidCategory,
   type RuleThresholds,
 } from '../features/rules/rulesSlice';
 import { extractRuleTag } from '../lib/locationRules';
@@ -40,10 +41,41 @@ const formatThreshold = (seconds: number): string => {
   return `${seconds}s`;
 };
 
+interface VidCardMeta {
+  category: AllowedVidCategory;
+  icon: typeof Truck;
+  title: string;
+  description: string;
+}
+
+const VID_CARDS: VidCardMeta[] = [
+  {
+    category: 'speed',
+    icon: Gauge,
+    title: 'Allowed VIDs — Speed',
+    description:
+      "Speed events for these VIDs are subtracted from every Speed count on the Dashboard, Master Fleet and Transporter pages. Doesn't affect Nights or Continuous counts.",
+  },
+  {
+    category: 'nights',
+    icon: Moon,
+    title: 'Allowed VIDs — Nights',
+    description:
+      "Nights rows for these VIDs are subtracted from every Nights count on the Dashboard, Master Fleet and Transporter pages. Doesn't affect Speed or Continuous counts.",
+  },
+  {
+    category: 'continuous',
+    icon: RouteIcon,
+    title: 'Allowed VIDs — Continuous',
+    description:
+      "Continuous rows for these VIDs are subtracted from every Continuous count on the Dashboard, Master Fleet and Transporter pages. Doesn't affect Speed or Nights counts.",
+  },
+];
+
 export const RulesPage = () => {
   const dispatch = useAppDispatch();
   const thresholds = useAppSelector((s) => s.rules.thresholds);
-  const allowedVids = useAppSelector((s) => s.rules.allowedVids);
+  const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocations = useAppSelector((s) => s.rules.allowedLocations);
 
   return (
@@ -51,7 +83,7 @@ export const RulesPage = () => {
       <PageHeader
         eyebrow="Manager workspace"
         title="Rules"
-        subtitle="Set the filters Master Fleet uses. Change the duration threshold per violation type, whitelist VIDs that don't need to be checked, and whitelist speed locations (highways, border crossings)."
+        subtitle="Set the filters Master Fleet uses. Change the duration threshold per violation type, whitelist VIDs per violation source (Speed / Nights / Continuous), and whitelist speed locations (highways, border crossings)."
       />
 
       <div className="space-y-8">
@@ -61,17 +93,22 @@ export const RulesPage = () => {
           onReset={() => dispatch(resetThresholds())}
         />
 
-        <AllowedListCard
-          icon={Truck}
-          title="Allowed VIDs"
-          description="Vehicles in this list still appear on Master Fleet but are visually flagged as allowed — they won't be treated as needing review."
-          placeholder="e.g. ET-3-A12345"
-          items={allowedVids}
-          onAdd={(v) => dispatch(addAllowedVid(v))}
-          onRemove={(v) => dispatch(removeAllowedVid(v))}
-          onClear={() => dispatch(clearAllowedVids())}
-          previewItem={(v) => v}
-        />
+        {VID_CARDS.map((meta) => (
+          <AllowedListCard
+            key={meta.category}
+            icon={meta.icon}
+            title={meta.title}
+            description={meta.description}
+            placeholder="e.g. ET-3-A12345"
+            items={allowedVidsByType[meta.category]}
+            onAdd={(v) => dispatch(addAllowedVid({ category: meta.category, value: v }))}
+            onRemove={(v) =>
+              dispatch(removeAllowedVid({ category: meta.category, value: v }))
+            }
+            onClear={() => dispatch(clearAllowedVids(meta.category))}
+            previewItem={(v) => v}
+          />
+        ))}
 
         <AllowedListCard
           icon={MapPin}

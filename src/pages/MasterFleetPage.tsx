@@ -132,7 +132,7 @@ export const MasterFleetPage = () => {
   const rawCont = useAppSelector((s) => s.unfilteredContinuous.files);
   const rawDriverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
-  const allowedVids = useAppSelector((s) => s.rules.allowedVids);
+  const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocations = useAppSelector((s) => s.rules.allowedLocations);
   const { isTransporterStaff, matchesTransporter } = useUserScope();
   const [query, setQuery] = useState('');
@@ -165,7 +165,7 @@ export const MasterFleetPage = () => {
         continuousFiles,
         driverRecords,
         thresholds,
-        allowedVids,
+        allowedVidsByType,
         allowedLocations,
       }),
     [
@@ -174,7 +174,7 @@ export const MasterFleetPage = () => {
       continuousFiles,
       driverRecords,
       thresholds,
-      allowedVids,
+      allowedVidsByType,
       allowedLocations,
     ],
   );
@@ -187,7 +187,7 @@ export const MasterFleetPage = () => {
         continuousFiles,
         driverRecords,
         thresholds,
-        allowedVids,
+        allowedVidsByType,
         allowedLocations,
       }),
     [
@@ -196,7 +196,7 @@ export const MasterFleetPage = () => {
       continuousFiles,
       driverRecords,
       thresholds,
-      allowedVids,
+      allowedVidsByType,
       allowedLocations,
     ],
   );
@@ -293,14 +293,30 @@ export const MasterFleetPage = () => {
         </div>
       ) : (
         <>
-          {(allowedVids.length > 0 || allowedLocations.length > 0) && (
+          {(allowedVidsByType.speed.length > 0 ||
+            allowedVidsByType.nights.length > 0 ||
+            allowedVidsByType.continuous.length > 0 ||
+            allowedLocations.length > 0) && (
             <div className="surface mt-6 flex flex-wrap items-center gap-3 rounded-2xl p-4 sm:p-5">
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
                 <ShieldCheck size={14} /> Active whitelists
               </span>
-              {allowedVids.length > 0 && (
+              {allowedVidsByType.speed.length > 0 && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800">
-                  {allowedVids.length} VID{allowedVids.length === 1 ? '' : 's'}
+                  <Gauge size={11} /> {allowedVidsByType.speed.length} speed VID
+                  {allowedVidsByType.speed.length === 1 ? '' : 's'}
+                </span>
+              )}
+              {allowedVidsByType.nights.length > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800">
+                  <Moon size={11} /> {allowedVidsByType.nights.length} nights VID
+                  {allowedVidsByType.nights.length === 1 ? '' : 's'}
+                </span>
+              )}
+              {allowedVidsByType.continuous.length > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800">
+                  <RouteIcon size={11} /> {allowedVidsByType.continuous.length} continuous VID
+                  {allowedVidsByType.continuous.length === 1 ? '' : 's'}
                 </span>
               )}
               {allowedLocations.length > 0 && (

@@ -4,6 +4,7 @@ import type {
   UnfilteredFile,
   UnfilteredNightFile,
 } from '../types';
+import type { AllowedVidLists } from '../features/rules/rulesSlice';
 import { parseDurationSeconds } from './duration';
 import {
   buildAllowedTagSet,
@@ -13,6 +14,12 @@ import {
   blobHasAllowedTag,
 } from './locationRules';
 import type { EventThresholds } from './masterFleet';
+
+const EMPTY_ALLOWED: AllowedVidLists = {
+  speed: [],
+  nights: [],
+  continuous: [],
+};
 
 /**
  * Canonical list of transporters we always want to surface on the
@@ -83,7 +90,7 @@ interface AnalyticsInput {
   continuousFiles: UnfilteredContinuousFile[];
   driverRecords: DriverRecord[];
   thresholds: EventThresholds;
-  allowedVids?: string[];
+  allowedVidsByType?: AllowedVidLists;
   allowedLocations?: string[];
 }
 
@@ -125,13 +132,16 @@ export const computeTransporterAnalytics = ({
   continuousFiles,
   driverRecords,
   thresholds,
-  allowedVids = [],
+  allowedVidsByType = EMPTY_ALLOWED,
   allowedLocations = [],
 }: AnalyticsInput): TransporterAnalyticsRow[] => {
-  const allowedVidSet = buildAllowedVidSet(allowedVids);
+  const allowedSpeedSet = buildAllowedVidSet(allowedVidsByType.speed);
+  const allowedNightsSet = buildAllowedVidSet(allowedVidsByType.nights);
+  const allowedContSet = buildAllowedVidSet(allowedVidsByType.continuous);
   const allowedTagSet = buildAllowedTagSet(allowedLocations);
-  const skipVid = (vid: string) =>
-    allowedVidSet.size > 0 && allowedVidSet.has(normalizeVid(vid));
+  const skipSpeed = (vid: string) => allowedSpeedSet.has(normalizeVid(vid));
+  const skipNights = (vid: string) => allowedNightsSet.has(normalizeVid(vid));
+  const skipCont = (vid: string) => allowedContSet.has(normalizeVid(vid));
 
   // Prime the lookup from driver records so a VID → transporter mapping
   // is available even when the upload's driver block has an empty
@@ -164,7 +174,7 @@ export const computeTransporterAnalytics = ({
       const t = resolveTransporter(driver.vid, driver.transporter);
       const b = getBucket(buckets, t);
       if (!b) return;
-      const skip = skipVid(driver.vid);
+      const skip = skipSpeed(driver.vid);
       if (driver.vid) b.vids.add(normalizeVid(driver.vid));
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
@@ -186,7 +196,7 @@ export const computeTransporterAnalytics = ({
       const t = resolveTransporter(driver.vid, driver.transporter);
       const b = getBucket(buckets, t);
       if (!b) return;
-      const skip = skipVid(driver.vid);
+      const skip = skipNights(driver.vid);
       if (driver.vid) b.vids.add(normalizeVid(driver.vid));
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
@@ -209,7 +219,7 @@ export const computeTransporterAnalytics = ({
       const t = resolveTransporter(driver.vid, driver.transporter);
       const b = getBucket(buckets, t);
       if (!b) return;
-      const skip = skipVid(driver.vid);
+      const skip = skipCont(driver.vid);
       if (driver.vid) b.vids.add(normalizeVid(driver.vid));
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);

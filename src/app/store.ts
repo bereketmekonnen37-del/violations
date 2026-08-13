@@ -6,9 +6,11 @@ import {
   PURGE,
   REGISTER,
   REHYDRATE,
+  createMigrate,
   persistReducer,
   persistStore,
 } from 'redux-persist';
+import type { PersistedState } from 'redux-persist';
 import storage from '../lib/chromeStorage';
 import { useDispatch, useSelector, type TypedUseSelectorHook } from 'react-redux';
 import authReducer from '../features/auth/authSlice';
@@ -35,10 +37,39 @@ const rootReducer = combineReducers({
   staffUsers: staffUsersReducer,
 });
 
+// Migration 2: `rules.allowedVids: string[]` became
+// `rules.allowedVidsByType: { speed, nights, continuous }` so each violation
+// source can whitelist independently. Copy any legacy list into all three so
+// existing users keep the same behavior on first load.
+const migrations = {
+  2: (persisted: PersistedState): PersistedState => {
+    if (!persisted) return persisted;
+    const anyState = persisted as unknown as Record<string, unknown>;
+    const rules = anyState.rules as Record<string, unknown> | undefined;
+    if (!rules) return persisted;
+    if (rules.allowedVidsByType) return persisted;
+    const legacy = Array.isArray(rules.allowedVids)
+      ? (rules.allowedVids as string[])
+      : [];
+    return {
+      ...anyState,
+      rules: {
+        ...rules,
+        allowedVidsByType: {
+          speed: [...legacy],
+          nights: [...legacy],
+          continuous: [...legacy],
+        },
+        allowedVids: undefined,
+      },
+    } as PersistedState;
+  },
+};
+
 const persistedReducer = persistReducer(
   {
     key: 'fleetwatch',
-    version: 1,
+    version: 2,
     storage,
     whitelist: [
       'auth',
@@ -52,6 +83,7 @@ const persistedReducer = persistReducer(
       'rules',
       'staffUsers',
     ],
+    migrate: createMigrate(migrations, { debug: false }),
   },
   rootReducer,
 );

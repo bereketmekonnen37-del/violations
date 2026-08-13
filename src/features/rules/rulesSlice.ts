@@ -11,9 +11,17 @@ export interface RuleThresholds {
   continuous: number;
 }
 
+export type AllowedVidCategory = 'speed' | 'nights' | 'continuous';
+
+export interface AllowedVidLists {
+  speed: string[];
+  nights: string[];
+  continuous: string[];
+}
+
 export interface RulesState {
   thresholds: RuleThresholds;
-  allowedVids: string[];
+  allowedVidsByType: AllowedVidLists;
   allowedLocations: string[];
 }
 
@@ -23,11 +31,22 @@ export const DEFAULT_RULE_THRESHOLDS: RuleThresholds = {
   continuous: CONTINUOUS_MIN_SECONDS,
 };
 
+const emptyAllowedVids = (): AllowedVidLists => ({
+  speed: [],
+  nights: [],
+  continuous: [],
+});
+
 const initialState: RulesState = {
   thresholds: DEFAULT_RULE_THRESHOLDS,
-  allowedVids: [],
+  allowedVidsByType: emptyAllowedVids(),
   allowedLocations: [],
 };
+
+interface AllowedVidPayload {
+  category: AllowedVidCategory;
+  value: string;
+}
 
 const rulesSlice = createSlice({
   name: 'rules',
@@ -39,18 +58,22 @@ const rulesSlice = createSlice({
     resetThresholds(state) {
       state.thresholds = DEFAULT_RULE_THRESHOLDS;
     },
-    addAllowedVid(state, action: PayloadAction<string>) {
-      const v = action.payload.trim();
+    addAllowedVid(state, action: PayloadAction<AllowedVidPayload>) {
+      const v = action.payload.value.trim();
       if (!v) return;
-      if (!state.allowedVids.some((x) => x.toLowerCase() === v.toLowerCase())) {
-        state.allowedVids.unshift(v);
+      const list = state.allowedVidsByType[action.payload.category];
+      if (!list.some((x) => x.toLowerCase() === v.toLowerCase())) {
+        list.unshift(v);
       }
     },
-    removeAllowedVid(state, action: PayloadAction<string>) {
-      state.allowedVids = state.allowedVids.filter((x) => x !== action.payload);
+    removeAllowedVid(state, action: PayloadAction<AllowedVidPayload>) {
+      const list = state.allowedVidsByType[action.payload.category];
+      state.allowedVidsByType[action.payload.category] = list.filter(
+        (x) => x !== action.payload.value,
+      );
     },
-    clearAllowedVids(state) {
-      state.allowedVids = [];
+    clearAllowedVids(state, action: PayloadAction<AllowedVidCategory>) {
+      state.allowedVidsByType[action.payload] = [];
     },
     addAllowedLocation(state, action: PayloadAction<string>) {
       const v = action.payload.trim();

@@ -4,6 +4,7 @@ import type {
   UnfilteredFile,
   UnfilteredNightFile,
 } from '../types';
+import type { AllowedVidLists } from '../features/rules/rulesSlice';
 import {
   buildDriverProfileLookup,
   NOT_FOUND,
@@ -17,6 +18,12 @@ import {
   normalizeVid,
 } from './locationRules';
 import type { EventThresholds } from './masterFleet';
+
+const EMPTY_ALLOWED: AllowedVidLists = {
+  speed: [],
+  nights: [],
+  continuous: [],
+};
 
 export type ViolationKind = 'speed' | 'nights' | 'continuous';
 
@@ -50,7 +57,7 @@ interface AnalyticsInput {
   continuousFiles: UnfilteredContinuousFile[];
   driverRecords: DriverRecord[];
   thresholds: EventThresholds;
-  allowedVids?: string[];
+  allowedVidsByType?: AllowedVidLists;
   allowedLocations?: string[];
 }
 
@@ -181,11 +188,13 @@ export const computeDashboardAnalytics = ({
   continuousFiles,
   driverRecords,
   thresholds,
-  allowedVids = [],
+  allowedVidsByType = EMPTY_ALLOWED,
   allowedLocations = [],
 }: AnalyticsInput): AnalyticsResult => {
   const resolve = buildDriverProfileLookup(driverRecords);
-  const allowedVidSet = buildAllowedVidSet(allowedVids);
+  const allowedSpeedSet = buildAllowedVidSet(allowedVidsByType.speed);
+  const allowedNightsSet = buildAllowedVidSet(allowedVidsByType.nights);
+  const allowedContSet = buildAllowedVidSet(allowedVidsByType.continuous);
   const allowedTagSet = buildAllowedTagSet(allowedLocations);
   const daily = new Map<string, DailyBucket>();
   const buckets = new Map<string, VioBucket>();
@@ -205,7 +214,7 @@ export const computeDashboardAnalytics = ({
   speedFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
       const vidKey = normalizeVid(driver.vid);
-      const skipVid = allowedVidSet.size > 0 && allowedVidSet.has(vidKey);
+      const skipVid = allowedSpeedSet.has(vidKey);
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
@@ -233,7 +242,7 @@ export const computeDashboardAnalytics = ({
   nightFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
       const vidKey = normalizeVid(driver.vid);
-      const skipVid = allowedVidSet.size > 0 && allowedVidSet.has(vidKey);
+      const skipVid = allowedNightsSet.has(vidKey);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.nights) return;
@@ -254,7 +263,7 @@ export const computeDashboardAnalytics = ({
   continuousFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
       const vidKey = normalizeVid(driver.vid);
-      const skipVid = allowedVidSet.size > 0 && allowedVidSet.has(vidKey);
+      const skipVid = allowedContSet.has(vidKey);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.continuous) return;

@@ -10,6 +10,7 @@ import {
   type DriverProfileLookup,
 } from './driverLookup';
 import type { DriverRecord } from '../types';
+import type { AllowedVidLists } from '../features/rules/rulesSlice';
 import {
   CONTINUOUS_MIN_SECONDS,
   NIGHTS_MIN_SECONDS,
@@ -23,6 +24,12 @@ import {
   normalizeVid,
   positionHasAllowedTag,
 } from './locationRules';
+
+const EMPTY_ALLOWED: AllowedVidLists = {
+  speed: [],
+  nights: [],
+  continuous: [],
+};
 
 export interface MasterFleetRow {
   vid: string;
@@ -124,7 +131,10 @@ interface AggregateInput {
   continuousFiles: UnfilteredContinuousFile[];
   driverRecords: DriverRecord[];
   thresholds?: EventThresholds;
-  allowedVids?: string[];
+  /** Per-category whitelists. VIDs in a category are excluded from that
+   *  category's counts (a VID whitelisted only for Speed still contributes
+   *  to Nights and Continuous). */
+  allowedVidsByType?: AllowedVidLists;
   allowedLocations?: string[];
 }
 
@@ -178,12 +188,14 @@ export const aggregateMasterFleet = ({
   continuousFiles,
   driverRecords,
   thresholds = DEFAULT_THRESHOLDS,
-  allowedVids = [],
+  allowedVidsByType = EMPTY_ALLOWED,
   allowedLocations = [],
 }: AggregateInput): MasterFleetRow[] => {
   const resolve: DriverProfileLookup = buildDriverProfileLookup(driverRecords);
   const buckets = new Map<string, Bucket>();
-  const allowedVidSet = buildAllowedVidSet(allowedVids);
+  const allowedSpeedSet = buildAllowedVidSet(allowedVidsByType.speed);
+  const allowedNightsSet = buildAllowedVidSet(allowedVidsByType.nights);
+  const allowedContSet = buildAllowedVidSet(allowedVidsByType.continuous);
   const allowedTagSet = buildAllowedTagSet(allowedLocations);
 
   speedFiles.forEach((file) => {
@@ -195,16 +207,17 @@ export const aggregateMasterFleet = ({
         sourceTransporter(driver),
       );
       if (!b) return;
+      const skipVid = allowedSpeedSet.has(b.vidKey);
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
-        if (Number.isFinite(seconds) && seconds >= thresholds.speed) {
-          b.speed += 1;
-          if (
-            allowedTagSet.size > 0 &&
-            blobHasAllowedTag(event.overspeedPosition, allowedTagSet)
-          ) {
-            b.speedInAllowedLocations += 1;
-          }
+        if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
+        if (skipVid) return;
+        b.speed += 1;
+        if (
+          allowedTagSet.size > 0 &&
+          blobHasAllowedTag(event.overspeedPosition, allowedTagSet)
+        ) {
+          b.speedInAllowedLocations += 1;
         }
       });
     });
@@ -219,6 +232,8 @@ export const aggregateMasterFleet = ({
         sourceTransporter(driver),
       );
       if (!b) return;
+      const skipVid = allowedNightsSet.has(b.vidKey);
+      if (skipVid) return;
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (Number.isFinite(seconds) && seconds >= thresholds.nights) {
@@ -237,6 +252,8 @@ export const aggregateMasterFleet = ({
         sourceTransporter(driver),
       );
       if (!b) return;
+      const skipVid = allowedContSet.has(b.vidKey);
+      if (skipVid) return;
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (Number.isFinite(seconds) && seconds >= thresholds.continuous) {
@@ -251,6 +268,10 @@ export const aggregateMasterFleet = ({
     const total = b.speed + b.nights + b.continuous;
     if (total === 0) return;
     const profile = resolve(b.vid);
+    const isAllowed =
+      allowedSpeedSet.has(b.vidKey) ||
+      allowedNightsSet.has(b.vidKey) ||
+      allowedContSet.has(b.vidKey);
     rows.push({
       vid: b.vid,
       driverName: profile.driverName || NOT_FOUND,
@@ -259,7 +280,7 @@ export const aggregateMasterFleet = ({
       nights: b.nights,
       continuous: b.continuous,
       total,
-      allowedVid: allowedVidSet.has(b.vidKey),
+      allowedVid: isAllowed,
       speedInAllowedLocations: b.speedInAllowedLocations,
     });
   });
@@ -276,14 +297,20 @@ export const collectFilteredEvents = ({
   continuousFiles,
   driverRecords,
   thresholds = DEFAULT_THRESHOLDS,
-  allowedVids = [],
+  allowedVidsByType = EMPTY_ALLOWED,
   allowedLocations = [],
 }: AggregateInput): FilteredEvents => {
   const resolve = buildDriverProfileLookup(driverRecords);
-  const allowedVidSet = buildAllowedVidSet(allowedVids);
+  const allowedSpeedSet = buildAllowedVidSet(allowedVidsByType.speed);
+  const allowedNightsSet = buildAllowedVidSet(allowedVidsByType.nights);
+  const allowedContSet = buildAllowedVidSet(allowedVidsByType.continuous);
   const allowedTagSet = buildAllowedTagSet(allowedLocations);
-  const isAllowedVid = (vid: string): boolean =>
-    allowedVidSet.size > 0 && allowedVidSet.has(normalizeVid(vid));
+  const isSpeedAllowed = (vid: string): boolean =>
+    allowedSpeedSet.has(normalizeVid(vid));
+  const isNightsAllowed = (vid: string): boolean =>
+    allowedNightsSet.has(normalizeVid(vid));
+  const isContAllowed = (vid: string): boolean =>
+    allowedContSet.has(normalizeVid(vid));
   const speed: FilteredSpeedEvent[] = [];
   const nights: FilteredNightEvent[] = [];
   const continuous: FilteredContinuousEvent[] = [];
@@ -294,7 +321,7 @@ export const collectFilteredEvents = ({
       const profile = resolve(vid);
       const driverName = profile.driverName || NOT_FOUND;
       const transporter = profile.transporter || sourceTransporter(driver);
-      const allowedVid = isAllowedVid(vid);
+      const allowedVid = isSpeedAllowed(vid);
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
         if (Number.isFinite(seconds) && seconds >= thresholds.speed) {
@@ -326,7 +353,7 @@ export const collectFilteredEvents = ({
       const profile = resolve(vid);
       const driverName = profile.driverName || NOT_FOUND;
       const transporter = profile.transporter || sourceTransporter(driver);
-      const allowedVid = isAllowedVid(vid);
+      const allowedVid = isNightsAllowed(vid);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (Number.isFinite(seconds) && seconds >= thresholds.nights) {
@@ -363,7 +390,7 @@ export const collectFilteredEvents = ({
       const profile = resolve(vid);
       const driverName = profile.driverName || NOT_FOUND;
       const transporter = profile.transporter || sourceTransporter(driver);
-      const allowedVid = isAllowedVid(vid);
+      const allowedVid = isContAllowed(vid);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (Number.isFinite(seconds) && seconds >= thresholds.continuous) {

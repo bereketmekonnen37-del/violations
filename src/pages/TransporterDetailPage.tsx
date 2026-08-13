@@ -45,7 +45,7 @@ export const TransporterDetailPage = () => {
   const rawCont = useAppSelector((s) => s.unfilteredContinuous.files);
   const rawDriverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
-  const allowedVids = useAppSelector((s) => s.rules.allowedVids);
+  const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocations = useAppSelector((s) => s.rules.allowedLocations);
   const { isTransporterStaff, matchesTransporter } = useUserScope();
 
@@ -77,7 +77,7 @@ export const TransporterDetailPage = () => {
         continuousFiles,
         driverRecords,
         thresholds,
-        allowedVids,
+        allowedVidsByType,
         allowedLocations,
       }),
     [
@@ -86,7 +86,7 @@ export const TransporterDetailPage = () => {
       continuousFiles,
       driverRecords,
       thresholds,
-      allowedVids,
+      allowedVidsByType,
       allowedLocations,
     ],
   );

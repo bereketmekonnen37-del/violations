@@ -43,7 +43,7 @@ export const DashboardPage = () => {
   const rawContFiles = useAppSelector((s) => s.unfilteredContinuous.files);
   const rawDriverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
-  const allowedVids = useAppSelector((s) => s.rules.allowedVids);
+  const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocations = useAppSelector((s) => s.rules.allowedLocations);
   const { isBoss, isTransporterStaff, matchesTransporter } = useUserScope();
 
@@ -93,7 +93,7 @@ export const DashboardPage = () => {
         continuousFiles,
         driverRecords,
         thresholds,
-        allowedVids,
+        allowedVidsByType,
         allowedLocations,
       }),
     [
@@ -102,7 +102,7 @@ export const DashboardPage = () => {
       continuousFiles,
       driverRecords,
       thresholds,
-      allowedVids,
+      allowedVidsByType,
       allowedLocations,
     ],
   );
@@ -120,7 +120,7 @@ export const DashboardPage = () => {
         continuousFiles,
         driverRecords,
         thresholds,
-        allowedVids,
+        allowedVidsByType,
         allowedLocations,
       }),
     [
@@ -129,7 +129,7 @@ export const DashboardPage = () => {
       continuousFiles,
       driverRecords,
       thresholds,
-      allowedVids,
+      allowedVidsByType,
       allowedLocations,
     ],
   );
