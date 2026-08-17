@@ -4,7 +4,10 @@ import type {
   UnfilteredFile,
   UnfilteredNightFile,
 } from '../types';
-import type { AllowedVidLists } from '../features/rules/rulesSlice';
+import type {
+  AllowedLocationLists,
+  AllowedVidLists,
+} from '../features/rules/rulesSlice';
 import {
   buildDriverProfileLookup,
   NOT_FOUND,
@@ -16,10 +19,17 @@ import {
   buildAllowedTagSet,
   buildAllowedVidSet,
   normalizeVid,
+  positionHasAllowedTag,
 } from './locationRules';
 import type { EventThresholds } from './masterFleet';
 
 const EMPTY_ALLOWED: AllowedVidLists = {
+  speed: [],
+  nights: [],
+  continuous: [],
+};
+
+const EMPTY_ALLOWED_LOCATIONS: AllowedLocationLists = {
   speed: [],
   nights: [],
   continuous: [],
@@ -58,7 +68,7 @@ interface AnalyticsInput {
   driverRecords: DriverRecord[];
   thresholds: EventThresholds;
   allowedVidsByType?: AllowedVidLists;
-  allowedLocations?: string[];
+  allowedLocationsByType?: AllowedLocationLists;
 }
 
 const parseEventDate = (raw: string): Date | null => {
@@ -189,13 +199,15 @@ export const computeDashboardAnalytics = ({
   driverRecords,
   thresholds,
   allowedVidsByType = EMPTY_ALLOWED,
-  allowedLocations = [],
+  allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
 }: AnalyticsInput): AnalyticsResult => {
   const resolve = buildDriverProfileLookup(driverRecords);
   const allowedSpeedSet = buildAllowedVidSet(allowedVidsByType.speed);
   const allowedNightsSet = buildAllowedVidSet(allowedVidsByType.nights);
   const allowedContSet = buildAllowedVidSet(allowedVidsByType.continuous);
-  const allowedTagSet = buildAllowedTagSet(allowedLocations);
+  const speedTagSet = buildAllowedTagSet(allowedLocationsByType.speed);
+  const nightsTagSet = buildAllowedTagSet(allowedLocationsByType.nights);
+  const contTagSet = buildAllowedTagSet(allowedLocationsByType.continuous);
   const daily = new Map<string, DailyBucket>();
   const buckets = new Map<string, VioBucket>();
   const totals = { speed: 0, nights: 0, continuous: 0 };
@@ -218,10 +230,10 @@ export const computeDashboardAnalytics = ({
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
-        // Speed events in an allowed location are NOT counted.
+        // Speed events in an allowed Speed location are NOT counted.
         if (
-          allowedTagSet.size > 0 &&
-          blobHasAllowedTag(event.overspeedPosition, allowedTagSet)
+          speedTagSet.size > 0 &&
+          blobHasAllowedTag(event.overspeedPosition, speedTagSet)
         ) {
           return;
         }
@@ -247,6 +259,13 @@ export const computeDashboardAnalytics = ({
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.nights) return;
         if (skipVid) return;
+        if (
+          nightsTagSet.size > 0 &&
+          (positionHasAllowedTag(row.positionA, nightsTagSet) ||
+            positionHasAllowedTag(row.positionB, nightsTagSet))
+        ) {
+          return;
+        }
         bumpBucket(
           buckets,
           driver.vid,
@@ -268,6 +287,13 @@ export const computeDashboardAnalytics = ({
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.continuous) return;
         if (skipVid) return;
+        if (
+          contTagSet.size > 0 &&
+          (positionHasAllowedTag(row.positionA, contTagSet) ||
+            positionHasAllowedTag(row.positionB, contTagSet))
+        ) {
+          return;
+        }
         bumpBucket(
           buckets,
           driver.vid,

@@ -41,6 +41,7 @@ const rootReducer = combineReducers({
 // `rules.allowedVidsByType: { speed, nights, continuous }` so each violation
 // source can whitelist independently. Copy any legacy list into all three so
 // existing users keep the same behavior on first load.
+// Migration 3: same split for `rules.allowedLocations` → `allowedLocationsByType`.
 const migrations = {
   2: (persisted: PersistedState): PersistedState => {
     if (!persisted) return persisted;
@@ -64,12 +65,34 @@ const migrations = {
       },
     } as unknown as PersistedState;
   },
+  3: (persisted: PersistedState): PersistedState => {
+    if (!persisted) return persisted;
+    const anyState = persisted as unknown as Record<string, unknown>;
+    const rules = anyState.rules as Record<string, unknown> | undefined;
+    if (!rules) return persisted;
+    if (rules.allowedLocationsByType) return persisted;
+    const legacy = Array.isArray(rules.allowedLocations)
+      ? (rules.allowedLocations as string[])
+      : [];
+    return {
+      ...anyState,
+      rules: {
+        ...rules,
+        allowedLocationsByType: {
+          speed: [...legacy],
+          nights: [...legacy],
+          continuous: [...legacy],
+        },
+        allowedLocations: undefined,
+      },
+    } as unknown as PersistedState;
+  },
 };
 
 const persistedReducer = persistReducer(
   {
     key: 'fleetwatch',
-    version: 2,
+    version: 3,
     storage,
     whitelist: [
       'auth',

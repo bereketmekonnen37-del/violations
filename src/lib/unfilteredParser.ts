@@ -29,7 +29,7 @@ const cleanText = (raw: unknown): string => {
   const s = String(raw ?? '');
   return s
     .replace(/ /g, ' ')
-    .replace(/[°º]/g, '')
+    .replace(/°|º|&(?:deg|ordm|#0*176|#[xX]0*b0);/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
 };
@@ -37,7 +37,7 @@ const cleanText = (raw: unknown): string => {
 const normalizeHeader = (s: string): string =>
   s
     .toLowerCase()
-    .replace(/[°º]/g, '')
+    .replace(/°|º|&(?:deg|ordm|#0*176|#[xX]0*b0);/gi, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 

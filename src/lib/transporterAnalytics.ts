@@ -4,7 +4,10 @@ import type {
   UnfilteredFile,
   UnfilteredNightFile,
 } from '../types';
-import type { AllowedVidLists } from '../features/rules/rulesSlice';
+import type {
+  AllowedLocationLists,
+  AllowedVidLists,
+} from '../features/rules/rulesSlice';
 import { parseDurationSeconds } from './duration';
 import {
   buildAllowedTagSet,
@@ -16,6 +19,12 @@ import {
 import type { EventThresholds } from './masterFleet';
 
 const EMPTY_ALLOWED: AllowedVidLists = {
+  speed: [],
+  nights: [],
+  continuous: [],
+};
+
+const EMPTY_ALLOWED_LOCATIONS: AllowedLocationLists = {
   speed: [],
   nights: [],
   continuous: [],
@@ -91,7 +100,7 @@ interface AnalyticsInput {
   driverRecords: DriverRecord[];
   thresholds: EventThresholds;
   allowedVidsByType?: AllowedVidLists;
-  allowedLocations?: string[];
+  allowedLocationsByType?: AllowedLocationLists;
 }
 
 interface Bucket {
@@ -133,12 +142,14 @@ export const computeTransporterAnalytics = ({
   driverRecords,
   thresholds,
   allowedVidsByType = EMPTY_ALLOWED,
-  allowedLocations = [],
+  allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
 }: AnalyticsInput): TransporterAnalyticsRow[] => {
   const allowedSpeedSet = buildAllowedVidSet(allowedVidsByType.speed);
   const allowedNightsSet = buildAllowedVidSet(allowedVidsByType.nights);
   const allowedContSet = buildAllowedVidSet(allowedVidsByType.continuous);
-  const allowedTagSet = buildAllowedTagSet(allowedLocations);
+  const speedTagSet = buildAllowedTagSet(allowedLocationsByType.speed);
+  const nightsTagSet = buildAllowedTagSet(allowedLocationsByType.nights);
+  const contTagSet = buildAllowedTagSet(allowedLocationsByType.continuous);
   const skipSpeed = (vid: string) => allowedSpeedSet.has(normalizeVid(vid));
   const skipNights = (vid: string) => allowedNightsSet.has(normalizeVid(vid));
   const skipCont = (vid: string) => allowedContSet.has(normalizeVid(vid));
@@ -180,8 +191,8 @@ export const computeTransporterAnalytics = ({
         const seconds = parseDurationSeconds(event.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
         if (
-          allowedTagSet.size > 0 &&
-          blobHasAllowedTag(event.overspeedPosition, allowedTagSet)
+          speedTagSet.size > 0 &&
+          blobHasAllowedTag(event.overspeedPosition, speedTagSet)
         ) {
           return;
         }
@@ -202,9 +213,9 @@ export const computeTransporterAnalytics = ({
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.nights) return;
         if (
-          allowedTagSet.size > 0 &&
-          (positionHasAllowedTag(row.positionA, allowedTagSet) ||
-            positionHasAllowedTag(row.positionB, allowedTagSet))
+          nightsTagSet.size > 0 &&
+          (positionHasAllowedTag(row.positionA, nightsTagSet) ||
+            positionHasAllowedTag(row.positionB, nightsTagSet))
         ) {
           return;
         }
@@ -225,9 +236,9 @@ export const computeTransporterAnalytics = ({
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.continuous) return;
         if (
-          allowedTagSet.size > 0 &&
-          (positionHasAllowedTag(row.positionA, allowedTagSet) ||
-            positionHasAllowedTag(row.positionB, allowedTagSet))
+          contTagSet.size > 0 &&
+          (positionHasAllowedTag(row.positionA, contTagSet) ||
+            positionHasAllowedTag(row.positionB, contTagSet))
         ) {
           return;
         }

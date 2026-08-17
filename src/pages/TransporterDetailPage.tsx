@@ -46,7 +46,9 @@ export const TransporterDetailPage = () => {
   const driverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
-  const allowedLocations = useAppSelector((s) => s.rules.allowedLocations);
+  const allowedLocationsByType = useAppSelector(
+    (s) => s.rules.allowedLocationsByType,
+  );
   const { isTransporterStaff, matchesTransporter } = useUserScope();
 
   const speedFiles = useMemo(
@@ -71,7 +73,7 @@ export const TransporterDetailPage = () => {
         driverRecords,
         thresholds,
         allowedVidsByType,
-        allowedLocations,
+        allowedLocationsByType,
       }),
     [
       speedFiles,
@@ -80,7 +82,7 @@ export const TransporterDetailPage = () => {
       driverRecords,
       thresholds,
       allowedVidsByType,
-      allowedLocations,
+      allowedLocationsByType,
     ],
   );
 

@@ -25,6 +25,7 @@ import {
   removeAllowedVid,
   resetThresholds,
   setThresholds,
+  type AllowedLocationCategory,
   type AllowedVidCategory,
   type RuleThresholds,
 } from '../features/rules/rulesSlice';
@@ -72,11 +73,44 @@ const VID_CARDS: VidCardMeta[] = [
   },
 ];
 
+interface LocationCardMeta {
+  category: AllowedLocationCategory;
+  icon: typeof MapPin;
+  title: string;
+  description: string;
+}
+
+const LOCATION_CARDS: LocationCardMeta[] = [
+  {
+    category: 'speed',
+    icon: Gauge,
+    title: 'Allowed locations — Speed',
+    description:
+      'Speed events whose Overspeed Position tag matches one of these are subtracted from every Speed count on the Dashboard, Master Fleet and Transporter pages. Match is exact (case-insensitive): "Adama" will NOT match "Adama Express". You can paste a full coordinate line — we\'ll extract the location name after the dash.',
+  },
+  {
+    category: 'nights',
+    icon: Moon,
+    title: 'Allowed locations — Nights',
+    description:
+      "Nights rows whose Position A or Position B matches one of these are subtracted from every Nights count. Doesn't affect Speed or Continuous.",
+  },
+  {
+    category: 'continuous',
+    icon: RouteIcon,
+    title: 'Allowed locations — Continuous',
+    description:
+      "Continuous rows whose Position A or Position B matches one of these are subtracted from every Continuous count. Doesn't affect Speed or Nights.",
+  },
+];
+
 export const RulesPage = () => {
   const dispatch = useAppDispatch();
   const thresholds = useAppSelector((s) => s.rules.thresholds);
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
-  const allowedLocations = useAppSelector((s) => s.rules.allowedLocations);
+  const allowedLocationsByType = useAppSelector(
+    (s) => s.rules.allowedLocationsByType,
+  );
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -110,22 +144,29 @@ export const RulesPage = () => {
           />
         ))}
 
-        <AllowedListCard
-          icon={MapPin}
-          title="Allowed locations (Speed only)"
-          description={
-            'Speed events whose Overspeed Position tag matches one of these are flagged as allowed on Master Fleet. Match is exact (case-insensitive): "Adama" will NOT match "Adama Express". You can paste a full coordinate line — we\'ll extract the location name after the dash.'
-          }
-          placeholder="e.g. Adama Express  or  10.87 °, 42.66 ° - Djibouti"
-          items={allowedLocations}
-          onAdd={(v) => dispatch(addAllowedLocation(v))}
-          onRemove={(v) => dispatch(removeAllowedLocation(v))}
-          onClear={() => dispatch(clearAllowedLocations())}
-          previewItem={(v) => {
-            const tag = extractRuleTag(v);
-            return tag === v ? v : `${tag}  ·  from: ${v}`;
-          }}
-        />
+        {LOCATION_CARDS.map((meta) => (
+          <AllowedListCard
+            key={`loc-${meta.category}`}
+            icon={meta.icon}
+            title={meta.title}
+            description={meta.description}
+            placeholder="e.g. Adama Express  or  10.87 °, 42.66 ° - Djibouti"
+            items={allowedLocationsByType[meta.category]}
+            onAdd={(v) =>
+              dispatch(addAllowedLocation({ category: meta.category, value: v }))
+            }
+            onRemove={(v) =>
+              dispatch(
+                removeAllowedLocation({ category: meta.category, value: v }),
+              )
+            }
+            onClear={() => dispatch(clearAllowedLocations(meta.category))}
+            previewItem={(v) => {
+              const tag = extractRuleTag(v);
+              return tag === v ? v : `${tag}  ·  from: ${v}`;
+            }}
+          />
+        ))}
       </div>
     </div>
   );

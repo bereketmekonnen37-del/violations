@@ -12,6 +12,7 @@ export interface RuleThresholds {
 }
 
 export type AllowedVidCategory = 'speed' | 'nights' | 'continuous';
+export type AllowedLocationCategory = AllowedVidCategory;
 
 export interface AllowedVidLists {
   speed: string[];
@@ -19,10 +20,12 @@ export interface AllowedVidLists {
   continuous: string[];
 }
 
+export type AllowedLocationLists = AllowedVidLists;
+
 export interface RulesState {
   thresholds: RuleThresholds;
   allowedVidsByType: AllowedVidLists;
-  allowedLocations: string[];
+  allowedLocationsByType: AllowedLocationLists;
 }
 
 export const DEFAULT_RULE_THRESHOLDS: RuleThresholds = {
@@ -31,7 +34,7 @@ export const DEFAULT_RULE_THRESHOLDS: RuleThresholds = {
   continuous: CONTINUOUS_MIN_SECONDS,
 };
 
-const emptyAllowedVids = (): AllowedVidLists => ({
+const emptyByType = (): AllowedVidLists => ({
   speed: [],
   nights: [],
   continuous: [],
@@ -39,12 +42,17 @@ const emptyAllowedVids = (): AllowedVidLists => ({
 
 const initialState: RulesState = {
   thresholds: DEFAULT_RULE_THRESHOLDS,
-  allowedVidsByType: emptyAllowedVids(),
-  allowedLocations: [],
+  allowedVidsByType: emptyByType(),
+  allowedLocationsByType: emptyByType(),
 };
 
 interface AllowedVidPayload {
   category: AllowedVidCategory;
+  value: string;
+}
+
+interface AllowedLocationPayload {
+  category: AllowedLocationCategory;
   value: string;
 }
 
@@ -75,24 +83,28 @@ const rulesSlice = createSlice({
     clearAllowedVids(state, action: PayloadAction<AllowedVidCategory>) {
       state.allowedVidsByType[action.payload] = [];
     },
-    addAllowedLocation(state, action: PayloadAction<string>) {
-      const v = action.payload.trim();
+    addAllowedLocation(state, action: PayloadAction<AllowedLocationPayload>) {
+      const v = action.payload.value.trim();
       if (!v) return;
-      if (
-        !state.allowedLocations.some(
-          (x) => x.toLowerCase() === v.toLowerCase(),
-        )
-      ) {
-        state.allowedLocations.unshift(v);
+      const list = state.allowedLocationsByType[action.payload.category];
+      if (!list.some((x) => x.toLowerCase() === v.toLowerCase())) {
+        list.unshift(v);
       }
     },
-    removeAllowedLocation(state, action: PayloadAction<string>) {
-      state.allowedLocations = state.allowedLocations.filter(
-        (x) => x !== action.payload,
+    removeAllowedLocation(
+      state,
+      action: PayloadAction<AllowedLocationPayload>,
+    ) {
+      const list = state.allowedLocationsByType[action.payload.category];
+      state.allowedLocationsByType[action.payload.category] = list.filter(
+        (x) => x !== action.payload.value,
       );
     },
-    clearAllowedLocations(state) {
-      state.allowedLocations = [];
+    clearAllowedLocations(
+      state,
+      action: PayloadAction<AllowedLocationCategory>,
+    ) {
+      state.allowedLocationsByType[action.payload] = [];
     },
   },
 });

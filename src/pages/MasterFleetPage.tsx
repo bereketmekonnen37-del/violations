@@ -133,7 +133,13 @@ export const MasterFleetPage = () => {
   const driverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
-  const allowedLocations = useAppSelector((s) => s.rules.allowedLocations);
+  const allowedLocationsByType = useAppSelector(
+    (s) => s.rules.allowedLocationsByType,
+  );
+  const allowedLocationsTotal =
+    allowedLocationsByType.speed.length +
+    allowedLocationsByType.nights.length +
+    allowedLocationsByType.continuous.length;
   const { isTransporterStaff, matchesTransporter } = useUserScope();
   const [query, setQuery] = useState('');
 
@@ -159,7 +165,7 @@ export const MasterFleetPage = () => {
         driverRecords,
         thresholds,
         allowedVidsByType,
-        allowedLocations,
+        allowedLocationsByType,
       }),
     [
       speedFiles,
@@ -168,7 +174,7 @@ export const MasterFleetPage = () => {
       driverRecords,
       thresholds,
       allowedVidsByType,
-      allowedLocations,
+      allowedLocationsByType,
     ],
   );
 
@@ -181,7 +187,7 @@ export const MasterFleetPage = () => {
         driverRecords,
         thresholds,
         allowedVidsByType,
-        allowedLocations,
+        allowedLocationsByType,
       }),
     [
       speedFiles,
@@ -190,7 +196,7 @@ export const MasterFleetPage = () => {
       driverRecords,
       thresholds,
       allowedVidsByType,
-      allowedLocations,
+      allowedLocationsByType,
     ],
   );
 
@@ -289,7 +295,7 @@ export const MasterFleetPage = () => {
           {(allowedVidsByType.speed.length > 0 ||
             allowedVidsByType.nights.length > 0 ||
             allowedVidsByType.continuous.length > 0 ||
-            allowedLocations.length > 0) && (
+            allowedLocationsTotal > 0) && (
             <div className="surface mt-6 flex flex-wrap items-center gap-3 rounded-2xl p-4 sm:p-5">
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
                 <ShieldCheck size={14} /> Active whitelists
@@ -312,10 +318,10 @@ export const MasterFleetPage = () => {
                   {allowedVidsByType.continuous.length === 1 ? '' : 's'}
                 </span>
               )}
-              {allowedLocations.length > 0 && (
+              {allowedLocationsTotal > 0 && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800">
-                  <MapPin size={11} /> {allowedLocations.length} location
-                  {allowedLocations.length === 1 ? '' : 's'}
+                  <MapPin size={11} /> {allowedLocationsTotal} location
+                  {allowedLocationsTotal === 1 ? '' : 's'}
                 </span>
               )}
               {!isTransporterStaff && (

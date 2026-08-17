@@ -44,7 +44,9 @@ export const DashboardPage = () => {
   const driverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
-  const allowedLocations = useAppSelector((s) => s.rules.allowedLocations);
+  const allowedLocationsByType = useAppSelector(
+    (s) => s.rules.allowedLocationsByType,
+  );
   const { isBoss, isTransporterStaff, matchesTransporter } = useUserScope();
 
   const hasBossView = isBoss || isTransporterStaff;
@@ -86,7 +88,7 @@ export const DashboardPage = () => {
         driverRecords,
         thresholds,
         allowedVidsByType,
-        allowedLocations,
+        allowedLocationsByType,
       }),
     [
       speedFiles,
@@ -95,7 +97,7 @@ export const DashboardPage = () => {
       driverRecords,
       thresholds,
       allowedVidsByType,
-      allowedLocations,
+      allowedLocationsByType,
     ],
   );
 
@@ -113,7 +115,7 @@ export const DashboardPage = () => {
         driverRecords,
         thresholds,
         allowedVidsByType,
-        allowedLocations,
+        allowedLocationsByType,
       }),
     [
       speedFiles,
@@ -122,7 +124,7 @@ export const DashboardPage = () => {
       driverRecords,
       thresholds,
       allowedVidsByType,
-      allowedLocations,
+      allowedLocationsByType,
     ],
   );
 

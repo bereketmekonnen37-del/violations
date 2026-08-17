@@ -31,7 +31,7 @@ const cleanText = (raw: unknown): string => {
   if (raw instanceof Date) return formatLocalDate(raw);
   return String(raw ?? '')
     .replace(/ /g, ' ')
-    .replace(/[°º]/g, '')
+    .replace(/°|º|&(?:deg|ordm|#0*176|#[xX]0*b0);/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
 };

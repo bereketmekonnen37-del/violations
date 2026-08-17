@@ -16,8 +16,20 @@ export interface ParsedCoord {
   tag: string;
 }
 
+/**
+ * Depending on the export, the "°" separator in a coordinate line comes
+ * through as a literal degree/ordinal glyph OR as an HTML entity that the
+ * parser never decoded (e.g. `8.54 &deg;, 39.20 &deg;- Adama`). Strip all
+ * of those so the coord-line regex can find the numbers and the tag after
+ * the dash regardless of source formatting.
+ */
+const DEGREE_MARKER_RE = /°|º|&(?:deg|ordm|#0*176|#[xX]0*b0);/gi;
+
+const stripDegreeMarkers = (raw: string): string =>
+  raw.replace(DEGREE_MARKER_RE, '');
+
 const COORD_LINE_RE =
-  /^\s*(-?\d+(?:\.\d+)?)\s*°?\s*,\s*(-?\d+(?:\.\d+)?)\s*°?\s*(?:[-–—]\s*(.+))?\s*$/;
+  /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*(?:[-–—]\s*(.+))?\s*$/;
 
 /** Normalize a tag for equality comparison: lowercase + collapse whitespace. */
 export const normalizeTag = (raw: string): string =>
@@ -31,7 +43,7 @@ export const normalizeTag = (raw: string): string =>
  * Returns null when the line is not a valid coordinate line.
  */
 export const parseCoordLine = (line: string): ParsedCoord | null => {
-  const m = COORD_LINE_RE.exec(line);
+  const m = COORD_LINE_RE.exec(stripDegreeMarkers(line));
   if (!m) return null;
   const lat = Number(m[1]);
   const lng = Number(m[2]);
@@ -110,7 +122,7 @@ export const positionHasAllowedTag = (
   allowed: Set<string>,
 ): boolean => {
   if (allowed.size === 0) return false;
-  const raw = String(position ?? '');
+  const raw = stripDegreeMarkers(String(position ?? ''));
   if (!raw.trim()) return false;
   if (blobHasAllowedTag(raw, allowed)) return true;
   const lines = raw.split(/\r?\n/);
