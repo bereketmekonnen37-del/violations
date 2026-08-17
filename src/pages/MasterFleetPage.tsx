@@ -720,6 +720,9 @@ const FilteredEventsPanel = ({
         </div>
       </div>
 
+      {/* Date filter UI temporarily hidden per product request. Filter state
+          (monthValue / dayValue) and matchesDateFilter still live in the
+          panel so re-enabling is just uncommenting this block.
       <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-ink-100 bg-ink-50/60 px-3 py-2 text-xs dark:border-ink-800 dark:bg-ink-900/40">
         <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
           <CalendarDays size={13} /> Date filter
@@ -771,6 +774,7 @@ const FilteredEventsPanel = ({
           Rules (thresholds &amp; whitelists) still applied.
         </span>
       </div>
+      */}
 
       <div className="mt-4 inline-flex rounded-xl border border-ink-100 bg-ink-50 p-1 dark:border-ink-800 dark:bg-ink-900">
         {(Object.keys(TAB_META) as EventTab[]).map((t) => {
