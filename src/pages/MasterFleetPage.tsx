@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  CalendarDays,
   Crown,
   Download,
   Gauge,
@@ -15,7 +14,6 @@ import {
   ShieldCheck,
   Trophy,
   Users,
-  X,
 } from 'lucide-react';
 import { useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -619,6 +617,10 @@ const FilteredEventsPanel = ({
 }: FilteredEventsPanelProps) => {
   const [monthValue, setMonthValue] = useState('');
   const [dayValue, setDayValue] = useState('');
+  // Setters are wired into the commented-out filter UI below; keep them
+  // referenced so the build stays clean while the UI is hidden.
+  void setMonthValue;
+  void setDayValue;
 
   const speedDated = useMemo(
     () =>
@@ -658,20 +660,10 @@ const FilteredEventsPanel = ({
     matchesQuery(query, e.vid, e.driverName, e.timeA, e.duration, e.position),
   );
 
-  const dateFilterActive = monthValue.length > 0;
-  const clearDateFilter = () => {
-    setMonthValue('');
-    setDayValue('');
-  };
-  const dayInputMax = (() => {
-    if (!monthValue) return 31;
-    const [yStr, mStr] = monthValue.split('-');
-    const y = Number(yStr);
-    const m = Number(mStr);
-    if (!Number.isFinite(y) || !Number.isFinite(m)) return 31;
-    // JS trick: day 0 of next month = last day of current month.
-    return new Date(y, m, 0).getDate();
-  })();
+  // UI-only helpers (dateFilterActive, clearDateFilter, dayInputMax) were
+  // removed with the commented-out filter UI to keep the build passing under
+  // `noUnusedLocals`. Re-add them alongside the JSX when re-enabling the
+  // filter — see the commented block below.
 
   return (
     <div className="surface mt-8 rounded-2xl p-5 sm:p-7">
