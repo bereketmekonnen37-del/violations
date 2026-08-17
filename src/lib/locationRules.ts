@@ -4,9 +4,13 @@
  *   8.832883 °, 38.890138 ° - Addis Adama Express
  *   10.870325 °, 42.662973 ° - Djibouti
  *
- * A rule is matched against the tag AFTER " - ". Match is case- and
- * whitespace-insensitive but *exact-tag*: "Adama" does NOT match
- * "Adama Express".
+ * A rule is matched against the tag AFTER " - ", falling back to the whole
+ * plain-text line for Nights/Continuous positions. Match is whole-word,
+ * case- and whitespace-insensitive:
+ *   rule "Adama"          matches "Adama", "Adama Express", "Addis Adama Express"
+ *   rule "Express"        matches "Addis Adama Express"
+ *   rule "Adama Express"  matches "Adama Express" and "Addis Adama Express"
+ *                         (every rule token must appear as a whole word).
  */
 
 export interface ParsedCoord {
@@ -17,11 +21,10 @@ export interface ParsedCoord {
 }
 
 /**
- * Depending on the export, the "°" separator in a coordinate line comes
- * through as a literal degree/ordinal glyph OR as an HTML entity that the
- * parser never decoded (e.g. `8.54 &deg;, 39.20 &deg;- Adama`). Strip all
- * of those so the coord-line regex can find the numbers and the tag after
- * the dash regardless of source formatting.
+ * Some exports leave the "°" separator in a coordinate line as a literal
+ * degree/ordinal glyph, others as an undecoded HTML entity (e.g.
+ * `8.54 &deg;, 39.20 &deg;- Adama`). Strip both so the coord-line regex
+ * and the tag tokenizer see a clean string.
  */
 const DEGREE_MARKER_RE = /°|º|&(?:deg|ordm|#0*176|#[xX]0*b0);/gi;
 
@@ -37,6 +40,25 @@ export const normalizeTag = (raw: string): string =>
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim();
+
+/**
+ * Split a location string into lowercase whole-word tokens. Non-alphanumeric
+ * chars (spaces, dashes, punctuation, HTML degree entities, digits from
+ * coord numbers) act as delimiters. Empty tokens are dropped.
+ */
+const tokenize = (raw: string): string[] => {
+  if (!raw) return [];
+  const cleaned = stripDegreeMarkers(String(raw)).toLowerCase();
+  const out: string[] = [];
+  cleaned.split(/[^a-z0-9]+/i).forEach((t) => {
+    // Drop pure numeric tokens — coord latitudes/longitudes would create
+    // noise and false matches otherwise.
+    if (!t) return;
+    if (/^\d+$/.test(t)) return;
+    out.push(t);
+  });
+  return out;
+};
 
 /**
  * Parse a single line of an overspeed-position string.
@@ -79,31 +101,64 @@ export const extractRuleTag = (input: string): string => {
 };
 
 /**
- * Build a Set of normalized rule tags. Empty inputs are ignored.
+ * Compiled representation of the allowed-locations list.
+ *   `size`       — number of rules that produced at least one token.
+ *   `ruleTokens` — per-rule list of tokens (all required to match a tag).
  */
-export const buildAllowedTagSet = (rules: string[]): Set<string> => {
-  const set = new Set<string>();
+export interface AllowedTagMatcher {
+  size: number;
+  ruleTokens: string[][];
+}
+
+/**
+ * Compile a list of boss-entered rules into an `AllowedTagMatcher`.
+ * Empty rules and rules that reduce to zero tokens after tokenizing are
+ * dropped. Returned shape is `.size`-compatible with the legacy
+ * `Set<string>` signature so callers can still do `matcher.size > 0`.
+ */
+export const buildAllowedTagSet = (rules: string[]): AllowedTagMatcher => {
+  const ruleTokens: string[][] = [];
   rules.forEach((r) => {
-    const tag = normalizeTag(extractRuleTag(r));
-    if (tag) set.add(tag);
+    const tokens = tokenize(extractRuleTag(r));
+    if (tokens.length > 0) ruleTokens.push(tokens);
   });
-  return set;
+  return { size: ruleTokens.length, ruleTokens };
+};
+
+const tagTokensMatch = (
+  tagTokens: string[],
+  matcher: AllowedTagMatcher,
+): boolean => {
+  if (matcher.size === 0 || tagTokens.length === 0) return false;
+  const tagSet = new Set(tagTokens);
+  for (const rule of matcher.ruleTokens) {
+    // Every token in the rule must appear as a whole word in the tag.
+    let all = true;
+    for (const t of rule) {
+      if (!tagSet.has(t)) {
+        all = false;
+        break;
+      }
+    }
+    if (all) return true;
+  }
+  return false;
 };
 
 /**
- * Given a parsed overspeed-position blob and the allowed-tag set, return
- * true when ANY coordinate in the blob carries a tag that matches (exact,
- * case/whitespace-insensitive) one of the allowed tags.
+ * True when any coordinate tag inside the blob whole-word-matches an
+ * allowed rule. Non-coord lines are ignored — use `positionHasAllowedTag`
+ * for those.
  */
 export const blobHasAllowedTag = (
   blob: string,
-  allowed: Set<string>,
+  allowed: AllowedTagMatcher,
 ): boolean => {
   if (allowed.size === 0) return false;
   const coords = parseCoordBlob(blob);
   for (const c of coords) {
     if (!c.tag) continue;
-    if (allowed.has(normalizeTag(c.tag))) return true;
+    if (tagTokensMatch(tokenize(c.tag), allowed)) return true;
   }
   return false;
 };
@@ -112,14 +167,14 @@ export const blobHasAllowedTag = (
  * Broader match for the free-form Position A / Position B fields on the
  * Nights and Continuous sheets. These may be:
  *   - A coordinate line ("11.58 °, 43.07 ° - Djibouti")
- *   - A plain text location ("Djibouti", "Metehara")
+ *   - A plain text location ("Djibouti", "Metehara", "Addis Adama Express")
  *   - Multi-line combinations of the above
- * Returns true when any coordinate tag OR any plain-text line matches
- * one of the allowed tags (case/whitespace-insensitive).
+ * Returns true when the tokens on any coord-tag OR any plain-text line
+ * satisfy an allowed rule.
  */
 export const positionHasAllowedTag = (
   position: string,
-  allowed: Set<string>,
+  allowed: AllowedTagMatcher,
 ): boolean => {
   if (allowed.size === 0) return false;
   const raw = stripDegreeMarkers(String(position ?? ''));
@@ -129,9 +184,9 @@ export const positionHasAllowedTag = (
   for (const line of lines) {
     const cleaned = line.trim();
     if (!cleaned) continue;
-    // If the line parses as a coord, `blobHasAllowedTag` already handled it.
+    // Coord lines were already handled above via blobHasAllowedTag.
     if (parseCoordLine(cleaned)) continue;
-    if (allowed.has(normalizeTag(cleaned))) return true;
+    if (tagTokensMatch(tokenize(cleaned), allowed)) return true;
   }
   return false;
 };

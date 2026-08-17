@@ -86,21 +86,21 @@ const LOCATION_CARDS: LocationCardMeta[] = [
     icon: Gauge,
     title: 'Allowed locations — Speed',
     description:
-      'Speed events whose Overspeed Position tag matches one of these are subtracted from every Speed count on the Dashboard, Master Fleet and Transporter pages. Match is exact (case-insensitive): "Adama" will NOT match "Adama Express". You can paste a full coordinate line — we\'ll extract the location name after the dash.',
+      'Speed events whose Overspeed Position tag contains this word are subtracted from every Speed count. Match is whole-word, case-insensitive: adding "Adama" flags both "Adama" and "Addis Adama Express"; adding "Express" flags any tag containing "Express". Multi-word rules like "Adama Express" match tags that contain every word. You can paste a full coordinate line — we\'ll extract the location name after the dash.',
   },
   {
     category: 'nights',
     icon: Moon,
     title: 'Allowed locations — Nights',
     description:
-      "Nights rows whose Position A or Position B matches one of these are subtracted from every Nights count. Doesn't affect Speed or Continuous.",
+      'Nights rows whose Position A or Position B contains the word are subtracted from every Nights count. Same whole-word matching as Speed — "Adama" flags "Addis Adama Express" too. Doesn\'t affect Speed or Continuous.',
   },
   {
     category: 'continuous',
     icon: RouteIcon,
     title: 'Allowed locations — Continuous',
     description:
-      "Continuous rows whose Position A or Position B matches one of these are subtracted from every Continuous count. Doesn't affect Speed or Nights.",
+      'Continuous rows whose Position A or Position B contains the word are subtracted from every Continuous count. Same whole-word matching as Speed. Doesn\'t affect Speed or Nights.',
   },
 ];
 

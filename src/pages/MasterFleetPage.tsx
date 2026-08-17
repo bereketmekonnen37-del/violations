@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  CalendarDays,
   Crown,
   Download,
   Gauge,
@@ -14,10 +15,12 @@ import {
   ShieldCheck,
   Trophy,
   Users,
+  X,
 } from 'lucide-react';
 import { useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Modal } from '../components/ui/Modal';
 import { StatCard } from '../components/ui/StatCard';
 import {
   aggregateMasterFleet,
@@ -45,10 +48,16 @@ const formatThreshold = (seconds: number): string => {
 };
 
 const PODIUM_ICONS = [Crown, Trophy, Medal];
-const PODIUM_TONES = [
-  'from-amber-400/30 to-amber-100/0 text-amber-700 dark:text-amber-300',
-  'from-slate-400/30 to-slate-100/0 text-slate-700 dark:text-slate-200',
-  'from-orange-500/30 to-orange-100/0 text-orange-700 dark:text-orange-300',
+// Solid accent tones for the rank pip only — no more gradient card washes.
+const PODIUM_PIP_STYLES = [
+  'bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30',
+  'bg-slate-100 text-slate-800 ring-slate-200 dark:bg-slate-500/15 dark:text-slate-200 dark:ring-slate-500/30',
+  'bg-orange-100 text-orange-800 ring-orange-200 dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/30',
+];
+const PODIUM_BAR_STYLES = [
+  'bg-amber-400',
+  'bg-slate-400',
+  'bg-orange-400',
 ];
 
 const TopOffenderCard = ({
@@ -59,17 +68,27 @@ const TopOffenderCard = ({
   row: MasterFleetRow;
 }) => {
   const Icon = PODIUM_ICONS[rank] ?? Medal;
-  const tone = PODIUM_TONES[rank] ?? PODIUM_TONES[2];
+  const pip = PODIUM_PIP_STYLES[rank] ?? PODIUM_PIP_STYLES[2];
+  const bar = PODIUM_BAR_STYLES[rank] ?? PODIUM_BAR_STYLES[2];
   return (
     <div
-      className={`surface relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br ${tone}`}
+      className="group surface relative overflow-hidden rounded-2xl p-5 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-elev"
     >
+      <span
+        aria-hidden
+        className={`absolute inset-y-0 left-0 w-1 ${bar}`}
+      />
       <div className="flex items-start justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-80">
-            #{rank + 1} most flagged
+          <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500 dark:text-ink-400">
+            <span
+              className={`inline-flex h-5 min-w-[1.75rem] items-center justify-center rounded-full px-2 text-[10px] font-bold ring-1 ${pip}`}
+            >
+              #{rank + 1}
+            </span>
+            Most flagged
           </p>
-          <h3 className="mt-1 truncate font-display text-xl font-semibold tracking-tight text-ink-900 dark:text-white">
+          <h3 className="mt-1.5 truncate font-display text-xl font-semibold tracking-tight text-ink-900 dark:text-white">
             {row.driverName || 'Not found'}
           </h3>
           <p className="mt-0.5 inline-flex items-center gap-1.5 text-xs text-ink-600 dark:text-ink-300">
@@ -82,13 +101,15 @@ const TopOffenderCard = ({
             )}
           </p>
         </div>
-        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/80 text-ink-700 shadow-card dark:bg-ink-900/70 dark:text-ink-100">
+        <span
+          className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 transition group-hover:scale-105 ${pip}`}
+        >
           <Icon size={18} />
         </span>
       </div>
 
       <div className="mt-5 grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-xl border border-ink-100 bg-white/80 p-2.5 dark:border-ink-800 dark:bg-ink-900/70">
+        <div className="surface-2 rounded-xl p-2.5">
           <p className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
             <Moon size={10} /> Nights
           </p>
@@ -96,7 +117,7 @@ const TopOffenderCard = ({
             {row.nights}
           </p>
         </div>
-        <div className="rounded-xl border border-ink-100 bg-white/80 p-2.5 dark:border-ink-800 dark:bg-ink-900/70">
+        <div className="surface-2 rounded-xl p-2.5">
           <p className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
             <Gauge size={10} /> Speed
           </p>
@@ -104,7 +125,7 @@ const TopOffenderCard = ({
             {row.speed}
           </p>
         </div>
-        <div className="rounded-xl border border-ink-100 bg-white/80 p-2.5 dark:border-ink-800 dark:bg-ink-900/70">
+        <div className="surface-2 rounded-xl p-2.5">
           <p className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
             <RouteIcon size={10} /> Cont.
           </p>
@@ -114,7 +135,7 @@ const TopOffenderCard = ({
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between rounded-xl bg-ink-900/90 px-4 py-2.5 text-white dark:bg-white dark:text-ink-900">
+      <div className="mt-4 flex items-center justify-between rounded-xl bg-ink-900 px-4 py-2.5 text-white dark:bg-white dark:text-ink-900">
         <span className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-80">
           Combined
         </span>
@@ -142,6 +163,7 @@ export const MasterFleetPage = () => {
     allowedLocationsByType.continuous.length;
   const { isTransporterStaff, matchesTransporter } = useUserScope();
   const [query, setQuery] = useState('');
+  const [rankingOpen, setRankingOpen] = useState(false);
 
   const speedFiles = useMemo(
     () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesTransporter),
@@ -249,11 +271,19 @@ export const MasterFleetPage = () => {
         )}). Edit thresholds and whitelists in Rules.`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {!isTransporterStaff && (
-              <Link to="/rules" className="btn-ghost">
-                <ShieldCheck size={16} /> Rules
-              </Link>
-            )}
+            <button
+              type="button"
+              onClick={() => setRankingOpen(true)}
+              disabled={rows.length === 0}
+              className="btn-ghost"
+            >
+              <Layers size={16} /> View full ranking
+              {rows.length > 0 && (
+                <span className="ml-1 rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-semibold text-ink-700 dark:bg-ink-800 dark:text-ink-200">
+                  {rows.length}
+                </span>
+              )}
+            </button>
             <button
               type="button"
               onClick={() => downloadMasterFleetCsv(rows)}
@@ -374,141 +404,144 @@ export const MasterFleetPage = () => {
             thresholds={thresholds}
           />
 
-          <div className="surface mt-8 rounded-2xl p-5 sm:p-7">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-base font-semibold text-ink-900 dark:text-white">
-                  Full ranking ({rows.length})
-                </h3>
-                <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-                  Sorted by combined total, highest first. VID drives the merge —
-                  transporter labels are ignored.
-                </p>
-              </div>
-              <div className="relative sm:w-72">
-                <Search
-                  size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
-                />
-                <input
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search VID or driver name"
-                  className="input-base !pl-9"
-                />
-              </div>
-            </div>
-
-            <div className="mt-5 overflow-x-auto rounded-xl border border-ink-100 dark:border-ink-800">
-              <table className="min-w-full text-sm">
-                <thead className="bg-ink-50 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:bg-ink-900 dark:text-ink-400">
-                  <tr>
-                    <th className="px-4 py-3">#</th>
-                    <th className="px-4 py-3">VID</th>
-                    <th className="px-4 py-3">Driver name</th>
-                    <th className="px-4 py-3">Transporter</th>
-                    <th className="px-4 py-3 text-right">Nights</th>
-                    <th className="px-4 py-3 text-right">Speed</th>
-                    <th className="px-4 py-3 text-right">Continuous</th>
-                    <th className="px-4 py-3 text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
-                  {filtered.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={8}
-                        className="px-4 py-8 text-center text-sm text-ink-500 dark:text-ink-400"
-                      >
-                        No drivers match your search.
-                      </td>
-                    </tr>
-                  ) : (
-                    filtered.map((r) => {
-                      const rank = rows.indexOf(r) + 1;
-                      const isFlagged =
-                        r.allowedVid || r.speedInAllowedLocations > 0;
-                      return (
-                        <tr
-                          key={r.vid}
-                          className={
-                            r.allowedVid
-                              ? 'bg-red-50/60 dark:bg-red-950/20'
-                              : 'bg-white dark:bg-ink-900'
-                          }
-                        >
-                          <td className="px-4 py-2.5 font-mono text-xs text-ink-500 dark:text-ink-400">
-                            {rank}
-                          </td>
-                          <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
-                            {r.vid}
-                          </td>
-                          <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span
-                                className={
-                                  r.driverName === 'Not found'
-                                    ? 'text-ink-400 italic'
-                                    : ''
-                                }
-                              >
-                                {r.driverName || (
-                                  <span className="text-ink-400">—</span>
-                                )}
-                              </span>
-                              {r.allowedVid && (
-                                <span
-                                  title="This VID is on the allowed list"
-                                  className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-900/60 dark:text-red-100 dark:ring-red-800"
-                                >
-                                  <ShieldCheck size={10} /> Allowed VID
-                                </span>
-                              )}
-                              {r.speedInAllowedLocations > 0 && (
-                                <span
-                                  title={`${r.speedInAllowedLocations} speed event(s) occurred in an allowed location`}
-                                  className="inline-flex items-center gap-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800"
-                                >
-                                  <MapPin size={10} /> {r.speedInAllowedLocations} in allowed zone
-                                  {r.speedInAllowedLocations === 1 ? '' : 's'}
-                                </span>
-                              )}
-                              {!isFlagged && null}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
-                            {r.transporter || (
-                              <span className="text-ink-400">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2.5 text-right font-mono text-ink-800 dark:text-ink-100">
-                            {r.nights}
-                          </td>
-                          <td className="px-4 py-2.5 text-right font-mono text-ink-800 dark:text-ink-100">
-                            {r.speed}
-                          </td>
-                          <td className="px-4 py-2.5 text-right font-mono text-ink-800 dark:text-ink-100">
-                            {r.continuous}
-                          </td>
-                          <td className="px-4 py-2.5 text-right font-mono font-semibold text-ink-900 dark:text-white">
-                            {r.total}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
             </>
           )}
         </>
       )}
+
+      <Modal
+        open={rankingOpen}
+        onClose={() => setRankingOpen(false)}
+        title={`Full ranking · ${rows.length} driver${rows.length === 1 ? '' : 's'}`}
+        subtitle="Sorted by combined total. VID drives the merge — transporter labels are ignored."
+        toolbar={
+          <div className="relative w-72">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
+            />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search VID or driver name"
+              className="input-base !py-2 !pl-9 !text-xs"
+            />
+          </div>
+        }
+      >
+        <FullRankingTable rows={rows} filtered={filtered} />
+      </Modal>
     </div>
   );
 };
+
+interface FullRankingTableProps {
+  rows: MasterFleetRow[];
+  filtered: MasterFleetRow[];
+}
+
+const FullRankingTable = ({ rows, filtered }: FullRankingTableProps) => (
+  <div className="overflow-hidden rounded-xl border border-ink-100 dark:border-ink-800">
+    <div className="max-h-[70vh] overflow-auto">
+      <table className="min-w-full text-sm">
+        <thead className="sticky top-0 z-10 bg-ink-50 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-500 shadow-[0_1px_0_rgba(0,0,0,0.06)] dark:bg-ink-900 dark:text-ink-400">
+          <tr>
+            <th className="px-4 py-3">#</th>
+            <th className="px-4 py-3">VID</th>
+            <th className="px-4 py-3">Driver name</th>
+            <th className="px-4 py-3">Transporter</th>
+            <th className="px-4 py-3 text-right">Nights</th>
+            <th className="px-4 py-3 text-right">Speed</th>
+            <th className="px-4 py-3 text-right">Continuous</th>
+            <th className="px-4 py-3 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
+          {filtered.length === 0 ? (
+            <tr>
+              <td
+                colSpan={8}
+                className="px-4 py-8 text-center text-sm text-ink-500 dark:text-ink-400"
+              >
+                No drivers match your search.
+              </td>
+            </tr>
+          ) : (
+            filtered.map((r) => {
+              const rank = rows.indexOf(r) + 1;
+              return (
+                <tr
+                  key={r.vid}
+                  className={
+                    'transition hover:bg-ink-50/60 dark:hover:bg-ink-900/60 ' +
+                    (r.allowedVid
+                      ? 'bg-red-50/60 dark:bg-red-950/20'
+                      : 'bg-white dark:bg-ink-950')
+                  }
+                >
+                  <td className="px-4 py-2.5 font-mono text-xs text-ink-500 dark:text-ink-400">
+                    {rank}
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
+                    {r.vid}
+                  </td>
+                  <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={
+                          r.driverName === 'Not found'
+                            ? 'italic text-ink-400'
+                            : ''
+                        }
+                      >
+                        {r.driverName || (
+                          <span className="text-ink-400">—</span>
+                        )}
+                      </span>
+                      {r.allowedVid && (
+                        <span
+                          title="This VID is on the allowed list"
+                          className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-900/60 dark:text-red-100 dark:ring-red-800"
+                        >
+                          <ShieldCheck size={10} /> Allowed VID
+                        </span>
+                      )}
+                      {r.speedInAllowedLocations > 0 && (
+                        <span
+                          title={`${r.speedInAllowedLocations} speed event(s) occurred in an allowed location`}
+                          className="inline-flex items-center gap-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800"
+                        >
+                          <MapPin size={10} /> {r.speedInAllowedLocations} in allowed zone
+                          {r.speedInAllowedLocations === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                    {r.transporter || <span className="text-ink-400">—</span>}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-ink-800 dark:text-ink-100">
+                    {r.nights}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-ink-800 dark:text-ink-100">
+                    {r.speed}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-ink-800 dark:text-ink-100">
+                    {r.continuous}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono font-semibold text-ink-900 dark:text-white">
+                    {r.total}
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+);
 
 type EventTab = 'speed' | 'nights' | 'continuous';
 
@@ -522,6 +555,49 @@ const matchesQuery = (q: string, ...fields: string[]): boolean => {
   if (!q) return true;
   const needle = q.toLowerCase();
   return fields.some((f) => (f ?? '').toLowerCase().includes(needle));
+};
+
+/**
+ * Parse a raw date string (from a Speed/Nights/Continuous event field)
+ * into a Date. Accepts ISO and "YYYY-MM-DD HH:MM:SS"-style forms.
+ */
+const parseEventDate = (raw: string): Date | null => {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  const withT = new Date(
+    trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T'),
+  );
+  if (!Number.isNaN(withT.getTime())) return withT;
+  const plain = new Date(trimmed);
+  return Number.isNaN(plain.getTime()) ? null : plain;
+};
+
+/**
+ * Return true when the given event's primary/secondary date field falls in
+ * the selected month (`YYYY-MM` from `<input type="month">`) and optional
+ * day (1-31). Empty month = no date filter.
+ */
+const matchesDateFilter = (
+  primary: string,
+  secondary: string,
+  monthValue: string,
+  dayValue: string,
+): boolean => {
+  if (!monthValue) return true;
+  const [yStr, mStr] = monthValue.split('-');
+  const targetYear = Number(yStr);
+  const targetMonth = Number(mStr);
+  if (!Number.isFinite(targetYear) || !Number.isFinite(targetMonth)) return true;
+  const targetDay = dayValue ? Number(dayValue) : null;
+  const check = (raw: string): boolean => {
+    const d = parseEventDate(raw);
+    if (!d) return false;
+    if (d.getFullYear() !== targetYear) return false;
+    if (d.getMonth() + 1 !== targetMonth) return false;
+    if (targetDay != null && d.getDate() !== targetDay) return false;
+    return true;
+  };
+  return check(primary) || check(secondary);
 };
 
 interface FilteredEventsPanelProps {
@@ -541,21 +617,61 @@ const FilteredEventsPanel = ({
   events,
   thresholds,
 }: FilteredEventsPanelProps) => {
+  const [monthValue, setMonthValue] = useState('');
+  const [dayValue, setDayValue] = useState('');
+
+  const speedDated = useMemo(
+    () =>
+      events.speed.filter((e) =>
+        matchesDateFilter(e.start, e.end, monthValue, dayValue),
+      ),
+    [events.speed, monthValue, dayValue],
+  );
+  const nightsDated = useMemo(
+    () =>
+      events.nights.filter((e) =>
+        matchesDateFilter(e.timeA, e.timeB, monthValue, dayValue),
+      ),
+    [events.nights, monthValue, dayValue],
+  );
+  const contDated = useMemo(
+    () =>
+      events.continuous.filter((e) =>
+        matchesDateFilter(e.timeA, e.timeB, monthValue, dayValue),
+      ),
+    [events.continuous, monthValue, dayValue],
+  );
+
   const counts: Record<EventTab, number> = {
-    speed: events.speed.length,
-    nights: events.nights.length,
-    continuous: events.continuous.length,
+    speed: speedDated.length,
+    nights: nightsDated.length,
+    continuous: contDated.length,
   };
 
-  const speedRows = events.speed.filter((e) =>
+  const speedRows = speedDated.filter((e) =>
     matchesQuery(query, e.vid, e.driverName, e.overspeedPosition, e.duration),
   );
-  const nightRows = events.nights.filter((e) =>
+  const nightRows = nightsDated.filter((e) =>
     matchesQuery(query, e.vid, e.driverName, e.timeA, e.duration, e.position),
   );
-  const contRows = events.continuous.filter((e) =>
+  const contRows = contDated.filter((e) =>
     matchesQuery(query, e.vid, e.driverName, e.timeA, e.duration, e.position),
   );
+
+  const dateFilterActive = monthValue.length > 0;
+  const clearDateFilter = () => {
+    setMonthValue('');
+    setDayValue('');
+  };
+  const dayInputMax = (() => {
+    if (!monthValue) return 31;
+    const [yStr, mStr] = monthValue.split('-');
+    const y = Number(yStr);
+    const m = Number(mStr);
+    if (!Number.isFinite(y) || !Number.isFinite(m)) return 31;
+    // JS trick: day 0 of next month = last day of current month.
+    return new Date(y, m, 0).getDate();
+  })();
 
   return (
     <div className="surface mt-8 rounded-2xl p-5 sm:p-7">
@@ -573,9 +689,9 @@ const FilteredEventsPanel = ({
           <button
             type="button"
             onClick={() => {
-              if (activeTab === 'speed') downloadFilteredSpeedCsv(events.speed);
-              else if (activeTab === 'nights') downloadFilteredNightsCsv(events.nights);
-              else downloadFilteredContinuousCsv(events.continuous);
+              if (activeTab === 'speed') downloadFilteredSpeedCsv(speedDated);
+              else if (activeTab === 'nights') downloadFilteredNightsCsv(nightsDated);
+              else downloadFilteredContinuousCsv(contDated);
             }}
             disabled={counts[activeTab] === 0}
             className="btn-primary !px-3 !py-1.5 !text-xs"
@@ -602,6 +718,58 @@ const FilteredEventsPanel = ({
             />
           </div>
         </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-ink-100 bg-ink-50/60 px-3 py-2 text-xs dark:border-ink-800 dark:bg-ink-900/40">
+        <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+          <CalendarDays size={13} /> Date filter
+        </span>
+        <label className="inline-flex items-center gap-1.5 text-ink-600 dark:text-ink-300">
+          Month
+          <input
+            type="month"
+            value={monthValue}
+            onChange={(e) => {
+              const next = e.target.value;
+              setMonthValue(next);
+              if (!next) setDayValue('');
+            }}
+            className="rounded-md border border-ink-200 bg-white px-2 py-1 text-xs text-ink-900 outline-none focus:border-ink-400 dark:border-ink-700 dark:bg-ink-950 dark:text-white"
+          />
+        </label>
+        <label className="inline-flex items-center gap-1.5 text-ink-600 dark:text-ink-300">
+          Day <span className="text-ink-400">(optional)</span>
+          <input
+            type="number"
+            min={1}
+            max={dayInputMax}
+            value={dayValue}
+            disabled={!monthValue}
+            onChange={(e) => {
+              const raw = e.target.value.trim();
+              if (raw === '') {
+                setDayValue('');
+                return;
+              }
+              const n = Math.max(1, Math.min(dayInputMax, Math.floor(Number(raw))));
+              setDayValue(Number.isFinite(n) ? String(n) : '');
+            }}
+            placeholder="—"
+            className="w-16 rounded-md border border-ink-200 bg-white px-2 py-1 text-xs text-ink-900 outline-none focus:border-ink-400 disabled:opacity-50 dark:border-ink-700 dark:bg-ink-950 dark:text-white"
+          />
+        </label>
+        {dateFilterActive && (
+          <button
+            type="button"
+            onClick={clearDateFilter}
+            className="inline-flex items-center gap-1 rounded-full bg-ink-200/60 px-2 py-0.5 text-[11px] font-semibold text-ink-700 hover:bg-ink-300/60 dark:bg-ink-800 dark:text-ink-200 dark:hover:bg-ink-700"
+          >
+            <X size={11} /> Clear
+          </button>
+        )}
+        <span className="ml-auto text-[11px] text-ink-500 dark:text-ink-400">
+          Rules (thresholds &amp; whitelists) still applied.
+        </span>
       </div>
 
       <div className="mt-4 inline-flex rounded-xl border border-ink-100 bg-ink-50 p-1 dark:border-ink-800 dark:bg-ink-900">
@@ -647,7 +815,7 @@ const FilteredEventsPanel = ({
         of {counts[activeTab]}
       </p>
 
-      <div className="mt-4 max-h-[420px] overflow-auto rounded-xl border border-ink-100 dark:border-ink-800">
+      <div className="mt-4 max-h-[65vh] min-h-[420px] overflow-auto rounded-xl border border-ink-100 dark:border-ink-800">
         {activeTab === 'speed' && (
           <table className="min-w-full text-sm">
             <thead className="sticky top-0 z-10 bg-ink-50 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-500 shadow-[0_1px_0_rgba(0,0,0,0.05)] dark:bg-ink-900 dark:text-ink-400">

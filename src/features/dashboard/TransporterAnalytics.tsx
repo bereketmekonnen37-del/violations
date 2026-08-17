@@ -141,12 +141,18 @@ const TransporterCard = ({ row, rank, highlighted }: CardProps) => {
     <Link
       to={`/transporters/${encodeTransporterSlug(row.name)}`}
       className={
-        'group relative overflow-hidden rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-elev ' +
+        'group relative overflow-hidden rounded-2xl border p-4 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-elev ' +
         (highlighted
-          ? 'border-red-200 bg-gradient-to-br from-red-50 via-white to-white dark:border-red-900/60 dark:from-red-950/30 dark:via-ink-900 dark:to-ink-900'
+          ? 'border-red-200 bg-white dark:border-red-900/60 dark:bg-ink-900'
           : 'border-ink-100 bg-white dark:border-ink-800 dark:bg-ink-900')
       }
     >
+      {highlighted && (
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 w-1 bg-red-500"
+        />
+      )}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-500 dark:text-ink-400">

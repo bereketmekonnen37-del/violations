@@ -215,13 +215,7 @@ export const DashboardPage = () => {
         eyebrow={
           isBoss ? 'Overview' : isTransporterStaff ? 'Your workspace' : 'Welcome'
         }
-        title={
-          isBoss
-            ? 'Fleet operations dashboard'
-            : isTransporterStaff
-              ? `Hello, ${user.name.split(' ')[0]}`
-              : `Hello, ${user.name.split(' ')[0]}`
-        }
+        title=""
         subtitle={
           isBoss
             ? 'Real-time view of uploaded violation reports, drivers and transporters.'
@@ -308,7 +302,7 @@ export const DashboardPage = () => {
               {transporterBreakdown.map((t) => (
                 <div
                   key={t.name}
-                  className="surface relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-white via-white to-ink-50 dark:from-ink-900 dark:via-ink-900 dark:to-ink-950"
+                  className="surface group relative overflow-hidden rounded-2xl p-5 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-elev"
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0">

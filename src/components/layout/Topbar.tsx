@@ -41,16 +41,7 @@ export const Topbar = () => {
           >
             Workspace
           </p>
-          <p
-            className="text-sm font-semibold tracking-tight"
-            style={{ color: 'var(--color-text-primary)' }}
-          >
-            {user?.role === 'boss'
-              ? 'Fleet Operations'
-              : (user?.assignedTransporters?.length ?? 0) > 0
-                ? `Transporter · ${user!.assignedTransporters!.join(', ')}`
-                : 'Operations Staff'}
-          </p>
+       
         </div>
       </div>
 
