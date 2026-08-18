@@ -1,6 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  CalendarDays,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Crown,
   Download,
   Gauge,
@@ -617,10 +621,6 @@ const FilteredEventsPanel = ({
 }: FilteredEventsPanelProps) => {
   const [monthValue, setMonthValue] = useState('');
   const [dayValue, setDayValue] = useState('');
-  // Setters are wired into the commented-out filter UI below; keep them
-  // referenced so the build stays clean while the UI is hidden.
-  void setMonthValue;
-  void setDayValue;
 
   const speedDated = useMemo(
     () =>
@@ -660,10 +660,10 @@ const FilteredEventsPanel = ({
     matchesQuery(query, e.vid, e.driverName, e.timeA, e.duration, e.position),
   );
 
-  // UI-only helpers (dateFilterActive, clearDateFilter, dayInputMax) were
-  // removed with the commented-out filter UI to keep the build passing under
-  // `noUnusedLocals`. Re-add them alongside the JSX when re-enabling the
-  // filter — see the commented block below.
+  const clearDateFilter = () => {
+    setMonthValue('');
+    setDayValue('');
+  };
 
   return (
     <div className="surface mt-8 rounded-2xl p-5 sm:p-7">
@@ -712,61 +712,23 @@ const FilteredEventsPanel = ({
         </div>
       </div>
 
-      {/* Date filter UI temporarily hidden per product request. Filter state
-          (monthValue / dayValue) and matchesDateFilter still live in the
-          panel so re-enabling is just uncommenting this block.
-      <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-ink-100 bg-ink-50/60 px-3 py-2 text-xs dark:border-ink-800 dark:bg-ink-900/40">
+      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-ink-100 bg-ink-50/60 px-3 py-2 text-xs dark:border-ink-800 dark:bg-ink-900/40">
         <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
           <CalendarDays size={13} /> Date filter
         </span>
-        <label className="inline-flex items-center gap-1.5 text-ink-600 dark:text-ink-300">
-          Month
-          <input
-            type="month"
-            value={monthValue}
-            onChange={(e) => {
-              const next = e.target.value;
-              setMonthValue(next);
-              if (!next) setDayValue('');
-            }}
-            className="rounded-md border border-ink-200 bg-white px-2 py-1 text-xs text-ink-900 outline-none focus:border-ink-400 dark:border-ink-700 dark:bg-ink-950 dark:text-white"
-          />
-        </label>
-        <label className="inline-flex items-center gap-1.5 text-ink-600 dark:text-ink-300">
-          Day <span className="text-ink-400">(optional)</span>
-          <input
-            type="number"
-            min={1}
-            max={dayInputMax}
-            value={dayValue}
-            disabled={!monthValue}
-            onChange={(e) => {
-              const raw = e.target.value.trim();
-              if (raw === '') {
-                setDayValue('');
-                return;
-              }
-              const n = Math.max(1, Math.min(dayInputMax, Math.floor(Number(raw))));
-              setDayValue(Number.isFinite(n) ? String(n) : '');
-            }}
-            placeholder="—"
-            className="w-16 rounded-md border border-ink-200 bg-white px-2 py-1 text-xs text-ink-900 outline-none focus:border-ink-400 disabled:opacity-50 dark:border-ink-700 dark:bg-ink-950 dark:text-white"
-          />
-        </label>
-        {dateFilterActive && (
-          <button
-            type="button"
-            onClick={clearDateFilter}
-            className="inline-flex items-center gap-1 rounded-full bg-ink-200/60 px-2 py-0.5 text-[11px] font-semibold text-ink-700 hover:bg-ink-300/60 dark:bg-ink-800 dark:text-ink-200 dark:hover:bg-ink-700"
-          >
-            <X size={11} /> Clear
-          </button>
-        )}
+        <DateFilterPopover
+          monthValue={monthValue}
+          dayValue={dayValue}
+          onSelectDay={(mv, dv) => {
+            setMonthValue(mv);
+            setDayValue(dv);
+          }}
+          onClear={clearDateFilter}
+        />
         <span className="ml-auto text-[11px] text-ink-500 dark:text-ink-400">
           Rules (thresholds &amp; whitelists) still applied.
         </span>
       </div>
-      */}
 
       <div className="mt-4 inline-flex rounded-xl border border-ink-100 bg-ink-50 p-1 dark:border-ink-800 dark:bg-ink-900">
         {(Object.keys(TAB_META) as EventTab[]).map((t) => {
@@ -1069,6 +1031,229 @@ const FilteredEventsPanel = ({
           </table>
         )}
       </div>
+    </div>
+  );
+};
+
+const MONTH_LABELS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const MONTH_LABELS_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+interface DateFilterPopoverProps {
+  monthValue: string;
+  dayValue: string;
+  onSelectDay: (monthValue: string, dayValue: string) => void;
+  onClear: () => void;
+}
+
+const DateFilterPopover = ({
+  monthValue,
+  dayValue,
+  onSelectDay,
+  onClear,
+}: DateFilterPopoverProps) => {
+  const today = new Date();
+  const selectedYear = monthValue ? Number(monthValue.split('-')[0]) : null;
+  const selectedMonth = monthValue ? Number(monthValue.split('-')[1]) - 1 : null;
+  const selectedDay = dayValue ? Number(dayValue) : null;
+
+  const [open, setOpen] = useState(false);
+  const [viewYear, setViewYear] = useState(selectedYear ?? today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(selectedMonth ?? today.getMonth());
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    if (selectedYear != null && selectedMonth != null) {
+      setViewYear(selectedYear);
+      setViewMonth(selectedMonth);
+    }
+  }, [open, selectedYear, selectedMonth]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const goPrev = () => {
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear(viewYear - 1);
+    } else {
+      setViewMonth(viewMonth - 1);
+    }
+  };
+  const goNext = () => {
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear(viewYear + 1);
+    } else {
+      setViewMonth(viewMonth + 1);
+    }
+  };
+
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const firstWeekday = new Date(viewYear, viewMonth, 1).getDay();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const pickDay = (day: number) => {
+    const mv = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+    onSelectDay(mv, String(day));
+    setOpen(false);
+  };
+  const pickMonth = () => {
+    const mv = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+    onSelectDay(mv, '');
+    setOpen(false);
+  };
+
+  const buttonLabel = (() => {
+    if (!monthValue || selectedYear == null || selectedMonth == null) return 'Any date';
+    if (selectedDay != null) {
+      return `${MONTH_LABELS_SHORT[selectedMonth]} ${selectedDay}, ${selectedYear}`;
+    }
+    return `${MONTH_LABELS[selectedMonth]} ${selectedYear}`;
+  })();
+
+  const hasSelection = monthValue.length > 0;
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className={
+          'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium outline-none transition ' +
+          (hasSelection
+            ? 'border-ink-900 bg-ink-900 text-white hover:bg-ink-800 dark:border-white dark:bg-white dark:text-ink-900 dark:hover:bg-ink-100'
+            : 'border-ink-200 bg-white text-ink-800 hover:border-ink-300 focus:border-ink-400 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-100 dark:hover:border-ink-600')
+        }
+      >
+        <CalendarDays size={14} className={hasSelection ? '' : 'text-ink-500 dark:text-ink-400'} />
+        {buttonLabel}
+        <ChevronDown size={13} className="opacity-70" />
+      </button>
+
+      {open && (
+        <div
+          role="dialog"
+          className="absolute left-0 top-full z-30 mt-2 w-72 rounded-2xl border border-ink-100 bg-white p-3 shadow-elev dark:border-ink-800 dark:bg-ink-900"
+        >
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={goPrev}
+              aria-label="Previous month"
+              className="rounded-md p-1 text-ink-500 transition hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-white"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={pickMonth}
+              title="Filter to the entire month"
+              className="rounded-md px-3 py-1 text-sm font-semibold text-ink-900 transition hover:bg-ink-100 dark:text-white dark:hover:bg-ink-800"
+            >
+              {MONTH_LABELS[viewMonth]} {viewYear}
+            </button>
+            <button
+              type="button"
+              onClick={goNext}
+              aria-label="Next month"
+              className="rounded-md p-1 text-ink-500 transition hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-white"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wider text-ink-400">
+            {WEEKDAY_LABELS.map((d, i) => (
+              <div key={i} className="py-1">{d}</div>
+            ))}
+          </div>
+          <div className="mt-1 grid grid-cols-7 gap-1">
+            {cells.map((c, i) => {
+              if (c === null) return <div key={i} className="h-8 w-8" />;
+              const isSelectedDay =
+                selectedYear === viewYear &&
+                selectedMonth === viewMonth &&
+                selectedDay === c;
+              const isSelectedMonthOnly =
+                selectedDay == null &&
+                selectedYear === viewYear &&
+                selectedMonth === viewMonth;
+              const isToday =
+                today.getFullYear() === viewYear &&
+                today.getMonth() === viewMonth &&
+                today.getDate() === c;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => pickDay(c)}
+                  className={
+                    'flex h-8 w-8 items-center justify-center rounded-full text-xs transition ' +
+                    (isSelectedDay
+                      ? 'bg-ink-900 font-semibold text-white dark:bg-white dark:text-ink-900'
+                      : isSelectedMonthOnly
+                        ? 'bg-ink-100 text-ink-900 dark:bg-ink-800 dark:text-white'
+                        : isToday
+                          ? 'text-ink-900 ring-1 ring-inset ring-ink-300 dark:text-white dark:ring-ink-600'
+                          : 'text-ink-700 hover:bg-ink-100 dark:text-ink-200 dark:hover:bg-ink-800')
+                  }
+                >
+                  {c}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 flex items-center justify-between border-t border-ink-100 pt-3 dark:border-ink-800">
+            <button
+              type="button"
+              onClick={pickMonth}
+              className="text-[11px] font-semibold text-ink-600 transition hover:text-ink-900 dark:text-ink-300 dark:hover:text-white"
+            >
+              Entire month
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onClear();
+                setOpen(false);
+              }}
+              disabled={!hasSelection}
+              className="text-[11px] font-semibold text-red-600 transition hover:text-red-700 disabled:opacity-40 disabled:hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
