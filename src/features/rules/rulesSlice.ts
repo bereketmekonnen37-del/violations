@@ -14,13 +14,32 @@ export interface RuleThresholds {
 export type AllowedVidCategory = 'speed' | 'nights' | 'continuous';
 export type AllowedLocationCategory = AllowedVidCategory;
 
-export interface AllowedVidLists {
-  speed: string[];
-  nights: string[];
-  continuous: string[];
+/**
+ * A single allowed-VID entry. When `dates` is empty the entry applies to
+ * every event. When `dates` has one or more ISO `YYYY-MM-DD` strings the
+ * entry only applies to events whose start date is in that set.
+ */
+export interface AllowedVidEntry {
+  vid: string;
+  dates: string[];
 }
 
-export type AllowedLocationLists = AllowedVidLists;
+export interface AllowedLocationEntry {
+  value: string;
+  dates: string[];
+}
+
+export interface AllowedVidLists {
+  speed: AllowedVidEntry[];
+  nights: AllowedVidEntry[];
+  continuous: AllowedVidEntry[];
+}
+
+export interface AllowedLocationLists {
+  speed: AllowedLocationEntry[];
+  nights: AllowedLocationEntry[];
+  continuous: AllowedLocationEntry[];
+}
 
 export interface RulesState {
   thresholds: RuleThresholds;
@@ -34,7 +53,13 @@ export const DEFAULT_RULE_THRESHOLDS: RuleThresholds = {
   continuous: CONTINUOUS_MIN_SECONDS,
 };
 
-const emptyByType = (): AllowedVidLists => ({
+const emptyVidLists = (): AllowedVidLists => ({
+  speed: [],
+  nights: [],
+  continuous: [],
+});
+
+const emptyLocationLists = (): AllowedLocationLists => ({
   speed: [],
   nights: [],
   continuous: [],
@@ -42,18 +67,48 @@ const emptyByType = (): AllowedVidLists => ({
 
 const initialState: RulesState = {
   thresholds: DEFAULT_RULE_THRESHOLDS,
-  allowedVidsByType: emptyByType(),
-  allowedLocationsByType: emptyByType(),
+  allowedVidsByType: emptyVidLists(),
+  allowedLocationsByType: emptyLocationLists(),
 };
 
-interface AllowedVidPayload {
+const eqValue = (a: string, b: string): boolean =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
+
+const mergeDates = (existing: string[], incoming: string[]): string[] => {
+  const set = new Set<string>();
+  existing.forEach((d) => d && set.add(d));
+  incoming.forEach((d) => d && set.add(d));
+  return Array.from(set).sort();
+};
+
+interface AddVidPayload {
+  category: AllowedVidCategory;
+  value: string;
+  dates?: string[];
+}
+interface RemoveVidPayload {
   category: AllowedVidCategory;
   value: string;
 }
+interface SetVidDatesPayload {
+  category: AllowedVidCategory;
+  value: string;
+  dates: string[];
+}
 
-interface AllowedLocationPayload {
+interface AddLocationPayload {
   category: AllowedLocationCategory;
   value: string;
+  dates?: string[];
+}
+interface RemoveLocationPayload {
+  category: AllowedLocationCategory;
+  value: string;
+}
+interface SetLocationDatesPayload {
+  category: AllowedLocationCategory;
+  value: string;
+  dates: string[];
 }
 
 const rulesSlice = createSlice({
@@ -66,39 +121,67 @@ const rulesSlice = createSlice({
     resetThresholds(state) {
       state.thresholds = DEFAULT_RULE_THRESHOLDS;
     },
-    addAllowedVid(state, action: PayloadAction<AllowedVidPayload>) {
-      const v = action.payload.value.trim();
-      if (!v) return;
+
+    /* ── VIDs ─────────────────────────────────────────────────────── */
+
+    addAllowedVid(state, action: PayloadAction<AddVidPayload>) {
+      const value = action.payload.value.trim();
+      if (!value) return;
+      const dates = (action.payload.dates ?? []).filter(Boolean);
       const list = state.allowedVidsByType[action.payload.category];
-      if (!list.some((x) => x.toLowerCase() === v.toLowerCase())) {
-        list.unshift(v);
+      const existing = list.find((e) => eqValue(e.vid, value));
+      if (existing) {
+        existing.dates = mergeDates(existing.dates, dates);
+        return;
       }
+      list.unshift({ vid: value, dates: mergeDates([], dates) });
     },
-    removeAllowedVid(state, action: PayloadAction<AllowedVidPayload>) {
+    removeAllowedVid(state, action: PayloadAction<RemoveVidPayload>) {
       const list = state.allowedVidsByType[action.payload.category];
       state.allowedVidsByType[action.payload.category] = list.filter(
-        (x) => x !== action.payload.value,
+        (e) => !eqValue(e.vid, action.payload.value),
       );
+    },
+    setAllowedVidDates(state, action: PayloadAction<SetVidDatesPayload>) {
+      const list = state.allowedVidsByType[action.payload.category];
+      const existing = list.find((e) => eqValue(e.vid, action.payload.value));
+      if (!existing) return;
+      existing.dates = mergeDates([], action.payload.dates);
     },
     clearAllowedVids(state, action: PayloadAction<AllowedVidCategory>) {
       state.allowedVidsByType[action.payload] = [];
     },
-    addAllowedLocation(state, action: PayloadAction<AllowedLocationPayload>) {
-      const v = action.payload.value.trim();
-      if (!v) return;
+
+    /* ── Locations ────────────────────────────────────────────────── */
+
+    addAllowedLocation(state, action: PayloadAction<AddLocationPayload>) {
+      const value = action.payload.value.trim();
+      if (!value) return;
+      const dates = (action.payload.dates ?? []).filter(Boolean);
       const list = state.allowedLocationsByType[action.payload.category];
-      if (!list.some((x) => x.toLowerCase() === v.toLowerCase())) {
-        list.unshift(v);
+      const existing = list.find((e) => eqValue(e.value, value));
+      if (existing) {
+        existing.dates = mergeDates(existing.dates, dates);
+        return;
       }
+      list.unshift({ value, dates: mergeDates([], dates) });
     },
-    removeAllowedLocation(
-      state,
-      action: PayloadAction<AllowedLocationPayload>,
-    ) {
+    removeAllowedLocation(state, action: PayloadAction<RemoveLocationPayload>) {
       const list = state.allowedLocationsByType[action.payload.category];
       state.allowedLocationsByType[action.payload.category] = list.filter(
-        (x) => x !== action.payload.value,
+        (e) => !eqValue(e.value, action.payload.value),
       );
+    },
+    setAllowedLocationDates(
+      state,
+      action: PayloadAction<SetLocationDatesPayload>,
+    ) {
+      const list = state.allowedLocationsByType[action.payload.category];
+      const existing = list.find((e) =>
+        eqValue(e.value, action.payload.value),
+      );
+      if (!existing) return;
+      existing.dates = mergeDates([], action.payload.dates);
     },
     clearAllowedLocations(
       state,
@@ -114,9 +197,11 @@ export const {
   resetThresholds,
   addAllowedVid,
   removeAllowedVid,
+  setAllowedVidDates,
   clearAllowedVids,
   addAllowedLocation,
   removeAllowedLocation,
+  setAllowedLocationDates,
   clearAllowedLocations,
 } = rulesSlice.actions;
 

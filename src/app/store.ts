@@ -42,6 +42,10 @@ const rootReducer = combineReducers({
 // source can whitelist independently. Copy any legacy list into all three so
 // existing users keep the same behavior on first load.
 // Migration 3: same split for `rules.allowedLocations` → `allowedLocationsByType`.
+// Migration 4: entries went from `string[]` to `{ vid, dates: [] }[]` so each
+// allowed VID can optionally be scoped to specific event days.
+// Migration 5: same shape upgrade for `allowedLocationsByType` entries
+// (`string[]` → `{ value, dates: [] }[]`).
 const migrations = {
   2: (persisted: PersistedState): PersistedState => {
     if (!persisted) return persisted;
@@ -87,12 +91,94 @@ const migrations = {
       },
     } as unknown as PersistedState;
   },
+  4: (persisted: PersistedState): PersistedState => {
+    if (!persisted) return persisted;
+    const anyState = persisted as unknown as Record<string, unknown>;
+    const rules = anyState.rules as Record<string, unknown> | undefined;
+    if (!rules) return persisted;
+    const bucket = rules.allowedVidsByType as
+      | Record<string, unknown>
+      | undefined;
+    if (!bucket) return persisted;
+    const upgrade = (list: unknown): Array<{ vid: string; dates: string[] }> => {
+      if (!Array.isArray(list)) return [];
+      return list
+        .map((item) => {
+          if (typeof item === 'string') {
+            return { vid: item, dates: [] };
+          }
+          if (item && typeof item === 'object' && 'vid' in item) {
+            const rec = item as { vid?: unknown; dates?: unknown };
+            const vid = typeof rec.vid === 'string' ? rec.vid : '';
+            const dates = Array.isArray(rec.dates)
+              ? (rec.dates.filter((d) => typeof d === 'string') as string[])
+              : [];
+            return vid ? { vid, dates } : null;
+          }
+          return null;
+        })
+        .filter((x): x is { vid: string; dates: string[] } => x !== null);
+    };
+    return {
+      ...anyState,
+      rules: {
+        ...rules,
+        allowedVidsByType: {
+          speed: upgrade(bucket.speed),
+          nights: upgrade(bucket.nights),
+          continuous: upgrade(bucket.continuous),
+        },
+      },
+    } as unknown as PersistedState;
+  },
+  5: (persisted: PersistedState): PersistedState => {
+    if (!persisted) return persisted;
+    const anyState = persisted as unknown as Record<string, unknown>;
+    const rules = anyState.rules as Record<string, unknown> | undefined;
+    if (!rules) return persisted;
+    const bucket = rules.allowedLocationsByType as
+      | Record<string, unknown>
+      | undefined;
+    if (!bucket) return persisted;
+    const upgrade = (
+      list: unknown,
+    ): Array<{ value: string; dates: string[] }> => {
+      if (!Array.isArray(list)) return [];
+      return list
+        .map((item) => {
+          if (typeof item === 'string') {
+            return { value: item, dates: [] };
+          }
+          if (item && typeof item === 'object' && 'value' in item) {
+            const rec = item as { value?: unknown; dates?: unknown };
+            const value = typeof rec.value === 'string' ? rec.value : '';
+            const dates = Array.isArray(rec.dates)
+              ? (rec.dates.filter((d) => typeof d === 'string') as string[])
+              : [];
+            return value ? { value, dates } : null;
+          }
+          return null;
+        })
+        .filter((x): x is { value: string; dates: string[] } => x !== null);
+    };
+    return {
+      ...anyState,
+      rules: {
+        ...rules,
+        allowedLocationsByType: {
+          speed: upgrade(bucket.speed),
+          nights: upgrade(bucket.nights),
+          continuous: upgrade(bucket.continuous),
+        },
+      },
+    } as unknown as PersistedState;
+  },
 };
 
 const persistedReducer = persistReducer(
   {
     key: 'fleetwatch',
-    version: 3,
+    version: 5,
     storage,
     whitelist: [
       'auth',

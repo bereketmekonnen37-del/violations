@@ -11,7 +11,16 @@
  *   rule "Express"        matches "Addis Adama Express"
  *   rule "Adama Express"  matches "Adama Express" and "Addis Adama Express"
  *                         (every rule token must appear as a whole word).
+ *
+ * Each rule may also carry an optional list of ISO YYYY-MM-DD dates. When
+ * present, the rule only fires when the event's own date is in that set.
+ * An empty date list means "applies to every event."
  */
+
+import type {
+  AllowedLocationEntry,
+  AllowedVidEntry,
+} from '../features/rules/rulesSlice';
 
 export interface ParsedCoord {
   lat: number;
@@ -100,41 +109,132 @@ export const extractRuleTag = (input: string): string => {
   return raw;
 };
 
-/**
- * Compiled representation of the allowed-locations list.
- *   `size`       — number of rules that produced at least one token.
- *   `ruleTokens` — per-rule list of tokens (all required to match a tag).
- */
-export interface AllowedTagMatcher {
+/** Normalize a VID for equality comparison (strip punctuation, lowercase). */
+export const normalizeVid = (vid: string): string =>
+  String(vid ?? '')
+    .replace(/[^0-9a-zA-Z]+/g, '')
+    .toLowerCase();
+
+/** Parse a raw event date string ("YYYY-MM-DD HH:MM:SS" or ISO) into a
+ *  Date. Returns null when the string doesn't parse. */
+export const parseEventDate = (raw: string): Date | null => {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  const withT = new Date(
+    trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T'),
+  );
+  if (!Number.isNaN(withT.getTime())) return withT;
+  const plain = new Date(trimmed);
+  return Number.isNaN(plain.getTime()) ? null : plain;
+};
+
+/** Return the local calendar date key (YYYY-MM-DD) for the given Date. */
+export const toDateKey = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+/** Convenience: get the date key from a raw event date field. */
+export const eventDateKey = (
+  primary: string,
+  secondary?: string,
+): string | null => {
+  const d = parseEventDate(primary) ?? (secondary ? parseEventDate(secondary) : null);
+  return d ? toDateKey(d) : null;
+};
+
+/* ── VID matcher (with per-entry date scope) ──────────────────────── */
+
+export interface AllowedVidMatcher {
+  /** Number of distinct VIDs in the compiled matcher. */
   size: number;
-  ruleTokens: string[][];
+  /**
+   * True when the (normalized) VID key has an allow entry AND either the
+   * entry is unscoped or the event date matches one of the entry's dates.
+   */
+  matches(vidKey: string, eventDateKey: string | null): boolean;
 }
 
 /**
- * Compile a list of boss-entered rules into an `AllowedTagMatcher`.
- * Empty rules and rules that reduce to zero tokens after tokenizing are
- * dropped. Returned shape is `.size`-compatible with the legacy
- * `Set<string>` signature so callers can still do `matcher.size > 0`.
+ * Compile a list of allowed-VID entries into a matcher.
+ *
+ * The internal map keeps, per normalized VID:
+ *   - `null` → unrestricted (matches every event)
+ *   - `Set<YYYY-MM-DD>` → only matches when the event date is in the set
+ * Merging two entries for the same VID follows the union semantics:
+ * "unrestricted wins."
  */
-export const buildAllowedTagSet = (rules: string[]): AllowedTagMatcher => {
-  const ruleTokens: string[][] = [];
-  rules.forEach((r) => {
-    const tokens = tokenize(extractRuleTag(r));
-    if (tokens.length > 0) ruleTokens.push(tokens);
-  });
-  return { size: ruleTokens.length, ruleTokens };
+export const buildAllowedVidMatcher = (
+  entries: readonly AllowedVidEntry[],
+): AllowedVidMatcher => {
+  const byVid = new Map<string, Set<string> | null>();
+  for (const e of entries) {
+    const key = normalizeVid(e.vid);
+    if (!key) continue;
+    const dates = (e.dates ?? []).filter(Boolean);
+    const current = byVid.get(key);
+    if (current === null) continue;
+    if (dates.length === 0) {
+      byVid.set(key, null);
+      continue;
+    }
+    if (current === undefined) {
+      byVid.set(key, new Set(dates));
+    } else {
+      dates.forEach((d) => current.add(d));
+    }
+  }
+  return {
+    size: byVid.size,
+    matches(vidKey, evtKey) {
+      const v = byVid.get(vidKey);
+      if (v === undefined) return false;
+      if (v === null) return true;
+      if (!evtKey) return false;
+      return v.has(evtKey);
+    },
+  };
 };
 
-const tagTokensMatch = (
-  tagTokens: string[],
-  matcher: AllowedTagMatcher,
+/* ── Location tag matcher (with per-entry date scope) ────────────── */
+
+interface CompiledLocationRule {
+  tokens: string[];
+  /** null = unscoped. */
+  dates: Set<string> | null;
+}
+
+export interface AllowedTagMatcher {
+  /** Number of compiled rules (rules with no tokens are dropped). */
+  size: number;
+  /** True when any coord-tag in the blob matches an active rule. */
+  matchesBlob(blob: string, eventDateKey: string | null): boolean;
+  /** True when any coord-tag OR any plain-text line matches an active rule. */
+  matchesPosition(position: string, eventDateKey: string | null): boolean;
+}
+
+const ruleApplies = (
+  r: CompiledLocationRule,
+  evtKey: string | null,
 ): boolean => {
-  if (matcher.size === 0 || tagTokens.length === 0) return false;
+  if (r.dates === null) return true;
+  if (!evtKey) return false;
+  return r.dates.has(evtKey);
+};
+
+const anyRuleMatches = (
+  rules: CompiledLocationRule[],
+  tagTokens: string[],
+  evtKey: string | null,
+): boolean => {
+  if (tagTokens.length === 0) return false;
   const tagSet = new Set(tagTokens);
-  for (const rule of matcher.ruleTokens) {
-    // Every token in the rule must appear as a whole word in the tag.
+  for (const r of rules) {
+    if (!ruleApplies(r, evtKey)) continue;
     let all = true;
-    for (const t of rule) {
+    for (const t of r.tokens) {
       if (!tagSet.has(t)) {
         all = false;
         break;
@@ -146,63 +246,52 @@ const tagTokensMatch = (
 };
 
 /**
- * True when any coordinate tag inside the blob whole-word-matches an
- * allowed rule. Non-coord lines are ignored — use `positionHasAllowedTag`
- * for those.
+ * Compile a list of boss-entered location rules into an `AllowedTagMatcher`.
+ * Rules that reduce to zero tokens after tokenizing (empty strings, pure
+ * coord lines with no tag, etc.) are dropped.
  */
-export const blobHasAllowedTag = (
-  blob: string,
-  allowed: AllowedTagMatcher,
-): boolean => {
-  if (allowed.size === 0) return false;
-  const coords = parseCoordBlob(blob);
-  for (const c of coords) {
-    if (!c.tag) continue;
-    if (tagTokensMatch(tokenize(c.tag), allowed)) return true;
-  }
-  return false;
-};
-
-/**
- * Broader match for the free-form Position A / Position B fields on the
- * Nights and Continuous sheets. These may be:
- *   - A coordinate line ("11.58 °, 43.07 ° - Djibouti")
- *   - A plain text location ("Djibouti", "Metehara", "Addis Adama Express")
- *   - Multi-line combinations of the above
- * Returns true when the tokens on any coord-tag OR any plain-text line
- * satisfy an allowed rule.
- */
-export const positionHasAllowedTag = (
-  position: string,
-  allowed: AllowedTagMatcher,
-): boolean => {
-  if (allowed.size === 0) return false;
-  const raw = stripDegreeMarkers(String(position ?? ''));
-  if (!raw.trim()) return false;
-  if (blobHasAllowedTag(raw, allowed)) return true;
-  const lines = raw.split(/\r?\n/);
-  for (const line of lines) {
-    const cleaned = line.trim();
-    if (!cleaned) continue;
-    // Coord lines were already handled above via blobHasAllowedTag.
-    if (parseCoordLine(cleaned)) continue;
-    if (tagTokensMatch(tokenize(cleaned), allowed)) return true;
-  }
-  return false;
-};
-
-/** Normalize a VID for equality comparison (strip punctuation, lowercase). */
-export const normalizeVid = (vid: string): string =>
-  String(vid ?? '')
-    .replace(/[^0-9a-zA-Z]+/g, '')
-    .toLowerCase();
-
-/** Build a Set of normalized allowed VIDs. */
-export const buildAllowedVidSet = (vids: string[]): Set<string> => {
-  const set = new Set<string>();
-  vids.forEach((v) => {
-    const n = normalizeVid(v);
-    if (n) set.add(n);
+export const buildAllowedTagMatcher = (
+  entries: readonly AllowedLocationEntry[],
+): AllowedTagMatcher => {
+  const rules: CompiledLocationRule[] = [];
+  entries.forEach((e) => {
+    const tokens = tokenize(extractRuleTag(e.value));
+    if (tokens.length === 0) return;
+    const dates = (e.dates ?? []).filter(Boolean);
+    rules.push({
+      tokens,
+      dates: dates.length === 0 ? null : new Set(dates),
+    });
   });
-  return set;
+
+  return {
+    size: rules.length,
+    matchesBlob(blob, evtKey) {
+      if (rules.length === 0) return false;
+      const coords = parseCoordBlob(blob);
+      for (const c of coords) {
+        if (!c.tag) continue;
+        if (anyRuleMatches(rules, tokenize(c.tag), evtKey)) return true;
+      }
+      return false;
+    },
+    matchesPosition(position, evtKey) {
+      if (rules.length === 0) return false;
+      const raw = stripDegreeMarkers(String(position ?? ''));
+      if (!raw.trim()) return false;
+      const coords = parseCoordBlob(raw);
+      for (const c of coords) {
+        if (!c.tag) continue;
+        if (anyRuleMatches(rules, tokenize(c.tag), evtKey)) return true;
+      }
+      const lines = raw.split(/\r?\n/);
+      for (const line of lines) {
+        const cleaned = line.trim();
+        if (!cleaned) continue;
+        if (parseCoordLine(cleaned)) continue;
+        if (anyRuleMatches(rules, tokenize(cleaned), evtKey)) return true;
+      }
+      return false;
+    },
+  };
 };

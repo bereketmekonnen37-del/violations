@@ -15,11 +15,11 @@ import {
 } from './driverLookup';
 import { parseDurationSeconds } from './duration';
 import {
-  blobHasAllowedTag,
-  buildAllowedTagSet,
-  buildAllowedVidSet,
+  buildAllowedTagMatcher,
+  buildAllowedVidMatcher,
   normalizeVid,
-  positionHasAllowedTag,
+  parseEventDate,
+  toDateKey,
 } from './locationRules';
 import type { EventThresholds } from './masterFleet';
 
@@ -70,23 +70,6 @@ interface AnalyticsInput {
   allowedVidsByType?: AllowedVidLists;
   allowedLocationsByType?: AllowedLocationLists;
 }
-
-const parseEventDate = (raw: string): Date | null => {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  // Try native parse (ISO-ish forms already work)
-  const withT = new Date(trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T'));
-  if (!Number.isNaN(withT.getTime())) return withT;
-  const plain = new Date(trimmed);
-  return Number.isNaN(plain.getTime()) ? null : plain;
-};
-
-const toDateKey = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
 
 interface VioBucket {
   vidKey: string;
@@ -202,12 +185,12 @@ export const computeDashboardAnalytics = ({
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
 }: AnalyticsInput): AnalyticsResult => {
   const resolve = buildDriverProfileLookup(driverRecords);
-  const allowedSpeedSet = buildAllowedVidSet(allowedVidsByType.speed);
-  const allowedNightsSet = buildAllowedVidSet(allowedVidsByType.nights);
-  const allowedContSet = buildAllowedVidSet(allowedVidsByType.continuous);
-  const speedTagSet = buildAllowedTagSet(allowedLocationsByType.speed);
-  const nightsTagSet = buildAllowedTagSet(allowedLocationsByType.nights);
-  const contTagSet = buildAllowedTagSet(allowedLocationsByType.continuous);
+  const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
+  const allowedNights = buildAllowedVidMatcher(allowedVidsByType.nights);
+  const allowedCont = buildAllowedVidMatcher(allowedVidsByType.continuous);
+  const speedTags = buildAllowedTagMatcher(allowedLocationsByType.speed);
+  const nightsTags = buildAllowedTagMatcher(allowedLocationsByType.nights);
+  const contTags = buildAllowedTagMatcher(allowedLocationsByType.continuous);
   const daily = new Map<string, DailyBucket>();
   const buckets = new Map<string, VioBucket>();
   const totals = { speed: 0, nights: 0, continuous: 0 };
@@ -226,18 +209,13 @@ export const computeDashboardAnalytics = ({
   speedFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
       const vidKey = normalizeVid(driver.vid);
-      const skipVid = allowedSpeedSet.has(vidKey);
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
-        // Speed events in an allowed Speed location are NOT counted.
-        if (
-          speedTagSet.size > 0 &&
-          blobHasAllowedTag(event.overspeedPosition, speedTagSet)
-        ) {
-          return;
-        }
-        if (skipVid) return;
+        const d = parseEventDate(event.start) ?? parseEventDate(event.end);
+        const evtKey = d ? toDateKey(d) : null;
+        if (speedTags.matchesBlob(event.overspeedPosition, evtKey)) return;
+        if (allowedSpeed.matches(vidKey, evtKey)) return;
         bumpBucket(
           buckets,
           driver.vid,
@@ -245,7 +223,6 @@ export const computeDashboardAnalytics = ({
           driver.transporter || driver.driverName || '',
           'speed',
         );
-        const d = parseEventDate(event.start) ?? parseEventDate(event.end);
         if (d) bumpDay(d, 'speed');
       });
     });
@@ -254,15 +231,15 @@ export const computeDashboardAnalytics = ({
   nightFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
       const vidKey = normalizeVid(driver.vid);
-      const skipVid = allowedNightsSet.has(vidKey);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.nights) return;
-        if (skipVid) return;
+        const d = parseEventDate(row.timeA) ?? parseEventDate(row.timeB);
+        const evtKey = d ? toDateKey(d) : null;
+        if (allowedNights.matches(vidKey, evtKey)) return;
         if (
-          nightsTagSet.size > 0 &&
-          (positionHasAllowedTag(row.positionA, nightsTagSet) ||
-            positionHasAllowedTag(row.positionB, nightsTagSet))
+          nightsTags.matchesPosition(row.positionA, evtKey) ||
+          nightsTags.matchesPosition(row.positionB, evtKey)
         ) {
           return;
         }
@@ -273,7 +250,6 @@ export const computeDashboardAnalytics = ({
           driver.transporter || driver.driverName || '',
           'nights',
         );
-        const d = parseEventDate(row.timeA) ?? parseEventDate(row.timeB);
         if (d) bumpDay(d, 'nights');
       });
     });
@@ -282,15 +258,15 @@ export const computeDashboardAnalytics = ({
   continuousFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
       const vidKey = normalizeVid(driver.vid);
-      const skipVid = allowedContSet.has(vidKey);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.continuous) return;
-        if (skipVid) return;
+        const d = parseEventDate(row.timeA) ?? parseEventDate(row.timeB);
+        const evtKey = d ? toDateKey(d) : null;
+        if (allowedCont.matches(vidKey, evtKey)) return;
         if (
-          contTagSet.size > 0 &&
-          (positionHasAllowedTag(row.positionA, contTagSet) ||
-            positionHasAllowedTag(row.positionB, contTagSet))
+          contTags.matchesPosition(row.positionA, evtKey) ||
+          contTags.matchesPosition(row.positionB, evtKey)
         ) {
           return;
         }
@@ -301,7 +277,6 @@ export const computeDashboardAnalytics = ({
           driver.transporter || driver.driverName || '',
           'continuous',
         );
-        const d = parseEventDate(row.timeA) ?? parseEventDate(row.timeB);
         if (d) bumpDay(d, 'continuous');
       });
     });

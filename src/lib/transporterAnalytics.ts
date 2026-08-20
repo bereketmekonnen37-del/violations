@@ -10,11 +10,10 @@ import type {
 } from '../features/rules/rulesSlice';
 import { parseDurationSeconds } from './duration';
 import {
-  buildAllowedTagSet,
-  buildAllowedVidSet,
+  buildAllowedTagMatcher,
+  buildAllowedVidMatcher,
+  eventDateKey,
   normalizeVid,
-  positionHasAllowedTag,
-  blobHasAllowedTag,
 } from './locationRules';
 import type { EventThresholds } from './masterFleet';
 
@@ -144,15 +143,12 @@ export const computeTransporterAnalytics = ({
   allowedVidsByType = EMPTY_ALLOWED,
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
 }: AnalyticsInput): TransporterAnalyticsRow[] => {
-  const allowedSpeedSet = buildAllowedVidSet(allowedVidsByType.speed);
-  const allowedNightsSet = buildAllowedVidSet(allowedVidsByType.nights);
-  const allowedContSet = buildAllowedVidSet(allowedVidsByType.continuous);
-  const speedTagSet = buildAllowedTagSet(allowedLocationsByType.speed);
-  const nightsTagSet = buildAllowedTagSet(allowedLocationsByType.nights);
-  const contTagSet = buildAllowedTagSet(allowedLocationsByType.continuous);
-  const skipSpeed = (vid: string) => allowedSpeedSet.has(normalizeVid(vid));
-  const skipNights = (vid: string) => allowedNightsSet.has(normalizeVid(vid));
-  const skipCont = (vid: string) => allowedContSet.has(normalizeVid(vid));
+  const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
+  const allowedNights = buildAllowedVidMatcher(allowedVidsByType.nights);
+  const allowedCont = buildAllowedVidMatcher(allowedVidsByType.continuous);
+  const speedTags = buildAllowedTagMatcher(allowedLocationsByType.speed);
+  const nightsTags = buildAllowedTagMatcher(allowedLocationsByType.nights);
+  const contTags = buildAllowedTagMatcher(allowedLocationsByType.continuous);
 
   // Prime the lookup from driver records so a VID → transporter mapping
   // is available even when the upload's driver block has an empty
@@ -185,18 +181,14 @@ export const computeTransporterAnalytics = ({
       const t = resolveTransporter(driver.vid, driver.transporter);
       const b = getBucket(buckets, t);
       if (!b) return;
-      const skip = skipSpeed(driver.vid);
-      if (driver.vid) b.vids.add(normalizeVid(driver.vid));
+      const vidKey = normalizeVid(driver.vid);
+      if (driver.vid) b.vids.add(vidKey);
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
-        if (
-          speedTagSet.size > 0 &&
-          blobHasAllowedTag(event.overspeedPosition, speedTagSet)
-        ) {
-          return;
-        }
-        if (skip) return;
+        const evtKey = eventDateKey(event.start, event.end);
+        if (speedTags.matchesBlob(event.overspeedPosition, evtKey)) return;
+        if (allowedSpeed.matches(vidKey, evtKey)) return;
         b.speed += 1;
       });
     }),
@@ -207,19 +199,19 @@ export const computeTransporterAnalytics = ({
       const t = resolveTransporter(driver.vid, driver.transporter);
       const b = getBucket(buckets, t);
       if (!b) return;
-      const skip = skipNights(driver.vid);
-      if (driver.vid) b.vids.add(normalizeVid(driver.vid));
+      const vidKey = normalizeVid(driver.vid);
+      if (driver.vid) b.vids.add(vidKey);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.nights) return;
+        const evtKey = eventDateKey(row.timeA, row.timeB);
+        if (allowedNights.matches(vidKey, evtKey)) return;
         if (
-          nightsTagSet.size > 0 &&
-          (positionHasAllowedTag(row.positionA, nightsTagSet) ||
-            positionHasAllowedTag(row.positionB, nightsTagSet))
+          nightsTags.matchesPosition(row.positionA, evtKey) ||
+          nightsTags.matchesPosition(row.positionB, evtKey)
         ) {
           return;
         }
-        if (skip) return;
         b.nights += 1;
       });
     }),
@@ -230,19 +222,19 @@ export const computeTransporterAnalytics = ({
       const t = resolveTransporter(driver.vid, driver.transporter);
       const b = getBucket(buckets, t);
       if (!b) return;
-      const skip = skipCont(driver.vid);
-      if (driver.vid) b.vids.add(normalizeVid(driver.vid));
+      const vidKey = normalizeVid(driver.vid);
+      if (driver.vid) b.vids.add(vidKey);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.continuous) return;
+        const evtKey = eventDateKey(row.timeA, row.timeB);
+        if (allowedCont.matches(vidKey, evtKey)) return;
         if (
-          contTagSet.size > 0 &&
-          (positionHasAllowedTag(row.positionA, contTagSet) ||
-            positionHasAllowedTag(row.positionB, contTagSet))
+          contTags.matchesPosition(row.positionA, evtKey) ||
+          contTags.matchesPosition(row.positionB, evtKey)
         ) {
           return;
         }
-        if (skip) return;
         b.continuous += 1;
       });
     }),
