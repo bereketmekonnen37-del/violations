@@ -19,11 +19,18 @@ export const ContinuousDriverCard = ({ driver, onOpen }: Props) => {
     <button
       type="button"
       onClick={onOpen}
-      className="surface group flex w-full flex-col rounded-2xl p-5 text-left transition hover:-translate-y-0.5 hover:shadow-elev"
+      className="card-base group flex w-full flex-col p-5 text-left transition hover:-translate-y-0.5 hover:shadow-elev"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200">
+          <div
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl"
+            style={{
+              background: 'var(--color-brand-blue-soft)',
+              color: 'var(--color-brand-blue)',
+              border: '1px solid var(--color-brand-blue-line)',
+            }}
+          >
             <User size={18} />
           </div>
           <div className="min-w-0">
@@ -76,7 +83,13 @@ export const ContinuousDriverCard = ({ driver, onOpen }: Props) => {
         )}
       </dl>
 
-      <div className="mt-5 flex items-center justify-between border-t border-ink-100 pt-4 text-sm font-medium text-ink-700 dark:border-ink-800 dark:text-ink-300">
+      <div
+        className="mt-5 flex items-center justify-between pt-4 text-sm font-semibold"
+        style={{
+          borderTop: '1px solid var(--color-brand-blue-line)',
+          color: 'var(--color-brand-accent)',
+        }}
+      >
         <span>Open all trips</span>
         <ArrowRight size={16} className="transition group-hover:translate-x-1" />
       </div>

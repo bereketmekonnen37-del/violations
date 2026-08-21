@@ -44,21 +44,34 @@ export const NightDriverModal = ({ driver, onClose }: Props) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-stretch justify-center bg-ink-950/60 px-3 py-4 backdrop-blur-sm sm:items-center sm:px-6 sm:py-10"
+      className="fixed inset-0 z-50 flex items-stretch justify-center px-3 py-4 backdrop-blur-sm sm:items-center sm:px-6 sm:py-10"
+      style={{ background: 'rgba(15, 20, 40, 0.55)' }}
       role="dialog"
       aria-modal
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="surface flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl"
+        className="card-base flex max-h-full w-full max-w-3xl flex-col overflow-hidden"
       >
-        <header className="flex items-start justify-between gap-3 border-b border-ink-100 p-5 dark:border-ink-800 sm:p-6">
+        <header
+          className="flex items-start justify-between gap-3 p-5 sm:p-6"
+          style={{
+            background: 'var(--color-brand-blue-soft)',
+            borderBottom: '1px solid var(--color-brand-blue-line)',
+          }}
+        >
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500 dark:text-ink-400">
+            <p
+              className="text-[11px] font-semibold uppercase tracking-[0.18em]"
+              style={{ color: 'var(--color-brand-accent)' }}
+            >
               Unauthorized travel — driver review
             </p>
-            <h2 className="mt-1 truncate font-display text-xl font-semibold tracking-tight text-ink-900 dark:text-white sm:text-2xl">
+            <h2
+              className="mt-1 truncate font-display text-xl font-semibold tracking-tight sm:text-2xl"
+              style={{ color: 'var(--color-brand-blue-dark)' }}
+            >
               {driver.matchedDriverName || driver.driverName || 'Unknown driver'}
             </h2>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-500 dark:text-ink-400">
@@ -134,7 +147,13 @@ export const NightDriverModal = ({ driver, onClose }: Props) => {
                 </div>
 
                 {/* Highlighted position strip */}
-                <div className="mt-4 flex items-start gap-3 rounded-2xl border border-ink-900/10 bg-ink-900 px-4 py-3.5 text-white dark:border-white/10 dark:bg-white dark:text-ink-900">
+                <div
+                  className="mt-4 flex items-start gap-3 rounded-2xl px-4 py-3.5"
+                  style={{
+                    background: 'var(--color-brand-blue)',
+                    color: '#ffffff',
+                  }}
+                >
                   <Map size={16} className="mt-0.5 shrink-0" />
                   <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
                     <div className="min-w-0">

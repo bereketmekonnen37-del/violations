@@ -3,55 +3,79 @@
 @tailwind utilities;
 
 :root {
-  /* ── Brand Colors ────────────────────────────────────────── */
-  --color-brand-red: #dc3545;
-  --color-brand-red-hover: #b02a37;
-  --color-brand-red-alt: #e14e5d;
-  --color-brand-red-dark: #7a1d25;
-  --color-brand-red-muted: #f5c2c7;
+  /* ── Brand Colors ──────────────────────────────────────────
+     New identity system:
+       Blue   #3E55A5 → trust, structure, identity (primary)
+       Orange #F48221 → energy, action, attention (accent/CTA)
+       White  #FFFFFF → space, elegance, cleanliness
+     Backgrounds use very light blue-tinted greys derived from
+     the blue rather than introducing unrelated colors.
+  ────────────────────────────────────────────────────────── */
 
-  --color-brand-blue: #1e85ae;
-  --color-brand-blue-light: #87ceeb;
-  --color-brand-blue-hover: #166580;
+  --color-brand-blue: #3e55a5;
+  --color-brand-blue-hover: #34488c;
+  --color-brand-blue-dark: #2a3a72;
+  --color-brand-blue-soft: #eef1fa;
+  --color-brand-blue-line: #dfe4f2;
+  --color-brand-blue-tint: #f7f8fc;
 
-  --color-brand-accent: #f5b841;
-  --color-brand-accent-hover: #dca032;
-  --color-brand-accent-soft: #fce4a6;
+  --color-brand-accent: #f48221;
+  --color-brand-accent-hover: #db6f14;
+  --color-brand-accent-dark: #b25a10;
+  --color-brand-accent-soft: #fde3ce;
+  --color-brand-accent-line: #f6c799;
 
-  --color-brand-navy: #0b1e3f;
-  --color-brand-navy-soft: #1c2f56;
-  --color-brand-navy-line: #d6dfef;
+  /* Legacy aliases (kept so existing var refs render the new palette
+     until every consumer is migrated). "red" now points at true red
+     used ONLY for destructive/logout affordances; primary CTAs use
+     blue, accent CTAs use orange. */
+  --color-brand-red: #dc2626;
+  --color-brand-red-hover: #b91c1c;
+  --color-brand-red-alt: #ef4444;
+  --color-brand-red-dark: #7f1d1d;
+  --color-brand-red-muted: #fecaca;
+
+  --color-brand-blue-light: #6b7fc4;
+
+  --color-brand-navy: #1f2b57;
+  --color-brand-navy-soft: #2a3a72;
+  --color-brand-navy-line: var(--color-brand-blue-line);
 
   /* ── Backgrounds ─────────────────────────────────────────── */
-  --color-bg-main: #ffffff;
-  --color-bg-light: #ebeef1;
-  --color-bg-card: #ebeef1;
-  --color-bg-transparent-search: rgba(11, 18, 32, 0.05);
+  --color-bg-main: #f7f8fc;
+  --color-bg-page: #f7f8fc;
+  --color-bg-section: #eef1fa;
+  --color-bg-card: #ffffff;
+  --color-bg-light: #eef1fa;
+  --color-bg-transparent-search: rgba(62, 85, 165, 0.06);
 
   /* ── Grays ───────────────────────────────────────────────── */
   --color-gray-light: #f1f5f9;
-  --color-gray-light-hover: #e5e7eb;
+  --color-gray-light-hover: #e6ebf5;
   --color-gray-dark: #6b7280;
   --color-gray-select-bg: #e5e7eb;
 
   /* ── Reds / Destructive ──────────────────────────────────── */
-  --color-red: #dc3545;
-  --color-red-dark: #b02a37;
-  --color-red-light: #f5c2c7;
+  --color-red: #dc2626;
+  --color-red-dark: #b91c1c;
+  --color-red-light: #fecaca;
   --color-pink-light: #fee2e2;
-  --color-logout: #dc3545;
+  --color-logout: #dc2626;
 
   /* ── Text ─────────────────────────────────────────────────
-     On light theme, "white" tokens become the dark body text tokens
-     so content remains legible against white/near-white surfaces. */
-  --color-text-primary: #0b1220;
-  --color-text-secondary: #1f2937;
-  --color-text-muted: #4b5563;
+     Body copy stays a near-black slate for maximum legibility on
+     the white/very-light-blue surfaces. Headings prefer the deep
+     brand blue; use --color-heading in components. */
+  --color-heading: var(--color-brand-blue-dark);
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #1e293b;
+  --color-text-muted: #64748b;
+  --color-text-on-blue: #ffffff;
 
   /* ── Misc / Accent ───────────────────────────────────────── */
-  --color-border-accent: #1e85ae;
-  --color-input: #e5e7eb;
-  --color-select-text: #6b7280;
+  --color-border-accent: var(--color-brand-blue);
+  --color-input: var(--color-brand-blue-line);
+  --color-select-text: #64748b;
 }
 
 @layer base {
@@ -62,7 +86,7 @@
   }
 
   body {
-    background: var(--color-bg-main);
+    background: var(--color-bg-page);
     color: var(--color-text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -70,7 +94,7 @@
   }
 
   ::selection {
-    background: var(--color-brand-red);
+    background: var(--color-brand-blue);
     color: #ffffff;
   }
 
@@ -83,11 +107,11 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--color-brand-navy-line);
+    background: var(--color-brand-blue-line);
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-gray-select-bg);
+    background: var(--color-brand-blue-light);
   }
 
   /* Keep browser default number-input spinners visible so users can
@@ -104,35 +128,34 @@
 }
 
 @layer components {
-  /* Primary card surface — sits on the white content canvas */
+  /* Primary card surface — white, sitting on the tinted page bg */
   .surface {
     background: var(--color-bg-card);
-    border: 1px solid var(--color-brand-navy-line);
+    border: 1px solid var(--color-brand-blue-line);
     color: var(--color-text-primary);
   }
 
-  /* Nested surface — a card *inside* a .surface. White so it lifts
-     off the bg-card parent. */
+  /* Nested surface — a card *inside* a .surface. Uses the soft blue
+     tint so it lifts off the white parent. */
   .surface-2 {
-    background: #ffffff;
-    border: 1px solid var(--color-brand-navy-line);
+    background: var(--color-brand-blue-soft);
+    border: 1px solid var(--color-brand-blue-line);
     color: var(--color-text-primary);
   }
 
   .card-base {
     @apply rounded-2xl shadow-card;
     background: var(--color-bg-card);
-    border: 1px solid var(--color-brand-navy-line);
+    border: 1px solid var(--color-brand-blue-line);
     color: var(--color-text-primary);
   }
 
-  /* Inputs: always white bg, always dark text — legible on both
-     white content areas and bg-card surfaces */
+  /* Inputs: white bg, blue focus ring — never harsh black borders */
   .input-base {
     width: 100%;
     background: #ffffff;
     color: var(--color-text-primary);
-    border: 1px solid var(--color-brand-navy-line);
+    border: 1px solid var(--color-brand-blue-line);
     border-radius: 0.75rem;
     padding: 0.625rem 1rem;
     font-size: 0.875rem;
@@ -146,38 +169,11 @@
   }
   .input-base:focus {
     border-color: var(--color-brand-blue);
-    box-shadow: 0 0 0 3px rgba(30, 133, 174, 0.15);
+    box-shadow: 0 0 0 3px rgba(62, 85, 165, 0.18);
   }
 
-  /* Primary CTA — brand red with white text */
+  /* Primary CTA — solid brand blue */
   .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0.625rem 1rem;
-    border-radius: 0.75rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #ffffff;
-    background: var(--color-brand-red);
-    border: 1px solid transparent;
-    transition: background-color 150ms ease, box-shadow 150ms ease,
-      transform 100ms ease;
-  }
-  .btn-primary:hover {
-    background: var(--color-brand-red-hover);
-  }
-  .btn-primary:active {
-    background: var(--color-brand-red-dark);
-  }
-  .btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  /* Secondary CTA — deep blue with white text (per palette pairing) */
-  .btn-secondary {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -189,17 +185,73 @@
     color: #ffffff;
     background: var(--color-brand-blue);
     border: 1px solid transparent;
-    transition: background-color 150ms ease, box-shadow 150ms ease;
+    box-shadow: 0 1px 2px rgba(62, 85, 165, 0.18);
+    transition: background-color 150ms ease, box-shadow 150ms ease,
+      transform 100ms ease;
+  }
+  .btn-primary:hover {
+    background: var(--color-brand-blue-hover);
+  }
+  .btn-primary:active {
+    background: var(--color-brand-blue-dark);
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Secondary — white with blue border/text */
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-brand-blue);
+    background: #ffffff;
+    border: 1px solid var(--color-brand-blue-line);
+    transition: background-color 150ms ease, border-color 150ms ease;
   }
   .btn-secondary:hover {
-    background: var(--color-brand-blue-hover);
+    background: var(--color-brand-blue-soft);
+    border-color: var(--color-brand-blue);
   }
   .btn-secondary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
-  /* Ghost/tertiary — transparent, dark text, subtle hover */
+  /* Accent CTA — orange, reserved for high-attention actions */
+  .btn-accent {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #ffffff;
+    background: var(--color-brand-accent);
+    border: 1px solid transparent;
+    box-shadow: 0 1px 2px rgba(244, 130, 33, 0.25);
+    transition: background-color 150ms ease, box-shadow 150ms ease;
+  }
+  .btn-accent:hover {
+    background: var(--color-brand-accent-hover);
+  }
+  .btn-accent:active {
+    background: var(--color-brand-accent-dark);
+  }
+  .btn-accent:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Ghost/tertiary — transparent, dark text, subtle blue hover */
   .btn-ghost {
     display: inline-flex;
     align-items: center;
@@ -215,7 +267,27 @@
     transition: background-color 150ms ease;
   }
   .btn-ghost:hover {
-    background: var(--color-bg-transparent-search);
+    background: var(--color-brand-blue-soft);
+    color: var(--color-brand-blue);
+  }
+
+  /* Destructive — used only for true delete/sign-out affordances */
+  .btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #ffffff;
+    background: var(--color-brand-red);
+    border: 1px solid transparent;
+    transition: background-color 150ms ease;
+  }
+  .btn-danger:hover {
+    background: var(--color-brand-red-hover);
   }
 
   .chip {
@@ -226,9 +298,22 @@
     border-radius: 9999px;
     font-size: 0.75rem;
     font-weight: 500;
-    color: var(--color-text-primary);
-    background: #ffffff;
-    border: 1px solid var(--color-brand-navy-line);
+    color: var(--color-brand-blue);
+    background: var(--color-brand-blue-soft);
+    border: 1px solid var(--color-brand-blue-line);
+  }
+
+  .chip-accent {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-brand-accent-dark);
+    background: var(--color-brand-accent-soft);
+    border: 1px solid var(--color-brand-accent-line);
   }
 }
 

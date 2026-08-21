@@ -185,8 +185,8 @@ export const TransporterDetailPage = () => {
                     className={
                       'ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ' +
                       (active
-                        ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-900'
-                        : 'bg-ink-200/70 text-ink-600 dark:bg-ink-800 dark:text-ink-300')
+                        ? 'bg-brand-blue text-white'
+                        : 'bg-brand-blue-soft text-brand-blue-dark')
                     }
                   >
                     {counts[t]}

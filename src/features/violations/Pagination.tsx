@@ -45,8 +45,8 @@ export const Pagination = ({ page, pageCount, onChange }: Props) => {
                 className={cn(
                   'inline-flex h-9 min-w-[36px] items-center justify-center rounded-xl border px-3 text-sm font-medium transition',
                   p === page
-                    ? 'border-ink-900 bg-ink-900 text-white dark:border-white dark:bg-white dark:text-ink-900'
-                    : 'border-ink-200 bg-white text-ink-700 hover:bg-ink-50 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-200 dark:hover:bg-ink-800',
+                    ? 'border-brand-blue bg-brand-blue text-white shadow-blue-glow'
+                    : 'border-brand-blue-line bg-white text-brand-blue-dark hover:bg-brand-blue-soft',
                 )}
               >
                 {p}

@@ -275,8 +275,8 @@ const CategoryTabs = ({ active, onChange, counts }: CategoryTabsProps) => (
           className={
             'group relative flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition ' +
             (isActive
-              ? 'bg-white text-ink-900 shadow-card dark:bg-ink-950 dark:text-white'
-              : 'text-ink-500 hover:text-ink-900 dark:text-ink-400 dark:hover:text-white')
+              ? 'bg-white text-brand-blue-dark shadow-card border border-brand-blue-line'
+              : 'text-ink-500 hover:text-brand-blue')
           }
         >
           <span
@@ -295,8 +295,8 @@ const CategoryTabs = ({ active, onChange, counts }: CategoryTabsProps) => (
             className={
               'ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ' +
               (isActive
-                ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-900'
-                : 'bg-ink-200/70 text-ink-600 dark:bg-ink-800 dark:text-ink-300')
+                ? 'bg-brand-blue text-white'
+                : 'bg-brand-blue-soft text-brand-blue-dark')
             }
           >
             {counts[c]}
@@ -1142,8 +1142,8 @@ const ScopeOption = ({
     className={
       'flex items-start gap-3 rounded-xl border p-3 text-left transition ' +
       (active
-        ? 'border-ink-900 bg-white shadow-card dark:border-white dark:bg-ink-950'
-        : 'border-ink-100 bg-white hover:border-ink-200 dark:border-ink-800 dark:bg-ink-950 dark:hover:border-ink-700')
+        ? 'border-brand-blue bg-brand-blue-soft shadow-card'
+        : 'border-brand-blue-line bg-white hover:border-brand-blue')
     }
   >
     <span
@@ -1152,8 +1152,8 @@ const ScopeOption = ({
         (active && tone
           ? tone.ring + ' ' + tone.tone
           : active
-            ? 'bg-ink-900 text-white ring-ink-900 dark:bg-white dark:text-ink-900 dark:ring-white'
-            : 'bg-ink-50 text-ink-500 ring-ink-100 dark:bg-ink-900 dark:text-ink-400 dark:ring-ink-800')
+            ? 'bg-brand-blue text-white ring-brand-blue'
+            : 'bg-brand-blue-soft text-brand-blue ring-brand-blue-line')
       }
     >
       <Icon size={14} />

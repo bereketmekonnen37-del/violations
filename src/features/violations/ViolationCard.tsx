@@ -91,11 +91,20 @@ export const ViolationCard = ({ record, index, driverViolationCount }: Props) =>
         </div>
       </header>
 
-      {/* Highlighted location row */}
-      <div className="mt-5 flex items-start gap-3 rounded-2xl border border-ink-900/10 bg-ink-900 px-4 py-3.5 text-white dark:border-white/10 dark:bg-white dark:text-ink-900">
+      {/* Highlighted location row — blue banner */}
+      <div
+        className="mt-5 flex items-start gap-3 rounded-2xl px-4 py-3.5"
+        style={{
+          background: 'var(--color-brand-blue)',
+          color: '#ffffff',
+        }}
+      >
         <MapPin size={16} className="mt-0.5 shrink-0" />
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-70">
+          <p
+            className="text-[10px] font-semibold uppercase tracking-[0.18em]"
+            style={{ color: 'var(--color-brand-accent)' }}
+          >
             Location
           </p>
           <p className="mt-0.5 truncate text-sm font-semibold">

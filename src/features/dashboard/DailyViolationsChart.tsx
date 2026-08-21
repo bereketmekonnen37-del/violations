@@ -12,18 +12,18 @@ type Kind = 'speed' | 'nights' | 'continuous';
 const KIND_META: Record<Kind, { label: string; color: string; softColor: string }> = {
   speed: {
     label: 'Speed',
-    color: '#ef4444', // red-500
-    softColor: '#fecaca', // red-200
+    color: '#F48221', // brand accent orange
+    softColor: '#FDE3CE',
   },
   nights: {
     label: 'Nights',
-    color: '#6366f1', // indigo-500
-    softColor: '#c7d2fe', // indigo-200
+    color: '#3E55A5', // brand blue
+    softColor: '#EEF1FA',
   },
   continuous: {
     label: 'Continuous',
-    color: '#f59e0b', // amber-500
-    softColor: '#fde68a', // amber-200
+    color: '#6B7FC4', // brand blue-light for a related-but-distinct hue
+    softColor: '#DFE4F2',
   },
 };
 
@@ -95,7 +95,8 @@ export const DailyViolationsChart = ({ data, height = 280 }: Props) => {
         {(Object.keys(KIND_META) as Kind[]).map((k) => (
           <span
             key={k}
-            className="inline-flex items-center gap-1.5 font-medium text-ink-600 dark:text-ink-300"
+            className="inline-flex items-center gap-1.5 font-medium"
+            style={{ color: 'var(--color-text-secondary)' }}
           >
             <span
               aria-hidden
@@ -249,19 +250,25 @@ export const DailyViolationsChart = ({ data, height = 280 }: Props) => {
       {/* Tooltip */}
       {hoverIdx !== null && data[hoverIdx] && (
         <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-xl border border-ink-200 bg-white p-3 text-xs shadow-elev dark:border-ink-700 dark:bg-ink-900"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-xl p-3 text-xs shadow-elev"
           style={{
             left: `${((PAD_L + hoverIdx * groupWidth + groupWidth / 2) / VIEW_W) * 100}%`,
             top: 6,
+            background: '#ffffff',
+            border: '1px solid var(--color-brand-blue-line)',
           }}
         >
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+          <p
+            className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider"
+            style={{ color: 'var(--color-brand-blue)' }}
+          >
             {dayLabelLong(data[hoverIdx].date)}
           </p>
           {(Object.keys(KIND_META) as Kind[]).map((k) => (
             <div
               key={k}
-              className="flex items-center justify-between gap-6 py-0.5 text-ink-800 dark:text-ink-100"
+              className="flex items-center justify-between gap-6 py-0.5"
+              style={{ color: 'var(--color-text-primary)' }}
             >
               <span className="inline-flex items-center gap-1.5">
                 <span
@@ -279,7 +286,10 @@ export const DailyViolationsChart = ({ data, height = 280 }: Props) => {
       )}
 
       {isAllZero && (
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-ink-400">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
           No violations recorded in this window yet.
         </div>
       )}

@@ -276,16 +276,23 @@ export const DashboardPage = () => {
         <section className="mt-10">
           <div className="mb-4 flex items-end justify-between">
             <div>
-              <h2 className="text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
+              <h2
+                className="text-lg font-semibold tracking-tight"
+                style={{ color: 'var(--color-brand-blue-dark)' }}
+              >
                 Your transporters
               </h2>
-              <p className="text-sm text-ink-500 dark:text-ink-400">
+              <p
+                className="text-sm"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
                 Every upload here is filtered to just these transporters.
               </p>
             </div>
             <Link
               to="/master-fleet"
-              className="hidden text-sm font-medium text-ink-700 hover:text-ink-900 dark:text-ink-300 dark:hover:text-white sm:inline-flex sm:items-center sm:gap-1"
+              className="hidden text-sm font-semibold sm:inline-flex sm:items-center sm:gap-1 hover:underline"
+              style={{ color: 'var(--color-brand-accent)' }}
             >
               Open master sheet <ArrowUpRight size={14} />
             </Link>
@@ -302,61 +309,121 @@ export const DashboardPage = () => {
               {transporterBreakdown.map((t) => (
                 <div
                   key={t.name}
-                  className="surface group relative overflow-hidden rounded-2xl p-5 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-elev"
+                  className="card-base group relative overflow-hidden p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-elev"
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500 dark:text-ink-400">
+                      <p
+                        className="text-[11px] font-semibold uppercase tracking-[0.18em]"
+                        style={{ color: 'var(--color-brand-accent)' }}
+                      >
                         Transporter
                       </p>
-                      <h3 className="mt-1 truncate font-display text-xl font-semibold tracking-tight text-ink-900 dark:text-white">
+                      <h3
+                        className="mt-1 truncate font-display text-xl font-semibold tracking-tight"
+                        style={{ color: 'var(--color-brand-blue-dark)' }}
+                      >
                         {t.name}
                       </h3>
                     </div>
-                    <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink-900 text-white shadow-card dark:bg-white dark:text-ink-900">
+                    <span
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                      style={{
+                        background: 'var(--color-brand-blue)',
+                        color: '#ffffff',
+                      }}
+                    >
                       <Truck size={18} />
                     </span>
                   </div>
 
                   {t.total === 0 && t.driverListCount === 0 ? (
-                    <p className="mt-4 text-xs italic text-ink-500 dark:text-ink-400">
+                    <p
+                      className="mt-4 text-xs italic"
+                      style={{ color: 'var(--color-text-muted)' }}
+                    >
                       No data found for this transporter yet.
                     </p>
                   ) : (
                     <>
                       <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                        <div className="rounded-xl border border-ink-100 bg-white/80 p-2.5 dark:border-ink-800 dark:bg-ink-900/70">
-                          <p className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-red-700 dark:text-red-300">
+                        <div
+                          className="rounded-xl p-2.5"
+                          style={{
+                            background: 'var(--color-brand-accent-soft)',
+                            border: '1px solid var(--color-brand-accent-line)',
+                          }}
+                        >
+                          <p
+                            className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider"
+                            style={{ color: 'var(--color-brand-accent-dark)' }}
+                          >
                             <Gauge size={10} /> Speed
                           </p>
-                          <p className="mt-0.5 text-lg font-semibold text-ink-900 dark:text-white">
+                          <p
+                            className="mt-0.5 text-lg font-semibold"
+                            style={{ color: 'var(--color-brand-blue-dark)' }}
+                          >
                             {t.speedEvents}
                           </p>
                         </div>
-                        <div className="rounded-xl border border-ink-100 bg-white/80 p-2.5 dark:border-ink-800 dark:bg-ink-900/70">
-                          <p className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                        <div
+                          className="rounded-xl p-2.5"
+                          style={{
+                            background: 'var(--color-brand-blue-soft)',
+                            border: '1px solid var(--color-brand-blue-line)',
+                          }}
+                        >
+                          <p
+                            className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider"
+                            style={{ color: 'var(--color-brand-blue)' }}
+                          >
                             <Moon size={10} /> Nights
                           </p>
-                          <p className="mt-0.5 text-lg font-semibold text-ink-900 dark:text-white">
+                          <p
+                            className="mt-0.5 text-lg font-semibold"
+                            style={{ color: 'var(--color-brand-blue-dark)' }}
+                          >
                             {t.nightRows}
                           </p>
                         </div>
-                        <div className="rounded-xl border border-ink-100 bg-white/80 p-2.5 dark:border-ink-800 dark:bg-ink-900/70">
-                          <p className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                        <div
+                          className="rounded-xl p-2.5"
+                          style={{
+                            background: 'var(--color-brand-blue-soft)',
+                            border: '1px solid var(--color-brand-blue-line)',
+                          }}
+                        >
+                          <p
+                            className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider"
+                            style={{ color: 'var(--color-brand-blue)' }}
+                          >
                             <RouteIcon size={10} /> Cont.
                           </p>
-                          <p className="mt-0.5 text-lg font-semibold text-ink-900 dark:text-white">
+                          <p
+                            className="mt-0.5 text-lg font-semibold"
+                            style={{ color: 'var(--color-brand-blue-dark)' }}
+                          >
                             {t.continuousRows}
                           </p>
                         </div>
                       </div>
 
-                      <div className="mt-4 flex items-center justify-between border-t border-ink-100 pt-3 text-xs text-ink-500 dark:border-ink-800 dark:text-ink-400">
+                      <div
+                        className="mt-4 flex items-center justify-between pt-3 text-xs"
+                        style={{
+                          borderTop: '1px solid var(--color-brand-blue-line)',
+                          color: 'var(--color-text-muted)',
+                        }}
+                      >
                         <span className="inline-flex items-center gap-1">
                           <Users size={12} /> {t.driverListCount} in drivers list
                         </span>
                         <span>
-                          <span className="font-semibold text-ink-900 dark:text-white">
+                          <span
+                            className="font-semibold"
+                            style={{ color: 'var(--color-brand-accent-dark)' }}
+                          >
                             {t.total}
                           </span>{' '}
                           events
@@ -374,10 +441,13 @@ export const DashboardPage = () => {
       {isBoss && (
         <section className="mt-10">
           <div className="mb-4">
-            <h2 className="text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
+            <h2
+              className="text-lg font-semibold tracking-tight"
+              style={{ color: 'var(--color-brand-blue-dark)' }}
+            >
               Top offenders
             </h2>
-            <p className="text-sm text-ink-500 dark:text-ink-400">
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
               Ranked from unfiltered Speed, Nights and Continuous uploads —
               scored against the current threshold rules.
             </p>
@@ -388,33 +458,72 @@ export const DashboardPage = () => {
 
       {isBoss && (
         <section className="mt-10">
-          <div className="surface rounded-2xl p-5 sm:p-7">
+          <div className="card-base p-5 sm:p-7">
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex items-start gap-3">
-                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink-900 text-white dark:bg-white dark:text-ink-900">
+                <span
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background: 'var(--color-brand-blue)',
+                    color: '#ffffff',
+                  }}
+                >
                   <BarChart3 size={18} />
                 </span>
                 <div>
-                  <h2 className="text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
+                  <h2
+                    className="text-lg font-semibold tracking-tight"
+                    style={{ color: 'var(--color-brand-blue-dark)' }}
+                  >
                     Daily violations trend
                   </h2>
-                  <p className="text-sm text-ink-500 dark:text-ink-400">
+                  <p
+                    className="text-sm"
+                    style={{ color: 'var(--color-text-muted)' }}
+                  >
                     Last {DAILY_WINDOW} days · Speed, Nights and Continuous events
                     counted against your rule thresholds.
                   </p>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="rounded-full bg-red-50 px-2.5 py-1 font-semibold text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-800">
+                <span
+                  className="rounded-full px-2.5 py-1 font-semibold"
+                  style={{
+                    background: 'var(--color-brand-accent-soft)',
+                    color: 'var(--color-brand-accent-dark)',
+                    border: '1px solid var(--color-brand-accent-line)',
+                  }}
+                >
                   {analytics.totals.speed} speed
                 </span>
-                <span className="rounded-full bg-indigo-50 px-2.5 py-1 font-semibold text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:ring-indigo-800">
+                <span
+                  className="rounded-full px-2.5 py-1 font-semibold"
+                  style={{
+                    background: 'var(--color-brand-blue-soft)',
+                    color: 'var(--color-brand-blue-dark)',
+                    border: '1px solid var(--color-brand-blue-line)',
+                  }}
+                >
                   {analytics.totals.nights} nights
                 </span>
-                <span className="rounded-full bg-amber-50 px-2.5 py-1 font-semibold text-amber-800 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-800">
+                <span
+                  className="rounded-full px-2.5 py-1 font-semibold"
+                  style={{
+                    background: 'var(--color-brand-blue-soft)',
+                    color: 'var(--color-brand-blue-dark)',
+                    border: '1px solid var(--color-brand-blue-line)',
+                  }}
+                >
                   {analytics.totals.continuous} continuous
                 </span>
-                <span className="rounded-full bg-ink-900 px-2.5 py-1 font-semibold text-white dark:bg-white dark:text-ink-900">
+                <span
+                  className="rounded-full px-2.5 py-1 font-semibold"
+                  style={{
+                    background: 'var(--color-brand-blue)',
+                    color: '#ffffff',
+                  }}
+                >
                   {analyticsTotal} total
                 </span>
               </div>
@@ -437,17 +546,21 @@ export const DashboardPage = () => {
       <section className="mt-10">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
+            <h2
+              className="text-lg font-semibold tracking-tight"
+              style={{ color: 'var(--color-brand-blue-dark)' }}
+            >
               Recent uploads
             </h2>
-            <p className="text-sm text-ink-500 dark:text-ink-400">
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
               {hasBossView ? 'Latest reports submitted to the platform.' : 'Your latest submissions.'}
             </p>
           </div>
           {hasBossView && files.length > 0 && (
             <Link
               to="/violations"
-              className="hidden text-sm font-medium text-ink-700 hover:text-ink-900 dark:text-ink-300 dark:hover:text-white sm:inline-flex sm:items-center sm:gap-1"
+              className="hidden text-sm font-semibold sm:inline-flex sm:items-center sm:gap-1 hover:underline"
+              style={{ color: 'var(--color-brand-accent)' }}
             >
               View all <ArrowUpRight size={14} />
             </Link>
@@ -472,22 +585,39 @@ export const DashboardPage = () => {
             }
           />
         ) : (
-          <div className="surface overflow-hidden rounded-2xl">
-            <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+          <div className="card-base overflow-hidden">
+            <ul
+              className="divide-y"
+              style={{ borderColor: 'var(--color-brand-blue-line)' }}
+            >
               {recent.map((file) => (
                 <li
                   key={file.id}
                   className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+                  style={{ borderColor: 'var(--color-brand-blue-line)' }}
                 >
                   <div className="flex items-start gap-4 min-w-0">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200">
+                    <div
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                      style={{
+                        background: 'var(--color-brand-blue-soft)',
+                        color: 'var(--color-brand-blue)',
+                        border: '1px solid var(--color-brand-blue-line)',
+                      }}
+                    >
                       <FileText size={18} />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-ink-900 dark:text-white">
+                      <p
+                        className="truncate text-sm font-semibold"
+                        style={{ color: 'var(--color-brand-blue-dark)' }}
+                      >
                         {file.title}
                       </p>
-                      <p className="mt-0.5 truncate text-xs text-ink-500 dark:text-ink-400">
+                      <p
+                        className="mt-0.5 truncate text-xs"
+                        style={{ color: 'var(--color-text-muted)' }}
+                      >
                         {formatDateTime(file.uploadDate)} · {file.uploaderName}
                       </p>
                     </div>
@@ -513,7 +643,10 @@ export const DashboardPage = () => {
 
       {hasBossView && files.length > 0 && (
         <section className="mt-10">
-          <h2 className="mb-4 text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
+          <h2
+            className="mb-4 text-lg font-semibold tracking-tight"
+            style={{ color: 'var(--color-brand-blue-dark)' }}
+          >
             File summaries
           </h2>
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -521,20 +654,35 @@ export const DashboardPage = () => {
               <Link
                 key={f.id}
                 to={`/violations/${f.id}`}
-                className="surface group rounded-2xl p-5 transition hover:-translate-y-0.5 hover:shadow-elev"
+                className="card-base group p-5 transition hover:-translate-y-0.5 hover:shadow-elev"
               >
                 <div className="flex items-center justify-between">
                   <Badge tone="neutral">{f.fileType.toUpperCase()}</Badge>
-                  <span className="text-[11px] text-ink-500 dark:text-ink-400">
+                  <span
+                    className="text-[11px]"
+                    style={{ color: 'var(--color-text-muted)' }}
+                  >
                     {formatDate(f.uploadDate)}
                   </span>
                 </div>
-                <p className="mt-4 line-clamp-2 text-base font-semibold text-ink-900 dark:text-white">
+                <p
+                  className="mt-4 line-clamp-2 text-base font-semibold"
+                  style={{ color: 'var(--color-brand-blue-dark)' }}
+                >
                   {f.title}
                 </p>
-                <div className="mt-4 flex items-center justify-between border-t border-ink-100 pt-4 text-xs text-ink-500 dark:border-ink-800 dark:text-ink-400">
+                <div
+                  className="mt-4 flex items-center justify-between pt-4 text-xs"
+                  style={{
+                    borderTop: '1px solid var(--color-brand-blue-line)',
+                    color: 'var(--color-text-muted)',
+                  }}
+                >
                   <span>{f.rowCount} records</span>
-                  <span className="inline-flex items-center gap-1 text-ink-700 group-hover:text-ink-900 dark:text-ink-300 dark:group-hover:text-white">
+                  <span
+                    className="inline-flex items-center gap-1 font-semibold"
+                    style={{ color: 'var(--color-brand-accent)' }}
+                  >
                     View details <ArrowRight size={13} />
                   </span>
                 </div>

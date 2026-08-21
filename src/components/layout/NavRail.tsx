@@ -82,8 +82,12 @@ export const NavRail = () => {
   return (
     <aside
       style={{
-        background: 'var(--color-bg-card)',
-        borderRight: '1px solid var(--color-brand-navy-line)',
+        // Whole sidebar is one continuous primary-blue gradient, top → bottom.
+        // Deepest at the top (behind the logo), easing to a lighter brand blue
+        // near the bottom. No seams — logo header and nav body read as one panel.
+        background:
+          'linear-gradient(180deg, #2a3a72 0%, #34488c 14%, #3e55a5 36%, #4966b6 62%, #566fbb 85%, #5f78bf 100%)',
+        borderRight: '1px solid var(--color-brand-blue-dark)',
       }}
       className={cn(
         'sticky top-0 hidden h-screen shrink-0 flex-col lg:flex transition-all duration-300',
@@ -92,15 +96,25 @@ export const NavRail = () => {
     >
       {/* ── Header ──────────────────────────────────────────── */}
       <div
-        style={{ borderBottom: '1px solid var(--color-brand-navy-line)' }}
+        style={{
+          borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+        }}
         className="flex h-16 shrink-0 items-center justify-between px-4"
       >
-        {collapsed ? <Logo withText={false} /> : <Logo />}
+        {collapsed ? (
+          <Logo withText={false} variant="gradient" />
+        ) : (
+          <Logo variant="gradient" />
+        )}
         <button
           onClick={() => setCollapsed((c) => !c)}
           aria-label="Toggle navigation"
-          style={{ color: 'var(--color-text-muted)' }}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition hover:bg-black/5"
+          style={{
+            color: '#ffffff',
+            background: 'rgba(255, 255, 255, 0.12)',
+            border: '1px solid rgba(255, 255, 255, 0.22)',
+          }}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition hover:!bg-white/25"
         >
           {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
         </button>
@@ -131,40 +145,46 @@ export const NavRail = () => {
       {/* ── Sign-out footer ─────────────────────────────────── */}
       <div
         className="shrink-0 p-3"
-        style={{ borderTop: '1px solid var(--color-brand-navy-line)' }}
+        style={{ borderTop: '1px solid rgba(255, 255, 255, 0.14)' }}
       >
         <button
           type="button"
           onClick={onSignOut}
           title={collapsed ? 'Sign out' : undefined}
           className={cn(
-            'flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition',
+            'nav-signout flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition',
             collapsed && 'justify-center px-2',
           )}
-          style={{
-            background: 'var(--color-brand-red)',
-            color: '#ffffff',
-            boxShadow: '0 4px 12px rgba(220, 53, 69, 0.25)',
-          }}
         >
           <LogOut size={16} className="shrink-0" />
           {!collapsed && <span>Sign out</span>}
         </button>
       </div>
 
-      {/* Scoped active/idle nav-link styles */}
+      {/* Scoped active/idle nav-link styles — tuned for the blue panel */}
       <style>{`
         .nav-link-idle {
-          color: var(--color-text-primary);
+          color: rgba(255, 255, 255, 0.82);
           background: transparent;
         }
         .nav-link-idle:hover {
-          background: rgba(11, 18, 32, 0.05);
+          background: rgba(255, 255, 255, 0.14);
+          color: #ffffff;
         }
         .nav-link-active {
+          color: var(--color-brand-blue-dark);
+          background: #ffffff;
+          box-shadow: 0 6px 18px rgba(15, 20, 40, 0.22);
+          font-weight: 600;
+        }
+        .nav-signout {
           color: #ffffff;
+          background: rgba(255, 255, 255, 0.10);
+          border: 1px solid rgba(255, 255, 255, 0.24);
+        }
+        .nav-signout:hover {
           background: var(--color-brand-red);
-          box-shadow: 0 4px 12px rgba(220, 53, 69, 0.25);
+          border-color: var(--color-brand-red);
         }
       `}</style>
     </aside>

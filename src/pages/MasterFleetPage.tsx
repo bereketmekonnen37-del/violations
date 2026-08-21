@@ -50,16 +50,16 @@ const formatThreshold = (seconds: number): string => {
 };
 
 const PODIUM_ICONS = [Crown, Trophy, Medal];
-// Solid accent tones for the rank pip only — no more gradient card washes.
+// Rank-pip tones — gold (accent orange) → deep blue → soft orange, all on-brand.
 const PODIUM_PIP_STYLES = [
-  'bg-amber-100 text-amber-800 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30',
-  'bg-slate-100 text-slate-800 ring-slate-200 dark:bg-slate-500/15 dark:text-slate-200 dark:ring-slate-500/30',
-  'bg-orange-100 text-orange-800 ring-orange-200 dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/30',
+  'bg-brand-orange-soft text-brand-orange-dark ring-brand-orange-line',
+  'bg-brand-blue-soft text-brand-blue-dark ring-brand-blue-line',
+  'bg-brand-orange-soft/60 text-brand-orange-dark ring-brand-orange-line',
 ];
 const PODIUM_BAR_STYLES = [
-  'bg-amber-400',
-  'bg-slate-400',
-  'bg-orange-400',
+  'bg-brand-orange',
+  'bg-brand-blue',
+  'bg-brand-orange/60',
 ];
 
 const TopOffenderCard = ({
@@ -752,8 +752,8 @@ const FilteredEventsPanel = ({
                 className={
                   'ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ' +
                   (active
-                    ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-900'
-                    : 'bg-ink-200/70 text-ink-600 dark:bg-ink-800 dark:text-ink-300')
+                    ? 'bg-brand-blue text-white'
+                    : 'bg-brand-blue-soft text-brand-blue-dark')
                 }
               >
                 {counts[t]}
@@ -1149,11 +1149,11 @@ const DateFilterPopover = ({
         className={
           'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium outline-none transition ' +
           (hasSelection
-            ? 'border-ink-900 bg-ink-900 text-white hover:bg-ink-800 dark:border-white dark:bg-white dark:text-ink-900 dark:hover:bg-ink-100'
-            : 'border-ink-200 bg-white text-ink-800 hover:border-ink-300 focus:border-ink-400 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-100 dark:hover:border-ink-600')
+            ? 'border-brand-blue bg-brand-blue text-white hover:bg-brand-blue-hover'
+            : 'border-brand-blue-line bg-white text-brand-blue-dark hover:border-brand-blue focus:border-brand-blue')
         }
       >
-        <CalendarDays size={14} className={hasSelection ? '' : 'text-ink-500 dark:text-ink-400'} />
+        <CalendarDays size={14} className={hasSelection ? '' : 'text-brand-blue'} />
         {buttonLabel}
         <ChevronDown size={13} className="opacity-70" />
       </button>

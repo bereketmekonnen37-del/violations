@@ -43,7 +43,8 @@ export const Modal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/40 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+      style={{ background: 'rgba(15, 20, 40, 0.45)' }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -53,19 +54,35 @@ export const Modal = ({
         role="dialog"
         aria-modal="true"
         className={
-          'relative flex max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-elev dark:border-ink-800 dark:bg-ink-950 ' +
+          'relative flex max-h-[90vh] flex-col overflow-hidden rounded-2xl shadow-elev ' +
           widthClassName
         }
+        style={{
+          background: '#ffffff',
+          border: '1px solid var(--color-brand-blue-line)',
+        }}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-ink-100 px-6 py-4 dark:border-ink-800">
+        <header
+          className="flex items-start justify-between gap-4 px-6 py-4"
+          style={{
+            borderBottom: '1px solid var(--color-brand-blue-line)',
+            background: 'var(--color-brand-blue-soft)',
+          }}
+        >
           <div className="min-w-0">
             {title && (
-              <h2 className="truncate font-display text-base font-semibold text-ink-900 dark:text-white">
+              <h2
+                className="truncate font-display text-base font-semibold"
+                style={{ color: 'var(--color-brand-blue-dark)' }}
+              >
                 {title}
               </h2>
             )}
             {subtitle && (
-              <p className="mt-0.5 truncate text-xs text-ink-500 dark:text-ink-400">
+              <p
+                className="mt-0.5 truncate text-xs"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
                 {subtitle}
               </p>
             )}
@@ -76,13 +93,25 @@ export const Modal = ({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-500 transition hover:bg-ink-100 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-white"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg transition"
+              style={{ color: 'var(--color-brand-blue)' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#ffffff';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
             >
               <X size={16} />
             </button>
           </div>
         </header>
-        <div className="flex-1 overflow-auto px-6 py-5">{children}</div>
+        <div
+          className="flex-1 overflow-auto px-6 py-5"
+          style={{ background: '#ffffff' }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

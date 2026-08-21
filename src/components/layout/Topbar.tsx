@@ -29,19 +29,18 @@ export const Topbar = () => {
     <header
       className="sticky top-0 z-30 flex h-16 items-center justify-between px-4 backdrop-blur sm:px-6"
       style={{
-        background: 'var(--color-bg-card)',
-        borderBottom: '1px solid var(--color-brand-navy-line)',
+        background: '#ffffff',
+        borderBottom: '1px solid var(--color-brand-blue-line)',
       }}
     >
       <div className="flex items-center gap-4">
         <div className="hidden lg:block">
           <p
-            className="text-[11px] font-medium uppercase tracking-wider"
-            style={{ color: 'var(--color-text-muted)' }}
+            className="text-[11px] font-semibold uppercase tracking-wider"
+            style={{ color: 'var(--color-brand-blue)' }}
           >
             Workspace
           </p>
-       
         </div>
       </div>
 
@@ -50,17 +49,25 @@ export const Topbar = () => {
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="inline-flex items-center gap-3 rounded-xl p-1.5 pr-3 transition hover:bg-black/5"
+            className="inline-flex items-center gap-3 rounded-xl p-1.5 pr-3 transition"
             style={{
-              background: '#ffffff',
-              border: '1px solid var(--color-brand-navy-line)',
-              color: 'var(--color-text-primary)',
+              background: 'var(--color-brand-blue)',
+              border: '1px solid var(--color-brand-blue-dark)',
+              color: '#ffffff',
+              boxShadow: '0 4px 14px rgba(62, 85, 165, 0.28)',
             }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background =
+                'var(--color-brand-blue-hover)')
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.background = 'var(--color-brand-blue)')
+            }
           >
             <Avatar name={user?.name ?? ''} src={photo} size={28} />
             <span
-              className="hidden text-sm font-medium sm:inline"
-              style={{ color: 'var(--color-text-primary)' }}
+              className="hidden text-sm font-semibold sm:inline"
+              style={{ color: '#ffffff' }}
             >
               {user?.name}
             </span>
@@ -70,19 +77,20 @@ export const Topbar = () => {
               className="absolute right-0 mt-2 w-60 origin-top-right overflow-hidden rounded-2xl shadow-elev"
               style={{
                 background: '#ffffff',
-                border: '1px solid var(--color-brand-navy-line)',
+                border: '1px solid var(--color-brand-blue-line)',
                 color: 'var(--color-text-primary)',
               }}
             >
               <div
                 className="px-4 py-3"
                 style={{
-                  borderBottom: '1px solid var(--color-brand-navy-line)',
+                  borderBottom: '1px solid var(--color-brand-blue-line)',
+                  background: 'var(--color-brand-blue-soft)',
                 }}
               >
                 <p
                   className="text-sm font-semibold"
-                  style={{ color: 'var(--color-text-primary)' }}
+                  style={{ color: 'var(--color-brand-blue-dark)' }}
                 >
                   {user?.name}
                 </p>
@@ -101,17 +109,21 @@ export const Topbar = () => {
                       setOpen(false);
                       navigate('/settings');
                     }}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-black/5"
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition hover:bg-[color:var(--color-brand-blue-soft)]"
                     style={{ color: 'var(--color-text-primary)' }}
                   >
-                    <UserIcon size={15} /> Profile & settings
+                    <UserIcon
+                      size={15}
+                      style={{ color: 'var(--color-brand-blue)' }}
+                    />{' '}
+                    Profile & settings
                   </button>
                 </li>
                 <li>
                   <button
                     type="button"
                     onClick={onLogout}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left"
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition hover:bg-[color:var(--color-red-light)]/40"
                     style={{ color: 'var(--color-brand-red)' }}
                   >
                     <LogOut size={15} /> Sign out

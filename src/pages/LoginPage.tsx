@@ -3,7 +3,6 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { Logo } from '../components/ui/Logo';
 
 interface FormValues {
@@ -43,32 +42,59 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="grid min-h-screen grid-cols-1 bg-white text-ink-900 dark:bg-ink-950 dark:text-ink-100 lg:grid-cols-[1.05fr_1fr]">
+    <div
+      className="grid min-h-screen grid-cols-1 lg:grid-cols-[1.05fr_1fr]"
+      style={{
+        background: 'var(--color-bg-page)',
+        color: 'var(--color-text-primary)',
+      }}
+    >
       {/* Left visual panel */}
-      <section className="relative hidden overflow-hidden border-r border-ink-100 dark:border-ink-800 lg:block">
+      <section
+        className="relative hidden overflow-hidden lg:block"
+        style={{ borderRight: '1px solid var(--color-brand-blue-line)' }}
+      >
         <img
           src="/loginimg.jpg"
           alt="Professional truck driver in cabin"
           className="absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-ink-950/45" />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(42, 58, 114, 0.72) 0%, rgba(15, 20, 40, 0.55) 100%)',
+          }}
+        />
         <div className="relative z-10 flex h-full flex-col justify-between p-10 text-white">
-          <Logo />
+          <Logo variant="primary" />
           <div className="max-w-md">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+            <p
+              className="text-[11px] font-semibold uppercase tracking-[0.18em]"
+              style={{ color: 'var(--color-brand-accent)' }}
+            >
               Fleetwatch Platform
             </p>
             <h1 className="mt-3 text-4xl font-semibold leading-[1.05] tracking-tight">
               Driver violations,
               <br />
-              under one calm command center.
+              <span style={{ color: 'var(--color-brand-accent)' }}>
+                under one calm command center.
+              </span>
             </h1>
-            <p className="mt-5 max-w-sm text-sm leading-relaxed text-white/75">
+            <p className="mt-5 max-w-sm text-sm leading-relaxed text-white/85">
               Upload daily reports, surface high-risk drivers, and keep every
               transporter accountable — without spreadsheets, email threads or
               guesswork.
             </p>
-            <div className="mt-8 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white/85 backdrop-blur">
+            <div
+              className="mt-8 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium backdrop-blur"
+              style={{
+                background: 'rgba(255, 255, 255, 0.14)',
+                border: '1px solid rgba(255, 255, 255, 0.24)',
+                color: '#ffffff',
+              }}
+            >
               <ShieldCheck size={14} /> Built for fleet operators
             </div>
           </div>
@@ -76,37 +102,50 @@ export const LoginPage = () => {
       </section>
 
       {/* Right form panel */}
-      <section className="flex min-h-screen flex-col">
+      <section
+        className="flex min-h-screen flex-col"
+        style={{ background: '#ffffff' }}
+      >
         <header className="flex items-center justify-between p-6 lg:px-10">
           <div className="lg:hidden">
-            <Logo />
-          </div>
-          <div className="ml-auto">
-            <ThemeToggle />
+            <Logo variant="primary" />
           </div>
         </header>
 
         <div className="flex flex-1 items-center justify-center px-6 pb-12 lg:px-10">
           <div className="w-full max-w-md">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500 dark:text-ink-400">
+            <p
+              className="text-[11px] font-semibold uppercase tracking-[0.18em]"
+              style={{ color: 'var(--color-brand-accent)' }}
+            >
               Welcome back
             </p>
-            <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight">
+            <h2
+              className="mt-2 font-display text-3xl font-semibold tracking-tight"
+              style={{ color: 'var(--color-brand-blue-dark)' }}
+            >
               Sign in to your fleet workspace
             </h2>
-            <p className="mt-2 text-sm text-ink-500 dark:text-ink-400">
+            <p
+              className="mt-2 text-sm"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
               Use your operator credentials to access dashboards and uploads.
             </p>
 
             <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-4">
               <div>
-                <label className="text-xs font-medium text-ink-700 dark:text-ink-300">
+                <label
+                  className="text-xs font-semibold"
+                  style={{ color: 'var(--color-brand-blue)' }}
+                >
                   Email
                 </label>
                 <div className="relative mt-1.5">
                   <Mail
                     size={16}
-                    className="pointer-events-none absolute left-3.5 top-3 text-ink-400"
+                    className="pointer-events-none absolute left-3.5 top-3"
+                    style={{ color: 'var(--color-brand-blue)' }}
                   />
                   <input
                     type="email"
@@ -117,18 +156,27 @@ export const LoginPage = () => {
                   />
                 </div>
                 {errors.email && (
-                  <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>
+                  <p
+                    className="mt-1 text-xs font-medium"
+                    style={{ color: 'var(--color-brand-accent-dark)' }}
+                  >
+                    {errors.email.message}
+                  </p>
                 )}
               </div>
 
               <div>
-                <label className="text-xs font-medium text-ink-700 dark:text-ink-300">
+                <label
+                  className="text-xs font-semibold"
+                  style={{ color: 'var(--color-brand-blue)' }}
+                >
                   Password
                 </label>
                 <div className="relative mt-1.5">
                   <Lock
                     size={16}
-                    className="pointer-events-none absolute left-3.5 top-3 text-ink-400"
+                    className="pointer-events-none absolute left-3.5 top-3"
+                    style={{ color: 'var(--color-brand-blue)' }}
                   />
                   <input
                     type={showPw ? 'text' : 'password'}
@@ -140,19 +188,32 @@ export const LoginPage = () => {
                   <button
                     type="button"
                     onClick={() => setShowPw((s) => !s)}
-                    className="absolute right-3 top-2.5 text-ink-400 hover:text-ink-700 dark:hover:text-ink-200"
+                    className="absolute right-3 top-2.5 transition"
+                    style={{ color: 'var(--color-brand-blue)' }}
                     aria-label="Toggle password visibility"
                   >
                     {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
                 {errors.password && (
-                  <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>
+                  <p
+                    className="mt-1 text-xs font-medium"
+                    style={{ color: 'var(--color-brand-accent-dark)' }}
+                  >
+                    {errors.password.message}
+                  </p>
                 )}
               </div>
 
               {error && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                <div
+                  className="rounded-xl px-3.5 py-2.5 text-xs font-medium"
+                  style={{
+                    background: 'var(--color-brand-accent-soft)',
+                    border: '1px solid var(--color-brand-accent-line)',
+                    color: 'var(--color-brand-accent-dark)',
+                  }}
+                >
                   {error}
                 </div>
               )}
@@ -164,7 +225,10 @@ export const LoginPage = () => {
             </form>
 
             <div className="mt-8">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500 dark:text-ink-400">
+              <p
+                className="text-[11px] font-semibold uppercase tracking-[0.18em]"
+                style={{ color: 'var(--color-brand-accent)' }}
+              >
                 Demo credentials
               </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -176,15 +240,40 @@ export const LoginPage = () => {
                       setValue('email', d.email);
                       setValue('password', d.password);
                     }}
-                    className="rounded-xl border border-ink-200 bg-white p-3 text-left transition hover:border-ink-900 hover:bg-ink-50 dark:border-ink-700 dark:bg-ink-900 dark:hover:border-white dark:hover:bg-ink-800"
+                    className="rounded-xl p-3 text-left transition"
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid var(--color-brand-blue-line)',
+                      color: 'var(--color-text-primary)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor =
+                        'var(--color-brand-blue)';
+                      e.currentTarget.style.background =
+                        'var(--color-brand-blue-soft)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor =
+                        'var(--color-brand-blue-line)';
+                      e.currentTarget.style.background = '#ffffff';
+                    }}
                   >
-                    <p className="text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+                    <p
+                      className="text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--color-brand-blue)' }}
+                    >
                       {d.label}
                     </p>
-                    <p className="mt-1 text-sm font-medium text-ink-900 dark:text-white">
+                    <p
+                      className="mt-1 text-sm font-medium"
+                      style={{ color: 'var(--color-brand-blue-dark)' }}
+                    >
                       {d.email}
                     </p>
-                    <p className="font-mono text-[11px] text-ink-500 dark:text-ink-400">
+                    <p
+                      className="font-mono text-[11px]"
+                      style={{ color: 'var(--color-text-muted)' }}
+                    >
                       {d.password}
                     </p>
                   </button>
@@ -194,7 +283,10 @@ export const LoginPage = () => {
           </div>
         </div>
 
-        <footer className="px-6 pb-6 text-center text-[11px] text-ink-500 dark:text-ink-400 lg:px-10">
+        <footer
+          className="px-6 pb-6 text-center text-[11px] lg:px-10"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
           © {new Date().getFullYear()} Fleetwatch. Internal preview build.
         </footer>
       </section>

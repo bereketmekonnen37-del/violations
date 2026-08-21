@@ -27,42 +27,85 @@ export const FilePickerGrid = ({ files, onSelect, icon: Icon = FileSpreadsheet }
           key={f.id}
           type="button"
           onClick={() => onSelect(f.id)}
-          className="surface group flex w-full flex-col rounded-2xl p-5 text-left transition hover:-translate-y-0.5 hover:shadow-elev"
+          className="card-base group flex w-full flex-col p-5 text-left transition hover:-translate-y-0.5 hover:shadow-elev"
         >
           <div className="flex items-start justify-between">
-            <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200">
+            <div
+              className="inline-flex h-11 w-11 items-center justify-center rounded-xl"
+              style={{
+                background: 'var(--color-brand-blue-soft)',
+                color: 'var(--color-brand-blue)',
+                border: '1px solid var(--color-brand-blue-line)',
+              }}
+            >
               <Icon size={18} />
             </div>
-            <Badge tone="neutral">{f.fileType.toUpperCase()}</Badge>
+            <Badge tone="info">{f.fileType.toUpperCase()}</Badge>
           </div>
 
-          <h3 className="mt-5 line-clamp-2 text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
+          <h3
+            className="mt-5 line-clamp-2 text-lg font-semibold tracking-tight"
+            style={{ color: 'var(--color-brand-blue-dark)' }}
+          >
             {f.title}
           </h3>
-          <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
+          <p
+            className="mt-1 text-xs"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
             Uploaded {formatDate(f.uploadDate)} · {f.uploaderName}
           </p>
 
           <dl className="mt-5 grid grid-cols-2 gap-3 text-xs">
-            <div className="rounded-xl border border-ink-100 bg-ink-50/60 p-3 dark:border-ink-800 dark:bg-ink-900">
-              <dt className="font-medium uppercase tracking-wider text-ink-500 dark:text-ink-400">
+            <div
+              className="rounded-xl p-3"
+              style={{
+                background: 'var(--color-brand-blue-soft)',
+                border: '1px solid var(--color-brand-blue-line)',
+              }}
+            >
+              <dt
+                className="font-semibold uppercase tracking-wider"
+                style={{ color: 'var(--color-brand-blue)' }}
+              >
                 Drivers
               </dt>
-              <dd className="mt-1 text-lg font-semibold text-ink-900 dark:text-white">
+              <dd
+                className="mt-1 text-lg font-semibold"
+                style={{ color: 'var(--color-brand-blue-dark)' }}
+              >
                 {f.driverCount}
               </dd>
             </div>
-            <div className="rounded-xl border border-ink-100 bg-ink-50/60 p-3 dark:border-ink-800 dark:bg-ink-900">
-              <dt className="font-medium uppercase tracking-wider text-ink-500 dark:text-ink-400">
+            <div
+              className="rounded-xl p-3"
+              style={{
+                background: 'var(--color-brand-blue-soft)',
+                border: '1px solid var(--color-brand-blue-line)',
+              }}
+            >
+              <dt
+                className="font-semibold uppercase tracking-wider"
+                style={{ color: 'var(--color-brand-blue)' }}
+              >
                 {f.rowLabel}
               </dt>
-              <dd className="mt-1 text-lg font-semibold text-ink-900 dark:text-white">
+              <dd
+                className="mt-1 text-lg font-semibold"
+                style={{ color: 'var(--color-brand-blue-dark)' }}
+              >
                 {f.rowCount.toLocaleString()}
               </dd>
             </div>
           </dl>
 
-          <div className="mt-5 flex items-center justify-between border-t border-ink-100 pt-4 text-sm font-medium text-ink-700 dark:border-ink-800 dark:text-ink-300">
+          <div
+            className="mt-5 flex items-center justify-between pt-4 text-sm font-semibold"
+            style={{
+              borderTop: '1px solid var(--color-brand-blue-line)',
+              color: 'var(--color-brand-accent)',
+            }}
+          >
             <span>Open file</span>
             <ArrowRight size={16} className="transition group-hover:translate-x-1" />
           </div>

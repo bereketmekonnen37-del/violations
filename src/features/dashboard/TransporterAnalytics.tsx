@@ -49,55 +49,99 @@ export const TransporterAnalytics = ({ rows }: Props) => {
 
   return (
     <section className="mt-10">
-      <div className="surface rounded-2xl p-5 sm:p-7">
+      <div className="card-base p-5 sm:p-7">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-start gap-3">
-            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink-900 text-white dark:bg-white dark:text-ink-900">
+            <span
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+              style={{
+                background: 'var(--color-brand-blue)',
+                color: '#ffffff',
+              }}
+            >
               <Truck size={18} />
             </span>
             <div>
-              <h2 className="text-lg font-semibold tracking-tight text-ink-900 dark:text-white">
+              <h2
+                className="text-lg font-semibold tracking-tight"
+                style={{ color: 'var(--color-brand-blue-dark)' }}
+              >
                 Transporter analytics
               </h2>
-              <p className="text-sm text-ink-500 dark:text-ink-400">
+              <p
+                className="text-sm"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
                 Violations grouped by transporter — highest total on top. Click any card to see every event one by one.
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="rounded-full bg-red-50 px-2.5 py-1 font-semibold text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-800">
+            <span
+              className="rounded-full px-2.5 py-1 font-semibold"
+              style={{
+                background: 'var(--color-brand-accent-soft)',
+                color: 'var(--color-brand-accent-dark)',
+                border: '1px solid var(--color-brand-accent-line)',
+              }}
+            >
               {totals.speed} speed
             </span>
-            <span className="rounded-full bg-indigo-50 px-2.5 py-1 font-semibold text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:ring-indigo-800">
+            <span
+              className="rounded-full px-2.5 py-1 font-semibold"
+              style={{
+                background: 'var(--color-brand-blue-soft)',
+                color: 'var(--color-brand-blue-dark)',
+                border: '1px solid var(--color-brand-blue-line)',
+              }}
+            >
               {totals.nights} nights
             </span>
-            <span className="rounded-full bg-amber-50 px-2.5 py-1 font-semibold text-amber-800 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-800">
+            <span
+              className="rounded-full px-2.5 py-1 font-semibold"
+              style={{
+                background: 'var(--color-brand-blue-soft)',
+                color: 'var(--color-brand-blue-dark)',
+                border: '1px solid var(--color-brand-blue-line)',
+              }}
+            >
               {totals.continuous} continuous
             </span>
-            <span className="rounded-full bg-ink-900 px-2.5 py-1 font-semibold text-white dark:bg-white dark:text-ink-900">
+            <span
+              className="rounded-full px-2.5 py-1 font-semibold"
+              style={{
+                background: 'var(--color-brand-blue)',
+                color: '#ffffff',
+              }}
+            >
               {totals.total} total
             </span>
           </div>
         </div>
 
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-ink-500 dark:text-ink-400">
+          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
             Showing {filtered.length} of {rows.length} transporters · {withData} have data
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="inline-flex items-center gap-2 text-xs font-medium text-ink-600 dark:text-ink-300">
+            <label
+              className="inline-flex items-center gap-2 text-xs font-medium"
+              style={{ color: 'var(--color-text-secondary)' }}
+            >
               <input
                 type="checkbox"
                 checked={onlyWithData}
                 onChange={(e) => setOnlyWithData(e.target.checked)}
-                className="h-3.5 w-3.5 accent-red-600"
+                className="h-3.5 w-3.5"
+                style={{ accentColor: 'var(--color-brand-blue)' }}
               />
               Only with violations
             </label>
             <div className="relative sm:w-64">
               <Search
                 size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2"
+                style={{ color: 'var(--color-brand-blue)' }}
               />
               <input
                 type="text"
@@ -111,7 +155,14 @@ export const TransporterAnalytics = ({ rows }: Props) => {
         </div>
 
         {filtered.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/60 px-4 py-8 text-center text-sm text-ink-500 dark:border-ink-800 dark:bg-ink-900/40 dark:text-ink-400">
+          <p
+            className="rounded-xl px-4 py-8 text-center text-sm"
+            style={{
+              background: 'var(--color-brand-blue-soft)',
+              border: '1px dashed var(--color-brand-blue-line)',
+              color: 'var(--color-text-muted)',
+            }}
+          >
             No transporters match your filters.
           </p>
         ) : (
@@ -140,38 +191,63 @@ const TransporterCard = ({ row, rank, highlighted }: CardProps) => {
   return (
     <Link
       to={`/transporters/${encodeTransporterSlug(row.name)}`}
-      className={
-        'group relative overflow-hidden rounded-2xl border p-4 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-elev ' +
-        (highlighted
-          ? 'border-red-200 bg-white dark:border-red-900/60 dark:bg-ink-900'
-          : 'border-ink-100 bg-white dark:border-ink-800 dark:bg-ink-900')
-      }
+      className="group relative overflow-hidden rounded-2xl p-4 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-elev"
+      style={{
+        background: '#ffffff',
+        border: `1px solid ${highlighted ? 'var(--color-brand-accent-line)' : 'var(--color-brand-blue-line)'}`,
+      }}
     >
       {highlighted && (
         <span
           aria-hidden
-          className="absolute inset-y-0 left-0 w-1 bg-red-500"
+          className="absolute inset-y-0 left-0 w-1"
+          style={{ background: 'var(--color-brand-accent)' }}
         />
       )}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-500 dark:text-ink-400">
+          <p
+            className="text-[10px] font-semibold uppercase tracking-[0.18em]"
+            style={{
+              color: highlighted
+                ? 'var(--color-brand-accent)'
+                : 'var(--color-brand-blue)',
+            }}
+          >
             #{rank} · {empty ? 'No data' : 'Transporter'}
           </p>
-          <h3 className="mt-0.5 truncate font-display text-base font-semibold tracking-tight text-ink-900 dark:text-white">
+          <h3
+            className="mt-0.5 truncate font-display text-base font-semibold tracking-tight"
+            style={{ color: 'var(--color-brand-blue-dark)' }}
+          >
             {row.name || 'Unknown'}
           </h3>
-          <p className="mt-0.5 text-[11px] text-ink-500 dark:text-ink-400">
+          <p
+            className="mt-0.5 text-[11px]"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
             {row.vidCount} VID{row.vidCount === 1 ? '' : 's'} seen
           </p>
         </div>
-        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ink-900 text-white dark:bg-white dark:text-ink-900">
+        <span
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+          style={{
+            background: 'var(--color-brand-blue)',
+            color: '#ffffff',
+          }}
+        >
           <Truck size={14} />
         </span>
       </div>
 
       {empty ? (
-        <p className="mt-4 rounded-lg bg-ink-50 px-3 py-3 text-center text-xs italic text-ink-500 dark:bg-ink-800 dark:text-ink-400">
+        <p
+          className="mt-4 rounded-lg px-3 py-3 text-center text-xs italic"
+          style={{
+            background: 'var(--color-brand-blue-soft)',
+            color: 'var(--color-text-muted)',
+          }}
+        >
           No data found
         </p>
       ) : (
@@ -180,35 +256,55 @@ const TransporterCard = ({ row, rank, highlighted }: CardProps) => {
             label="Speed"
             value={row.speed}
             icon={Gauge}
-            tone="text-red-700 dark:text-red-300"
+            bg="var(--color-brand-accent-soft)"
+            border="var(--color-brand-accent-line)"
+            color="var(--color-brand-accent-dark)"
           />
           <StatChip
             label="Nights"
             value={row.nights}
             icon={Moon}
-            tone="text-indigo-700 dark:text-indigo-300"
+            bg="var(--color-brand-blue-soft)"
+            border="var(--color-brand-blue-line)"
+            color="var(--color-brand-blue-dark)"
           />
           <StatChip
             label="Cont."
             value={row.continuous}
             icon={RouteIcon}
-            tone="text-amber-700 dark:text-amber-300"
+            bg="var(--color-brand-blue-soft)"
+            border="var(--color-brand-blue-line)"
+            color="var(--color-brand-blue-dark)"
           />
         </div>
       )}
 
-      <div className="mt-3 flex items-center justify-between border-t border-ink-100 pt-3 text-[11px] font-medium text-ink-500 dark:border-ink-800 dark:text-ink-400">
+      <div
+        className="mt-3 flex items-center justify-between pt-3 text-[11px] font-medium"
+        style={{
+          borderTop: '1px solid var(--color-brand-blue-line)',
+          color: 'var(--color-text-muted)',
+        }}
+      >
         <span>
           {empty ? (
             'Awaiting uploads'
           ) : (
             <>
-              <span className="font-semibold text-ink-900 dark:text-white">{row.total}</span>{' '}
+              <span
+                className="font-semibold"
+                style={{ color: 'var(--color-brand-blue-dark)' }}
+              >
+                {row.total}
+              </span>{' '}
               total violations
             </>
           )}
         </span>
-        <span className="inline-flex items-center gap-1 text-ink-700 group-hover:text-ink-900 dark:text-ink-300 dark:group-hover:text-white">
+        <span
+          className="inline-flex items-center gap-1 font-semibold"
+          style={{ color: 'var(--color-brand-accent)' }}
+        >
           Details <ArrowRight size={12} />
         </span>
       </div>
@@ -220,20 +316,26 @@ interface ChipProps {
   label: string;
   value: number;
   icon: typeof Gauge;
-  tone: string;
+  bg: string;
+  border: string;
+  color: string;
 }
 
-const StatChip = ({ label, value, icon: Icon, tone }: ChipProps) => (
-  <div className="rounded-xl border border-ink-100 bg-white/80 p-2 dark:border-ink-800 dark:bg-ink-900/70">
+const StatChip = ({ label, value, icon: Icon, bg, border, color }: ChipProps) => (
+  <div
+    className="rounded-xl p-2"
+    style={{ background: bg, border: `1px solid ${border}` }}
+  >
     <p
-      className={
-        'inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider ' +
-        tone
-      }
+      className="inline-flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider"
+      style={{ color }}
     >
       <Icon size={10} /> {label}
     </p>
-    <p className="mt-0.5 text-base font-semibold text-ink-900 dark:text-white">
+    <p
+      className="mt-0.5 text-base font-semibold"
+      style={{ color: 'var(--color-brand-blue-dark)' }}
+    >
       {value}
     </p>
   </div>

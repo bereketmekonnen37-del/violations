@@ -20,8 +20,13 @@ export const Avatar = ({ name, src, size = 36, className = '' }: Props) => {
   }
   return (
     <div
-      className={`inline-flex items-center justify-center rounded-full bg-ink-900 text-[12px] font-semibold uppercase text-white dark:bg-white dark:text-ink-900 ${className}`}
-      style={{ width: size, height: size }}
+      className={`inline-flex items-center justify-center rounded-full text-[12px] font-semibold uppercase ${className}`}
+      style={{
+        width: size,
+        height: size,
+        background: 'var(--color-brand-blue)',
+        color: '#ffffff',
+      }}
       aria-hidden
     >
       {initials(name) || '?'}

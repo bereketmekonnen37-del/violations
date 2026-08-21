@@ -55,8 +55,11 @@ export const MobileNav = () => {
     <nav
       className="fixed inset-x-0 bottom-0 z-40 backdrop-blur lg:hidden"
       style={{
-        background: 'var(--color-bg-card)',
-        borderTop: '1px solid var(--color-brand-navy-line)',
+        // Same secondary wash as the sidebar body — orange hint at the
+        // bottom edge, dissolving to white toward the top of the strip.
+        background:
+          'linear-gradient(to top, rgba(244, 130, 33, 0.14) 0%, rgba(244, 130, 33, 0.06) 40%, rgba(255, 255, 255, 0) 100%), #ffffff',
+        borderTop: '1px solid var(--color-brand-blue-line)',
       }}
     >
       <ul className="no-scrollbar flex gap-1 overflow-x-auto px-2 py-2">
@@ -80,13 +83,17 @@ export const MobileNav = () => {
       </ul>
       <style>{`
         .mobile-nav-idle {
-          color: var(--color-text-primary);
+          color: var(--color-text-secondary);
           background: transparent;
+        }
+        .mobile-nav-idle:hover {
+          color: var(--color-brand-blue);
+          background: var(--color-brand-blue-soft);
         }
         .mobile-nav-active {
           color: #ffffff;
-          background: var(--color-brand-red);
-          box-shadow: 0 4px 12px rgba(220, 53, 69, 0.25);
+          background: var(--color-brand-blue);
+          box-shadow: 0 4px 12px rgba(62, 85, 165, 0.28);
         }
       `}</style>
     </nav>
