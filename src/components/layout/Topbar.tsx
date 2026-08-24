@@ -45,6 +45,60 @@ export const Topbar = () => {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* <div
+          role="group"
+          aria-label="Timestamp mode"
+          className="inline-flex items-center overflow-hidden rounded-xl text-[11px] font-semibold"
+          style={{
+            border: '1px solid var(--color-brand-blue-line)',
+            background: '#ffffff',
+          }}
+        >
+          <span
+            className="inline-flex items-center gap-1 px-2.5 py-1.5"
+            style={{ color: 'var(--color-brand-blue)' }}
+            title="Which clock the app should show"
+          >
+            <Clock size={12} /> Time
+          </span>
+          <button
+            type="button"
+            onClick={() => dispatch(setTimeMode('default'))}
+            aria-pressed={timeMode === 'default'}
+            className="px-3 py-1.5 transition"
+            style={{
+              background:
+                timeMode === 'default'
+                  ? 'var(--color-brand-blue)'
+                  : 'transparent',
+              color:
+                timeMode === 'default'
+                  ? '#ffffff'
+                  : 'var(--color-brand-blue-dark)',
+            }}
+          >
+            Default
+          </button>
+          <button
+            type="button"
+            onClick={() => dispatch(setTimeMode('ethiopian'))}
+            aria-pressed={timeMode === 'ethiopian'}
+            className="px-3 py-1.5 transition"
+            style={{
+              background:
+                timeMode === 'ethiopian'
+                  ? 'var(--color-brand-blue)'
+                  : 'transparent',
+              color:
+                timeMode === 'ethiopian'
+                  ? '#ffffff'
+                  : 'var(--color-brand-blue-dark)',
+              borderLeft: '1px solid var(--color-brand-blue-line)',
+            }}
+          >
+            Ethiopian
+          </button>
+        </div> */}
         <div className="relative" ref={menuRef}>
           <button
             type="button"

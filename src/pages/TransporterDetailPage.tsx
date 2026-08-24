@@ -23,6 +23,12 @@ import type {
 import { decodeTransporterSlug } from '../lib/transporterAnalytics';
 import { filterFilesByTransporter } from '../lib/transporterScope';
 import { useUserScope } from '../hooks/useUserScope';
+import {
+  businessDayKey,
+  displayTime,
+  formatBusinessDay,
+} from '../lib/ethiopianTime';
+import type { TimeMode } from '../features/timeMode/timeModeSlice';
 
 type EventTab = 'speed' | 'nights' | 'continuous';
 
@@ -49,6 +55,7 @@ export const TransporterDetailPage = () => {
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
   );
+  const timeMode = useAppSelector((s) => s.timeMode.mode);
   const { isTransporterStaff, matchesTransporter } = useUserScope();
 
   const speedFiles = useMemo(
@@ -196,9 +203,15 @@ export const TransporterDetailPage = () => {
             })}
           </div>
 
-          {tab === 'speed' && <SpeedList events={scoped.speed} />}
-          {tab === 'nights' && <NightList events={scoped.nights} />}
-          {tab === 'continuous' && <ContinuousList events={scoped.continuous} />}
+          {tab === 'speed' && (
+            <SpeedList events={scoped.speed} timeMode={timeMode} />
+          )}
+          {tab === 'nights' && (
+            <NightList events={scoped.nights} timeMode={timeMode} />
+          )}
+          {tab === 'continuous' && (
+            <ContinuousList events={scoped.continuous} timeMode={timeMode} />
+          )}
         </section>
       )}
     </div>
@@ -214,6 +227,7 @@ const RowShell = ({
   duration,
   allowedVid,
   allowedLocation,
+  timeMode,
   children,
 }: {
   index: number;
@@ -224,6 +238,7 @@ const RowShell = ({
   duration: string;
   allowedVid?: boolean;
   allowedLocation?: boolean;
+  timeMode: TimeMode;
   children?: React.ReactNode;
 }) => (
   <li
@@ -264,111 +279,294 @@ const RowShell = ({
     <div className="grid grid-cols-1 gap-1 text-xs text-ink-600 dark:text-ink-300 sm:grid-cols-2">
       <span>
         <span className="font-semibold text-ink-500 dark:text-ink-400">Time A: </span>
-        <span className="font-mono text-ink-800 dark:text-ink-100">{timeA || '—'}</span>
+        <span className="font-mono text-ink-800 dark:text-ink-100">
+          {timeA ? displayTime(timeA, timeMode) : '—'}
+        </span>
       </span>
       <span>
         <span className="font-semibold text-ink-500 dark:text-ink-400">Time B: </span>
-        <span className="font-mono text-ink-800 dark:text-ink-100">{timeB || '—'}</span>
+        <span className="font-mono text-ink-800 dark:text-ink-100">
+          {timeB ? displayTime(timeB, timeMode) : '—'}
+        </span>
       </span>
     </div>
     {children}
   </li>
 );
 
-const SpeedList = ({ events }: { events: FilteredSpeedEvent[] }) =>
-  events.length === 0 ? (
-    <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/60 px-4 py-8 text-center text-sm text-ink-500 dark:border-ink-800 dark:bg-ink-900/40 dark:text-ink-400">
-      No speed events for this transporter.
-    </p>
-  ) : (
-    <ul className="space-y-3">
-      {events.map((e, i) => (
-        <RowShell
-          key={e.id}
-          index={i}
-          vid={e.vid}
-          driverName={e.driverName}
-          timeA={e.start}
-          timeB={e.end}
-          duration={e.duration}
-          allowedVid={e.allowedVid}
-          allowedLocation={e.allowedLocation}
+const PositionAB = ({
+  positionA,
+  positionB,
+  matchedA,
+  matchedB,
+}: {
+  positionA: string;
+  positionB: string;
+  matchedA: boolean;
+  matchedB: boolean;
+}) => {
+  const row = (label: 'A' | 'B', value: string, matched: boolean) => (
+    <div className="flex items-start gap-1.5">
+      <span className="mt-0.5 shrink-0 rounded-md bg-ink-100 px-1 font-mono text-[10px] font-semibold text-ink-600 dark:bg-ink-800 dark:text-ink-300">
+        {label}
+      </span>
+      {value ? (
+        <span
+          className={
+            matched
+              ? 'font-semibold text-red-800 dark:text-red-200'
+              : 'text-ink-800 dark:text-ink-100'
+          }
         >
-          <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-ink-600 dark:text-ink-300 sm:grid-cols-2">
-            <span>
-              <span className="font-semibold text-ink-500 dark:text-ink-400">Top speed: </span>
-              <span className="text-ink-800 dark:text-ink-100">{e.topSpeed || '—'}</span>
-            </span>
-            <span className="min-w-0">
-              <span className="font-semibold text-ink-500 dark:text-ink-400">Position: </span>
-              <span className="text-ink-800 dark:text-ink-100">
-                {e.overspeedPosition || '—'}
-              </span>
-            </span>
-          </div>
-        </RowShell>
-      ))}
-    </ul>
+          {value}
+        </span>
+      ) : (
+        <span className="text-ink-400">—</span>
+      )}
+    </div>
   );
+  return (
+    <div className="mt-2 flex flex-col gap-1 text-xs text-ink-600 dark:text-ink-300">
+      {row('A', positionA, matchedA)}
+      {row('B', positionB, matchedB)}
+    </div>
+  );
+};
 
-const NightList = ({ events }: { events: FilteredNightEvent[] }) =>
-  events.length === 0 ? (
-    <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/60 px-4 py-8 text-center text-sm text-ink-500 dark:border-ink-800 dark:bg-ink-900/40 dark:text-ink-400">
-      No night events for this transporter.
-    </p>
-  ) : (
-    <ul className="space-y-3">
-      {events.map((e, i) => (
-        <RowShell
-          key={e.id}
-          index={i}
-          vid={e.vid}
-          driverName={e.driverName}
-          timeA={e.timeA}
-          timeB={e.timeB}
-          duration={e.duration}
-          allowedVid={e.allowedVid}
-          allowedLocation={e.allowedLocation}
-        >
-          <div className="mt-2 text-xs text-ink-600 dark:text-ink-300">
-            <span className="font-semibold text-ink-500 dark:text-ink-400">Position: </span>
-            <span className="text-ink-800 dark:text-ink-100">{e.position || '—'}</span>
-          </div>
-        </RowShell>
-      ))}
-    </ul>
-  );
+const DayGroupHeader = ({ dateKey, count }: { dateKey: string; count: number }) => (
+  <li className="sticky top-0 z-10 -mx-1 flex items-center justify-between rounded-lg bg-ink-900/95 px-3 py-2 text-xs font-semibold text-white shadow-card backdrop-blur dark:bg-white/95 dark:text-ink-900">
+    <span className="inline-flex items-center gap-2">
+      <span className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-80">
+        Day
+      </span>
+      {formatBusinessDay(dateKey)}
+    </span>
+    <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold dark:bg-ink-900/15">
+      {count} violation{count === 1 ? '' : 's'}
+    </span>
+  </li>
+);
 
-const ContinuousList = ({ events }: { events: FilteredContinuousEvent[] }) =>
-  events.length === 0 ? (
-    <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/60 px-4 py-8 text-center text-sm text-ink-500 dark:border-ink-800 dark:bg-ink-900/40 dark:text-ink-400">
-      No continuous events for this transporter.
-    </p>
-  ) : (
+/**
+ * Group flat events by business day (Ethiopian or default depending on the
+ * time mode) and hand back a stable, chronologically-sorted list of
+ * `{ dateKey, events }` sections. Events with no parseable date fall into
+ * a single trailing "Unknown date" bucket so the boss can still see them.
+ */
+const groupByDay = <T extends { timeA?: string; timeB?: string; start?: string; end?: string }>(
+  events: T[],
+  primary: (e: T) => string,
+  secondary: (e: T) => string,
+  mode: TimeMode,
+): Array<{ dateKey: string; events: T[] }> => {
+  const buckets = new Map<string, T[]>();
+  const order: string[] = [];
+  events.forEach((e) => {
+    const key = businessDayKey(primary(e), secondary(e), mode) ?? '__unknown';
+    if (!buckets.has(key)) {
+      buckets.set(key, []);
+      order.push(key);
+    }
+    buckets.get(key)!.push(e);
+  });
+  order.sort((a, b) => {
+    if (a === '__unknown') return 1;
+    if (b === '__unknown') return -1;
+    return b.localeCompare(a);
+  });
+  return order.map((dateKey) => ({
+    dateKey: dateKey === '__unknown' ? 'Unknown date' : dateKey,
+    events: buckets.get(dateKey)!,
+  }));
+};
+
+const SpeedList = ({
+  events,
+  timeMode,
+}: {
+  events: FilteredSpeedEvent[];
+  timeMode: TimeMode;
+}) => {
+  const groups = useMemo(
+    () => groupByDay(events, (e) => e.start, (e) => e.end, timeMode),
+    [events, timeMode],
+  );
+  if (events.length === 0) {
+    return (
+      <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/60 px-4 py-8 text-center text-sm text-ink-500 dark:border-ink-800 dark:bg-ink-900/40 dark:text-ink-400">
+        No speed events for this transporter.
+      </p>
+    );
+  }
+  let running = 0;
+  return (
     <ul className="space-y-3">
-      {events.map((e, i) => (
-        <RowShell
-          key={e.id}
-          index={i}
-          vid={e.vid}
-          driverName={e.driverName}
-          timeA={e.timeA}
-          timeB={e.timeB}
-          duration={e.duration}
-          allowedVid={e.allowedVid}
-          allowedLocation={e.allowedLocation}
-        >
-          <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-ink-600 dark:text-ink-300 sm:grid-cols-2">
-            <span>
-              <span className="font-semibold text-ink-500 dark:text-ink-400">Length: </span>
-              <span className="text-ink-800 dark:text-ink-100">{e.length || '—'}</span>
-            </span>
-            <span className="min-w-0">
-              <span className="font-semibold text-ink-500 dark:text-ink-400">Position: </span>
-              <span className="text-ink-800 dark:text-ink-100">{e.position || '—'}</span>
-            </span>
-          </div>
-        </RowShell>
+      {groups.map(({ dateKey, events: bucket }) => (
+        <div key={dateKey} className="space-y-3">
+          <DayGroupHeader
+            dateKey={dateKey === 'Unknown date' ? dateKey : dateKey}
+            count={bucket.length}
+          />
+          {bucket.map((e) => {
+            const i = running++;
+            return (
+              <RowShell
+                key={e.id}
+                index={i}
+                vid={e.vid}
+                driverName={e.driverName}
+                timeA={e.start}
+                timeB={e.end}
+                duration={e.duration}
+                allowedVid={e.allowedVid}
+                allowedLocation={e.allowedLocation}
+                timeMode={timeMode}
+              >
+                <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-ink-600 dark:text-ink-300 sm:grid-cols-2">
+                  <span>
+                    <span className="font-semibold text-ink-500 dark:text-ink-400">
+                      Top speed:{' '}
+                    </span>
+                    <span className="text-ink-800 dark:text-ink-100">
+                      {e.topSpeed || '—'}
+                    </span>
+                  </span>
+                  <span className="min-w-0">
+                    <span className="font-semibold text-ink-500 dark:text-ink-400">
+                      Position:{' '}
+                    </span>
+                    <span
+                      className={
+                        e.allowedLocation
+                          ? 'font-semibold text-red-800 dark:text-red-200'
+                          : 'text-ink-800 dark:text-ink-100'
+                      }
+                    >
+                      {e.overspeedPosition || '—'}
+                    </span>
+                  </span>
+                </div>
+              </RowShell>
+            );
+          })}
+        </div>
       ))}
     </ul>
   );
+};
+
+const NightList = ({
+  events,
+  timeMode,
+}: {
+  events: FilteredNightEvent[];
+  timeMode: TimeMode;
+}) => {
+  const groups = useMemo(
+    () => groupByDay(events, (e) => e.timeA, (e) => e.timeB, timeMode),
+    [events, timeMode],
+  );
+  if (events.length === 0) {
+    return (
+      <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/60 px-4 py-8 text-center text-sm text-ink-500 dark:border-ink-800 dark:bg-ink-900/40 dark:text-ink-400">
+        No night events for this transporter.
+      </p>
+    );
+  }
+  let running = 0;
+  return (
+    <ul className="space-y-3">
+      {groups.map(({ dateKey, events: bucket }) => (
+        <div key={dateKey} className="space-y-3">
+          <DayGroupHeader dateKey={dateKey} count={bucket.length} />
+          {bucket.map((e) => {
+            const i = running++;
+            return (
+              <RowShell
+                key={e.id}
+                index={i}
+                vid={e.vid}
+                driverName={e.driverName}
+                timeA={e.timeA}
+                timeB={e.timeB}
+                duration={e.duration}
+                allowedVid={e.allowedVid}
+                allowedLocation={e.allowedLocation}
+                timeMode={timeMode}
+              >
+                <PositionAB
+                  positionA={e.positionA}
+                  positionB={e.positionB}
+                  matchedA={e.allowedLocationA}
+                  matchedB={e.allowedLocationB}
+                />
+              </RowShell>
+            );
+          })}
+        </div>
+      ))}
+    </ul>
+  );
+};
+
+const ContinuousList = ({
+  events,
+  timeMode,
+}: {
+  events: FilteredContinuousEvent[];
+  timeMode: TimeMode;
+}) => {
+  const groups = useMemo(
+    () => groupByDay(events, (e) => e.timeA, (e) => e.timeB, timeMode),
+    [events, timeMode],
+  );
+  if (events.length === 0) {
+    return (
+      <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/60 px-4 py-8 text-center text-sm text-ink-500 dark:border-ink-800 dark:bg-ink-900/40 dark:text-ink-400">
+        No continuous events for this transporter.
+      </p>
+    );
+  }
+  let running = 0;
+  return (
+    <ul className="space-y-3">
+      {groups.map(({ dateKey, events: bucket }) => (
+        <div key={dateKey} className="space-y-3">
+          <DayGroupHeader dateKey={dateKey} count={bucket.length} />
+          {bucket.map((e) => {
+            const i = running++;
+            return (
+              <RowShell
+                key={e.id}
+                index={i}
+                vid={e.vid}
+                driverName={e.driverName}
+                timeA={e.timeA}
+                timeB={e.timeB}
+                duration={e.duration}
+                allowedVid={e.allowedVid}
+                allowedLocation={e.allowedLocation}
+                timeMode={timeMode}
+              >
+                <div className="mt-2 text-xs text-ink-600 dark:text-ink-300">
+                  <span className="font-semibold text-ink-500 dark:text-ink-400">
+                    Length:{' '}
+                  </span>
+                  <span className="text-ink-800 dark:text-ink-100">
+                    {e.length || '—'}
+                  </span>
+                </div>
+                <PositionAB
+                  positionA={e.positionA}
+                  positionB={e.positionB}
+                  matchedA={e.allowedLocationA}
+                  matchedB={e.allowedLocationB}
+                />
+              </RowShell>
+            );
+          })}
+        </div>
+      ))}
+    </ul>
+  );
+};

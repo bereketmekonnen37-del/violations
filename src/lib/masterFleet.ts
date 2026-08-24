@@ -92,6 +92,10 @@ export interface FilteredNightEvent {
   positionB: string;
   allowedVid: boolean;
   allowedLocation: boolean;
+  /** True when Position A specifically contained an allowed-location tag. */
+  allowedLocationA: boolean;
+  /** True when Position B specifically contained an allowed-location tag. */
+  allowedLocationB: boolean;
 }
 
 export interface FilteredContinuousEvent {
@@ -111,6 +115,10 @@ export interface FilteredContinuousEvent {
   positionB: string;
   allowedVid: boolean;
   allowedLocation: boolean;
+  /** True when Position A specifically contained an allowed-location tag. */
+  allowedLocationA: boolean;
+  /** True when Position B specifically contained an allowed-location tag. */
+  allowedLocationB: boolean;
 }
 
 export interface FilteredEvents {
@@ -388,9 +396,14 @@ export const collectFilteredEvents = ({
         if (Number.isFinite(seconds) && seconds >= thresholds.nights) {
           const evtKey = eventDateKey(row.timeA, row.timeB);
           const position = row.positionA || row.positionB || '';
-          const allowedLocation =
-            nightsTags.matchesPosition(row.positionA, evtKey) ||
-            nightsTags.matchesPosition(row.positionB, evtKey);
+          const allowedLocationA = nightsTags.matchesPosition(
+            row.positionA,
+            evtKey,
+          );
+          const allowedLocationB = nightsTags.matchesPosition(
+            row.positionB,
+            evtKey,
+          );
           nights.push({
             id: row.id,
             vid,
@@ -406,7 +419,9 @@ export const collectFilteredEvents = ({
             positionA: row.positionA,
             positionB: row.positionB,
             allowedVid: allowedNights.matches(vidKey, evtKey),
-            allowedLocation,
+            allowedLocation: allowedLocationA || allowedLocationB,
+            allowedLocationA,
+            allowedLocationB,
           });
         }
       });
@@ -425,9 +440,14 @@ export const collectFilteredEvents = ({
         if (Number.isFinite(seconds) && seconds >= thresholds.continuous) {
           const evtKey = eventDateKey(row.timeA, row.timeB);
           const position = row.positionB || row.positionA || '';
-          const allowedLocation =
-            contTags.matchesPosition(row.positionB, evtKey) ||
-            contTags.matchesPosition(row.positionA, evtKey);
+          const allowedLocationA = contTags.matchesPosition(
+            row.positionA,
+            evtKey,
+          );
+          const allowedLocationB = contTags.matchesPosition(
+            row.positionB,
+            evtKey,
+          );
           continuous.push({
             id: row.id,
             vid,
@@ -443,7 +463,9 @@ export const collectFilteredEvents = ({
             positionA: row.positionA,
             positionB: row.positionB,
             allowedVid: allowedCont.matches(vidKey, evtKey),
-            allowedLocation,
+            allowedLocation: allowedLocationA || allowedLocationB,
+            allowedLocationA,
+            allowedLocationB,
           });
         }
       });

@@ -22,6 +22,8 @@ import {
   toDateKey,
 } from './locationRules';
 import type { EventThresholds } from './masterFleet';
+import { businessDayKey } from './ethiopianTime';
+import type { TimeMode } from '../features/timeMode/timeModeSlice';
 
 const EMPTY_ALLOWED: AllowedVidLists = {
   speed: [],
@@ -69,6 +71,13 @@ interface AnalyticsInput {
   thresholds: EventThresholds;
   allowedVidsByType?: AllowedVidLists;
   allowedLocationsByType?: AllowedLocationLists;
+  /**
+   * Controls which calendar day a violation is attributed to. Default keeps
+   * the raw calendar date. 'ethiopian' shifts the timestamp by the ET offset
+   * and rolls 00:00–05:59 back into the previous business day so a single
+   * overnight shift stays as one day of activity.
+   */
+  timeMode?: TimeMode;
 }
 
 interface VioBucket {
@@ -183,6 +192,7 @@ export const computeDashboardAnalytics = ({
   thresholds,
   allowedVidsByType = EMPTY_ALLOWED,
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
+  timeMode = 'default',
 }: AnalyticsInput): AnalyticsResult => {
   const resolve = buildDriverProfileLookup(driverRecords);
   const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
@@ -195,16 +205,18 @@ export const computeDashboardAnalytics = ({
   const buckets = new Map<string, VioBucket>();
   const totals = { speed: 0, nights: 0, continuous: 0 };
 
-  const bumpDay = (date: Date, kind: ViolationKind) => {
-    const key = toDateKey(date);
-    let bucket = daily.get(key);
+  const bumpDay = (dateKey: string, kind: ViolationKind) => {
+    let bucket = daily.get(dateKey);
     if (!bucket) {
-      bucket = { date: key, speed: 0, nights: 0, continuous: 0 };
-      daily.set(key, bucket);
+      bucket = { date: dateKey, speed: 0, nights: 0, continuous: 0 };
+      daily.set(dateKey, bucket);
     }
     bucket[kind] += 1;
     totals[kind] += 1;
   };
+
+  const dayKeyFor = (primary: string, secondary: string): string | null =>
+    businessDayKey(primary, secondary, timeMode);
 
   speedFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
@@ -223,7 +235,8 @@ export const computeDashboardAnalytics = ({
           driver.transporter || driver.driverName || '',
           'speed',
         );
-        if (d) bumpDay(d, 'speed');
+        const bizKey = dayKeyFor(event.start, event.end);
+        if (bizKey) bumpDay(bizKey, 'speed');
       });
     });
   });
@@ -250,7 +263,8 @@ export const computeDashboardAnalytics = ({
           driver.transporter || driver.driverName || '',
           'nights',
         );
-        if (d) bumpDay(d, 'nights');
+        const bizKey = dayKeyFor(row.timeA, row.timeB);
+        if (bizKey) bumpDay(bizKey, 'nights');
       });
     });
   });
@@ -277,7 +291,8 @@ export const computeDashboardAnalytics = ({
           driver.transporter || driver.driverName || '',
           'continuous',
         );
-        if (d) bumpDay(d, 'continuous');
+        const bizKey = dayKeyFor(row.timeA, row.timeB);
+        if (bizKey) bumpDay(bizKey, 'continuous');
       });
     });
   });

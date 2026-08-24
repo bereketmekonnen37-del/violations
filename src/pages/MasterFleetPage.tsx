@@ -37,6 +37,7 @@ import {
 } from '../lib/masterFleet';
 import { filterFilesByTransporter } from '../lib/transporterScope';
 import { useUserScope } from '../hooks/useUserScope';
+import { displayTime } from '../lib/ethiopianTime';
 
 const formatThreshold = (seconds: number): string => {
   if (seconds % 3600 === 0) return `${seconds / 3600}h`;
@@ -159,6 +160,7 @@ export const MasterFleetPage = () => {
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
   );
+  const timeMode = useAppSelector((s) => s.timeMode.mode);
   const allowedLocationsTotal =
     allowedLocationsByType.speed.length +
     allowedLocationsByType.nights.length +
@@ -404,6 +406,7 @@ export const MasterFleetPage = () => {
             setQuery={setEventQuery}
             events={filteredEvents}
             thresholds={thresholds}
+            timeMode={timeMode}
           />
 
             </>
@@ -602,6 +605,61 @@ const matchesDateFilter = (
   return check(primary) || check(secondary);
 };
 
+/**
+ * Renders both Position A and Position B side-by-side. When one side matched
+ * an allowed-location rule, that side's row is highlighted so the boss can
+ * see exactly which endpoint of the trip triggered the allow — without this,
+ * a trip like "Diredawa → Djibouti" would look like a Djibouti event was
+ * wrongly whitelisted, because only the end position was visible.
+ */
+const PositionCell = ({
+  positionA,
+  positionB,
+  matchedA,
+  matchedB,
+}: {
+  positionA: string;
+  positionB: string;
+  matchedA: boolean;
+  matchedB: boolean;
+}) => {
+  const anyMatched = matchedA || matchedB;
+  const row = (label: 'A' | 'B', value: string, matched: boolean) => (
+    <div className="flex items-start gap-1.5">
+      <span className="mt-0.5 shrink-0 rounded-md bg-ink-100 px-1 font-mono text-[10px] font-semibold text-ink-600 dark:bg-ink-800 dark:text-ink-300">
+        {label}
+      </span>
+      {value ? (
+        <span
+          className={
+            matched
+              ? 'font-semibold text-red-800 dark:text-red-200'
+              : 'text-ink-800 dark:text-ink-100'
+          }
+        >
+          {value}
+        </span>
+      ) : (
+        <span className="text-ink-400">—</span>
+      )}
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-1.5">
+      {row('A', positionA, matchedA)}
+      {row('B', positionB, matchedB)}
+      {anyMatched && (
+        <span
+          title="This event's position matches an allowed location"
+          className="inline-flex w-fit items-center gap-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800"
+        >
+          <MapPin size={10} /> Allowed location · {matchedA && matchedB ? 'A & B' : matchedA ? 'A' : 'B'}
+        </span>
+      )}
+    </div>
+  );
+};
+
 interface FilteredEventsPanelProps {
   activeTab: EventTab;
   setActiveTab: (tab: EventTab) => void;
@@ -609,6 +667,7 @@ interface FilteredEventsPanelProps {
   setQuery: (q: string) => void;
   events: FilteredEvents;
   thresholds: EventThresholds;
+  timeMode: import('../features/timeMode/timeModeSlice').TimeMode;
 }
 
 const FilteredEventsPanel = ({
@@ -618,6 +677,7 @@ const FilteredEventsPanel = ({
   setQuery,
   events,
   thresholds,
+  timeMode,
 }: FilteredEventsPanelProps) => {
   const [monthValue, setMonthValue] = useState('');
   const [dayValue, setDayValue] = useState('');
@@ -828,10 +888,10 @@ const FilteredEventsPanel = ({
                       {e.transporter || <span className="text-ink-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
-                      {e.start}
+                      {displayTime(e.start, timeMode)}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
-                      {e.end}
+                      {displayTime(e.end, timeMode)}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
                       {e.duration}
@@ -913,30 +973,21 @@ const FilteredEventsPanel = ({
                       {e.transporter || <span className="text-ink-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
-                      {e.timeA}
+                      {displayTime(e.timeA, timeMode)}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
-                      {e.timeB}
+                      {displayTime(e.timeB, timeMode)}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
                       {e.duration}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-ink-700 dark:text-ink-200">
-                      <div className="flex flex-col gap-1">
-                        {e.position ? (
-                          <span>{e.position}</span>
-                        ) : (
-                          <span className="text-ink-400">—</span>
-                        )}
-                        {e.allowedLocation && (
-                          <span
-                            title="This event's position matches an allowed location"
-                            className="inline-flex w-fit items-center gap-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800"
-                          >
-                            <MapPin size={10} /> Allowed location
-                          </span>
-                        )}
-                      </div>
+                      <PositionCell
+                        positionA={e.positionA}
+                        positionB={e.positionB}
+                        matchedA={e.allowedLocationA}
+                        matchedB={e.allowedLocationB}
+                      />
                     </td>
                   </tr>
                 ))
@@ -996,10 +1047,10 @@ const FilteredEventsPanel = ({
                       {e.transporter || <span className="text-ink-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
-                      {e.timeA}
+                      {displayTime(e.timeA, timeMode)}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
-                      {e.timeB}
+                      {displayTime(e.timeB, timeMode)}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
                       {e.duration}
@@ -1008,21 +1059,12 @@ const FilteredEventsPanel = ({
                       {e.length || <span className="text-ink-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-ink-700 dark:text-ink-200">
-                      <div className="flex flex-col gap-1">
-                        {e.position ? (
-                          <span>{e.position}</span>
-                        ) : (
-                          <span className="text-ink-400">—</span>
-                        )}
-                        {e.allowedLocation && (
-                          <span
-                            title="This event's position matches an allowed location"
-                            className="inline-flex w-fit items-center gap-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800"
-                          >
-                            <MapPin size={10} /> Allowed location
-                          </span>
-                        )}
-                      </div>
+                      <PositionCell
+                        positionA={e.positionA}
+                        positionB={e.positionB}
+                        matchedA={e.allowedLocationA}
+                        matchedB={e.allowedLocationB}
+                      />
                     </td>
                   </tr>
                 ))
