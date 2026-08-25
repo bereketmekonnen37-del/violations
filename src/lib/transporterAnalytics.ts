@@ -16,6 +16,7 @@ import {
   normalizeVid,
 } from './locationRules';
 import type { EventThresholds } from './masterFleet';
+import { mergeNightRows } from './nightsMerger';
 
 const EMPTY_ALLOWED: AllowedVidLists = {
   speed: [],
@@ -186,6 +187,7 @@ export const computeTransporterAnalytics = ({
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
+        if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const evtKey = eventDateKey(event.start, event.end);
         if (speedTags.matchesBlob(event.overspeedPosition, evtKey)) return;
         if (allowedSpeed.matches(vidKey, evtKey)) return;
@@ -201,7 +203,8 @@ export const computeTransporterAnalytics = ({
       if (!b) return;
       const vidKey = normalizeVid(driver.vid);
       if (driver.vid) b.vids.add(vidKey);
-      driver.rows.forEach((row) => {
+      const merged = mergeNightRows(driver.rows);
+      merged.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.nights) return;
         const evtKey = eventDateKey(row.timeA, row.timeB);
@@ -227,6 +230,10 @@ export const computeTransporterAnalytics = ({
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.continuous) return;
+        const hasPosition =
+          Boolean(row.positionA && row.positionA.trim()) ||
+          Boolean(row.positionB && row.positionB.trim());
+        if (!hasPosition) return;
         const evtKey = eventDateKey(row.timeA, row.timeB);
         if (allowedCont.matches(vidKey, evtKey)) return;
         if (

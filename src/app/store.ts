@@ -23,7 +23,6 @@ import unfilteredContinuousReducer from '../features/unfilteredContinuous/unfilt
 import driversReducer from '../features/drivers/driversSlice';
 import rulesReducer from '../features/rules/rulesSlice';
 import staffUsersReducer from '../features/staffUsers/staffUsersSlice';
-import timeModeReducer from '../features/timeMode/timeModeSlice';
 
 const rootReducer = combineReducers({
   auth: authReducer,
@@ -36,7 +35,6 @@ const rootReducer = combineReducers({
   drivers: driversReducer,
   rules: rulesReducer,
   staffUsers: staffUsersReducer,
-  timeMode: timeModeReducer,
 });
 
 // Migration 2: `rules.allowedVids: string[]` became
@@ -193,7 +191,6 @@ const persistedReducer = persistReducer(
       'drivers',
       'rules',
       'staffUsers',
-      'timeMode',
     ],
     migrate: createMigrate(migrations, { debug: false }),
   },

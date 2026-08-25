@@ -8,6 +8,7 @@ import {
   Crown,
   Download,
   Gauge,
+  GitMerge,
   IdCard,
   Layers,
   MapPin,
@@ -37,7 +38,6 @@ import {
 } from '../lib/masterFleet';
 import { filterFilesByTransporter } from '../lib/transporterScope';
 import { useUserScope } from '../hooks/useUserScope';
-import { displayTime } from '../lib/ethiopianTime';
 
 const formatThreshold = (seconds: number): string => {
   if (seconds % 3600 === 0) return `${seconds / 3600}h`;
@@ -160,7 +160,6 @@ export const MasterFleetPage = () => {
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
   );
-  const timeMode = useAppSelector((s) => s.timeMode.mode);
   const allowedLocationsTotal =
     allowedLocationsByType.speed.length +
     allowedLocationsByType.nights.length +
@@ -406,7 +405,6 @@ export const MasterFleetPage = () => {
             setQuery={setEventQuery}
             events={filteredEvents}
             thresholds={thresholds}
-            timeMode={timeMode}
           />
 
             </>
@@ -489,7 +487,17 @@ const FullRankingTable = ({ rows, filtered }: FullRankingTableProps) => (
                     {rank}
                   </td>
                   <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
-                    {r.vid}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span>{r.vid}</span>
+                      {r.hasMergedNights && (
+                        <span
+                          title="Some of this VID's night events were merged into a single shift (18:00–06:00)"
+                          className="inline-flex items-center gap-1 rounded-full bg-brand-blue-soft px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue-dark ring-1 ring-brand-blue-line"
+                        >
+                          <GitMerge size={10} /> Merged
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -667,7 +675,6 @@ interface FilteredEventsPanelProps {
   setQuery: (q: string) => void;
   events: FilteredEvents;
   thresholds: EventThresholds;
-  timeMode: import('../features/timeMode/timeModeSlice').TimeMode;
 }
 
 const FilteredEventsPanel = ({
@@ -677,7 +684,6 @@ const FilteredEventsPanel = ({
   setQuery,
   events,
   thresholds,
-  timeMode,
 }: FilteredEventsPanelProps) => {
   const [monthValue, setMonthValue] = useState('');
   const [dayValue, setDayValue] = useState('');
@@ -888,10 +894,10 @@ const FilteredEventsPanel = ({
                       {e.transporter || <span className="text-ink-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
-                      {displayTime(e.start, timeMode)}
+                      {e.start}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
-                      {displayTime(e.end, timeMode)}
+                      {e.end}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
                       {e.duration}
@@ -959,6 +965,14 @@ const FilteredEventsPanel = ({
                     <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span>{e.vid}</span>
+                        {e.mergedCount > 1 && (
+                          <span
+                            title={`Merged ${e.mergedCount} night events from the same 18:00–06:00 shift`}
+                            className="inline-flex items-center gap-1 rounded-full bg-brand-blue-soft px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue-dark ring-1 ring-brand-blue-line"
+                          >
+                            <GitMerge size={10} /> Merged ×{e.mergedCount}
+                          </span>
+                        )}
                         {e.allowedVid && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-900/60 dark:text-red-100 dark:ring-red-800">
                             <ShieldCheck size={10} /> Allowed
@@ -973,10 +987,10 @@ const FilteredEventsPanel = ({
                       {e.transporter || <span className="text-ink-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
-                      {displayTime(e.timeA, timeMode)}
+                      {e.timeA}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
-                      {displayTime(e.timeB, timeMode)}
+                      {e.timeB}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
                       {e.duration}
@@ -1047,10 +1061,10 @@ const FilteredEventsPanel = ({
                       {e.transporter || <span className="text-ink-400">—</span>}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
-                      {displayTime(e.timeA, timeMode)}
+                      {e.timeA}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
-                      {displayTime(e.timeB, timeMode)}
+                      {e.timeB}
                     </td>
                     <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
                       {e.duration}

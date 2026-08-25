@@ -26,6 +26,7 @@ import {
   eventDateKey,
   normalizeVid,
 } from './locationRules';
+import { mergeNightRows } from './nightsMerger';
 
 const EMPTY_ALLOWED: AllowedVidLists = {
   speed: [],
@@ -53,6 +54,9 @@ export interface MasterFleetRow {
    *  location tag (Speed-only reporting; the count is already subtracted
    *  from `speed`). */
   speedInAllowedLocations: number;
+  /** At least one of this VID's night rows was merged (two or more raw
+   *  night events collapsed into one). Drives the "merged" badge in the UI. */
+  hasMergedNights: boolean;
 }
 
 export interface FilteredSpeedEvent {
@@ -96,6 +100,8 @@ export interface FilteredNightEvent {
   allowedLocationA: boolean;
   /** True when Position B specifically contained an allowed-location tag. */
   allowedLocationB: boolean;
+  /** Number of raw night rows this event represents (1 = not merged). */
+  mergedCount: number;
 }
 
 export interface FilteredContinuousEvent {
@@ -167,6 +173,7 @@ interface Bucket {
   nights: number;
   continuous: number;
   speedInAllowedLocations: number;
+  hasMergedNights: boolean;
 }
 
 const getBucket = (
@@ -188,6 +195,7 @@ const getBucket = (
       nights: 0,
       continuous: 0,
       speedInAllowedLocations: 0,
+      hasMergedNights: false,
     };
     buckets.set(vidKey, b);
   }
@@ -232,6 +240,9 @@ export const aggregateMasterFleet = ({
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
+        // Drop rows that carry no position — a duration with nowhere to point
+        // at isn't useful on the master sheet.
+        if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const evtKey = eventDateKey(event.start, event.end);
         if (allowedSpeed.matches(b.vidKey, evtKey)) return;
         if (speedTags.matchesBlob(event.overspeedPosition, evtKey)) {
@@ -252,7 +263,10 @@ export const aggregateMasterFleet = ({
         sourceTransporter(driver),
       );
       if (!b) return;
-      driver.rows.forEach((row) => {
+      // Collapse consecutive same-night rows for this VID into one before
+      // applying threshold / whitelist filters.
+      const merged = mergeNightRows(driver.rows);
+      merged.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.nights) return;
         const evtKey = eventDateKey(row.timeA, row.timeB);
@@ -264,6 +278,7 @@ export const aggregateMasterFleet = ({
           return;
         }
         b.nights += 1;
+        if (row.mergedCount > 1) b.hasMergedNights = true;
       });
     });
   });
@@ -280,6 +295,11 @@ export const aggregateMasterFleet = ({
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.continuous) return;
+        // Skip rows with no position on either endpoint.
+        const hasPosition =
+          Boolean(row.positionA && row.positionA.trim()) ||
+          Boolean(row.positionB && row.positionB.trim());
+        if (!hasPosition) return;
         const evtKey = eventDateKey(row.timeA, row.timeB);
         if (allowedCont.matches(b.vidKey, evtKey)) return;
         if (
@@ -321,6 +341,7 @@ export const aggregateMasterFleet = ({
       total,
       allowedVid: isAllowed,
       speedInAllowedLocations: b.speedInAllowedLocations,
+      hasMergedNights: b.hasMergedNights,
     });
   });
 
@@ -359,27 +380,27 @@ export const collectFilteredEvents = ({
       const transporter = profile.transporter || sourceTransporter(driver);
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
-        if (Number.isFinite(seconds) && seconds >= thresholds.speed) {
-          const evtKey = eventDateKey(event.start, event.end);
-          speed.push({
-            id: event.id,
-            vid,
-            driverName,
-            transporter,
-            period: driver.period,
-            start: event.start,
-            end: event.end,
-            duration: event.duration,
-            durationSeconds: seconds,
-            topSpeed: event.topSpeed,
-            overspeedPosition: event.overspeedPosition,
-            allowedVid: allowedSpeed.matches(vidKey, evtKey),
-            allowedLocation: speedTags.matchesBlob(
-              event.overspeedPosition,
-              evtKey,
-            ),
-          });
-        }
+        if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
+        if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
+        const evtKey = eventDateKey(event.start, event.end);
+        speed.push({
+          id: event.id,
+          vid,
+          driverName,
+          transporter,
+          period: driver.period,
+          start: event.start,
+          end: event.end,
+          duration: event.duration,
+          durationSeconds: seconds,
+          topSpeed: event.topSpeed,
+          overspeedPosition: event.overspeedPosition,
+          allowedVid: allowedSpeed.matches(vidKey, evtKey),
+          allowedLocation: speedTags.matchesBlob(
+            event.overspeedPosition,
+            evtKey,
+          ),
+        });
       });
     });
   });
@@ -391,39 +412,40 @@ export const collectFilteredEvents = ({
       const profile = resolve(vid);
       const driverName = profile.driverName || NOT_FOUND;
       const transporter = profile.transporter || sourceTransporter(driver);
-      driver.rows.forEach((row) => {
+      const merged = mergeNightRows(driver.rows);
+      merged.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (Number.isFinite(seconds) && seconds >= thresholds.nights) {
-          const evtKey = eventDateKey(row.timeA, row.timeB);
-          const position = row.positionA || row.positionB || '';
-          const allowedLocationA = nightsTags.matchesPosition(
-            row.positionA,
-            evtKey,
-          );
-          const allowedLocationB = nightsTags.matchesPosition(
-            row.positionB,
-            evtKey,
-          );
-          nights.push({
-            id: row.id,
-            vid,
-            driverName,
-            transporter,
-            period: driver.period,
-            timeA: row.timeA,
-            timeB: row.timeB,
-            duration: row.duration,
-            durationSeconds: seconds,
-            length: row.length,
-            position,
-            positionA: row.positionA,
-            positionB: row.positionB,
-            allowedVid: allowedNights.matches(vidKey, evtKey),
-            allowedLocation: allowedLocationA || allowedLocationB,
-            allowedLocationA,
-            allowedLocationB,
-          });
-        }
+        if (!Number.isFinite(seconds) || seconds < thresholds.nights) return;
+        const evtKey = eventDateKey(row.timeA, row.timeB);
+        const position = row.positionA || row.positionB || '';
+        const allowedLocationA = nightsTags.matchesPosition(
+          row.positionA,
+          evtKey,
+        );
+        const allowedLocationB = nightsTags.matchesPosition(
+          row.positionB,
+          evtKey,
+        );
+        nights.push({
+          id: row.id,
+          vid,
+          driverName,
+          transporter,
+          period: driver.period,
+          timeA: row.timeA,
+          timeB: row.timeB,
+          duration: row.duration,
+          durationSeconds: seconds,
+          length: row.length,
+          position,
+          positionA: row.positionA,
+          positionB: row.positionB,
+          allowedVid: allowedNights.matches(vidKey, evtKey),
+          allowedLocation: allowedLocationA || allowedLocationB,
+          allowedLocationA,
+          allowedLocationB,
+          mergedCount: row.mergedCount,
+        });
       });
     });
   });
@@ -437,37 +459,40 @@ export const collectFilteredEvents = ({
       const transporter = profile.transporter || sourceTransporter(driver);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (Number.isFinite(seconds) && seconds >= thresholds.continuous) {
-          const evtKey = eventDateKey(row.timeA, row.timeB);
-          const position = row.positionB || row.positionA || '';
-          const allowedLocationA = contTags.matchesPosition(
-            row.positionA,
-            evtKey,
-          );
-          const allowedLocationB = contTags.matchesPosition(
-            row.positionB,
-            evtKey,
-          );
-          continuous.push({
-            id: row.id,
-            vid,
-            driverName,
-            transporter,
-            period: driver.period,
-            timeA: row.timeA,
-            timeB: row.timeB,
-            duration: row.duration,
-            durationSeconds: seconds,
-            length: row.length,
-            position,
-            positionA: row.positionA,
-            positionB: row.positionB,
-            allowedVid: allowedCont.matches(vidKey, evtKey),
-            allowedLocation: allowedLocationA || allowedLocationB,
-            allowedLocationA,
-            allowedLocationB,
-          });
-        }
+        if (!Number.isFinite(seconds) || seconds < thresholds.continuous) return;
+        const hasPosition =
+          Boolean(row.positionA && row.positionA.trim()) ||
+          Boolean(row.positionB && row.positionB.trim());
+        if (!hasPosition) return;
+        const evtKey = eventDateKey(row.timeA, row.timeB);
+        const position = row.positionB || row.positionA || '';
+        const allowedLocationA = contTags.matchesPosition(
+          row.positionA,
+          evtKey,
+        );
+        const allowedLocationB = contTags.matchesPosition(
+          row.positionB,
+          evtKey,
+        );
+        continuous.push({
+          id: row.id,
+          vid,
+          driverName,
+          transporter,
+          period: driver.period,
+          timeA: row.timeA,
+          timeB: row.timeB,
+          duration: row.duration,
+          durationSeconds: seconds,
+          length: row.length,
+          position,
+          positionA: row.positionA,
+          positionB: row.positionB,
+          allowedVid: allowedCont.matches(vidKey, evtKey),
+          allowedLocation: allowedLocationA || allowedLocationB,
+          allowedLocationA,
+          allowedLocationB,
+        });
       });
     });
   });

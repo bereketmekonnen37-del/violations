@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Gauge,
+  GitMerge,
   IdCard,
   MapPin,
   Moon,
@@ -23,12 +24,21 @@ import type {
 import { decodeTransporterSlug } from '../lib/transporterAnalytics';
 import { filterFilesByTransporter } from '../lib/transporterScope';
 import { useUserScope } from '../hooks/useUserScope';
-import {
-  businessDayKey,
-  displayTime,
-  formatBusinessDay,
-} from '../lib/ethiopianTime';
-import type { TimeMode } from '../features/timeMode/timeModeSlice';
+import { eventDateKey } from '../lib/locationRules';
+
+const MONTH_LABELS_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** Format a "YYYY-MM-DD" bucket key into "Fri, Jun 5, 2026". */
+const formatBusinessDay = (key: string): string => {
+  const [y, mo, d] = key.split('-').map(Number);
+  if (!y || !mo || !d) return key;
+  const dt = new Date(Date.UTC(y, mo - 1, d, 12));
+  return `${WEEKDAY_LABELS[dt.getUTCDay()]}, ${MONTH_LABELS_SHORT[mo - 1]} ${d}, ${y}`;
+};
 
 type EventTab = 'speed' | 'nights' | 'continuous';
 
@@ -55,7 +65,6 @@ export const TransporterDetailPage = () => {
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
   );
-  const timeMode = useAppSelector((s) => s.timeMode.mode);
   const { isTransporterStaff, matchesTransporter } = useUserScope();
 
   const speedFiles = useMemo(
@@ -203,15 +212,9 @@ export const TransporterDetailPage = () => {
             })}
           </div>
 
-          {tab === 'speed' && (
-            <SpeedList events={scoped.speed} timeMode={timeMode} />
-          )}
-          {tab === 'nights' && (
-            <NightList events={scoped.nights} timeMode={timeMode} />
-          )}
-          {tab === 'continuous' && (
-            <ContinuousList events={scoped.continuous} timeMode={timeMode} />
-          )}
+          {tab === 'speed' && <SpeedList events={scoped.speed} />}
+          {tab === 'nights' && <NightList events={scoped.nights} />}
+          {tab === 'continuous' && <ContinuousList events={scoped.continuous} />}
         </section>
       )}
     </div>
@@ -227,7 +230,7 @@ const RowShell = ({
   duration,
   allowedVid,
   allowedLocation,
-  timeMode,
+  mergedCount,
   children,
 }: {
   index: number;
@@ -238,7 +241,7 @@ const RowShell = ({
   duration: string;
   allowedVid?: boolean;
   allowedLocation?: boolean;
-  timeMode: TimeMode;
+  mergedCount?: number;
   children?: React.ReactNode;
 }) => (
   <li
@@ -257,6 +260,14 @@ const RowShell = ({
         <span className="inline-flex items-center gap-1 font-mono text-ink-800 dark:text-ink-100">
           <IdCard size={11} /> {vid || '—'}
         </span>
+        {mergedCount && mergedCount > 1 && (
+          <span
+            title={`Merged ${mergedCount} night events from the same 18:00–06:00 shift`}
+            className="inline-flex items-center gap-1 rounded-full bg-brand-blue-soft px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue-dark ring-1 ring-brand-blue-line"
+          >
+            <GitMerge size={10} /> Merged ×{mergedCount}
+          </span>
+        )}
         <span>·</span>
         <span className="truncate text-ink-800 dark:text-ink-100">
           {driverName || 'Not found'}
@@ -280,13 +291,13 @@ const RowShell = ({
       <span>
         <span className="font-semibold text-ink-500 dark:text-ink-400">Time A: </span>
         <span className="font-mono text-ink-800 dark:text-ink-100">
-          {timeA ? displayTime(timeA, timeMode) : '—'}
+          {timeA || '—'}
         </span>
       </span>
       <span>
         <span className="font-semibold text-ink-500 dark:text-ink-400">Time B: </span>
         <span className="font-mono text-ink-800 dark:text-ink-100">
-          {timeB ? displayTime(timeB, timeMode) : '—'}
+          {timeB || '—'}
         </span>
       </span>
     </div>
@@ -348,8 +359,8 @@ const DayGroupHeader = ({ dateKey, count }: { dateKey: string; count: number }) 
 );
 
 /**
- * Group flat events by business day (Ethiopian or default depending on the
- * time mode) and hand back a stable, chronologically-sorted list of
+ * Group flat events by calendar day (parsed from the primary/secondary time
+ * fields) and hand back a stable, chronologically-sorted list of
  * `{ dateKey, events }` sections. Events with no parseable date fall into
  * a single trailing "Unknown date" bucket so the boss can still see them.
  */
@@ -357,12 +368,11 @@ const groupByDay = <T extends { timeA?: string; timeB?: string; start?: string; 
   events: T[],
   primary: (e: T) => string,
   secondary: (e: T) => string,
-  mode: TimeMode,
 ): Array<{ dateKey: string; events: T[] }> => {
   const buckets = new Map<string, T[]>();
   const order: string[] = [];
   events.forEach((e) => {
-    const key = businessDayKey(primary(e), secondary(e), mode) ?? '__unknown';
+    const key = eventDateKey(primary(e), secondary(e)) ?? '__unknown';
     if (!buckets.has(key)) {
       buckets.set(key, []);
       order.push(key);
@@ -380,16 +390,10 @@ const groupByDay = <T extends { timeA?: string; timeB?: string; start?: string; 
   }));
 };
 
-const SpeedList = ({
-  events,
-  timeMode,
-}: {
-  events: FilteredSpeedEvent[];
-  timeMode: TimeMode;
-}) => {
+const SpeedList = ({ events }: { events: FilteredSpeedEvent[] }) => {
   const groups = useMemo(
-    () => groupByDay(events, (e) => e.start, (e) => e.end, timeMode),
-    [events, timeMode],
+    () => groupByDay(events, (e) => e.start, (e) => e.end),
+    [events],
   );
   if (events.length === 0) {
     return (
@@ -420,7 +424,6 @@ const SpeedList = ({
                 duration={e.duration}
                 allowedVid={e.allowedVid}
                 allowedLocation={e.allowedLocation}
-                timeMode={timeMode}
               >
                 <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-ink-600 dark:text-ink-300 sm:grid-cols-2">
                   <span>
@@ -455,16 +458,10 @@ const SpeedList = ({
   );
 };
 
-const NightList = ({
-  events,
-  timeMode,
-}: {
-  events: FilteredNightEvent[];
-  timeMode: TimeMode;
-}) => {
+const NightList = ({ events }: { events: FilteredNightEvent[] }) => {
   const groups = useMemo(
-    () => groupByDay(events, (e) => e.timeA, (e) => e.timeB, timeMode),
-    [events, timeMode],
+    () => groupByDay(events, (e) => e.timeA, (e) => e.timeB),
+    [events],
   );
   if (events.length === 0) {
     return (
@@ -492,7 +489,7 @@ const NightList = ({
                 duration={e.duration}
                 allowedVid={e.allowedVid}
                 allowedLocation={e.allowedLocation}
-                timeMode={timeMode}
+                mergedCount={e.mergedCount}
               >
                 <PositionAB
                   positionA={e.positionA}
@@ -509,16 +506,10 @@ const NightList = ({
   );
 };
 
-const ContinuousList = ({
-  events,
-  timeMode,
-}: {
-  events: FilteredContinuousEvent[];
-  timeMode: TimeMode;
-}) => {
+const ContinuousList = ({ events }: { events: FilteredContinuousEvent[] }) => {
   const groups = useMemo(
-    () => groupByDay(events, (e) => e.timeA, (e) => e.timeB, timeMode),
-    [events, timeMode],
+    () => groupByDay(events, (e) => e.timeA, (e) => e.timeB),
+    [events],
   );
   if (events.length === 0) {
     return (
@@ -546,7 +537,6 @@ const ContinuousList = ({
                 duration={e.duration}
                 allowedVid={e.allowedVid}
                 allowedLocation={e.allowedLocation}
-                timeMode={timeMode}
               >
                 <div className="mt-2 text-xs text-ink-600 dark:text-ink-300">
                   <span className="font-semibold text-ink-500 dark:text-ink-400">

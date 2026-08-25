@@ -47,7 +47,6 @@ export const DashboardPage = () => {
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
   );
-  const timeMode = useAppSelector((s) => s.timeMode.mode);
   const { isBoss, isTransporterStaff, matchesTransporter } = useUserScope();
 
   const hasBossView = isBoss || isTransporterStaff;
@@ -90,7 +89,6 @@ export const DashboardPage = () => {
         thresholds,
         allowedVidsByType,
         allowedLocationsByType,
-        timeMode,
       }),
     [
       speedFiles,
@@ -100,7 +98,6 @@ export const DashboardPage = () => {
       thresholds,
       allowedVidsByType,
       allowedLocationsByType,
-      timeMode,
     ],
   );
 

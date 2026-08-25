@@ -22,8 +22,7 @@ import {
   toDateKey,
 } from './locationRules';
 import type { EventThresholds } from './masterFleet';
-import { businessDayKey } from './ethiopianTime';
-import type { TimeMode } from '../features/timeMode/timeModeSlice';
+import { mergeNightRows } from './nightsMerger';
 
 const EMPTY_ALLOWED: AllowedVidLists = {
   speed: [],
@@ -71,13 +70,6 @@ interface AnalyticsInput {
   thresholds: EventThresholds;
   allowedVidsByType?: AllowedVidLists;
   allowedLocationsByType?: AllowedLocationLists;
-  /**
-   * Controls which calendar day a violation is attributed to. Default keeps
-   * the raw calendar date. 'ethiopian' shifts the timestamp by the ET offset
-   * and rolls 00:00–05:59 back into the previous business day so a single
-   * overnight shift stays as one day of activity.
-   */
-  timeMode?: TimeMode;
 }
 
 interface VioBucket {
@@ -192,7 +184,6 @@ export const computeDashboardAnalytics = ({
   thresholds,
   allowedVidsByType = EMPTY_ALLOWED,
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
-  timeMode = 'default',
 }: AnalyticsInput): AnalyticsResult => {
   const resolve = buildDriverProfileLookup(driverRecords);
   const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
@@ -215,15 +206,13 @@ export const computeDashboardAnalytics = ({
     totals[kind] += 1;
   };
 
-  const dayKeyFor = (primary: string, secondary: string): string | null =>
-    businessDayKey(primary, secondary, timeMode);
-
   speedFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
       const vidKey = normalizeVid(driver.vid);
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
+        if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const d = parseEventDate(event.start) ?? parseEventDate(event.end);
         const evtKey = d ? toDateKey(d) : null;
         if (speedTags.matchesBlob(event.overspeedPosition, evtKey)) return;
@@ -235,8 +224,7 @@ export const computeDashboardAnalytics = ({
           driver.transporter || driver.driverName || '',
           'speed',
         );
-        const bizKey = dayKeyFor(event.start, event.end);
-        if (bizKey) bumpDay(bizKey, 'speed');
+        if (evtKey) bumpDay(evtKey, 'speed');
       });
     });
   });
@@ -244,7 +232,8 @@ export const computeDashboardAnalytics = ({
   nightFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
       const vidKey = normalizeVid(driver.vid);
-      driver.rows.forEach((row) => {
+      const merged = mergeNightRows(driver.rows);
+      merged.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.nights) return;
         const d = parseEventDate(row.timeA) ?? parseEventDate(row.timeB);
@@ -263,8 +252,7 @@ export const computeDashboardAnalytics = ({
           driver.transporter || driver.driverName || '',
           'nights',
         );
-        const bizKey = dayKeyFor(row.timeA, row.timeB);
-        if (bizKey) bumpDay(bizKey, 'nights');
+        if (evtKey) bumpDay(evtKey, 'nights');
       });
     });
   });
@@ -275,6 +263,10 @@ export const computeDashboardAnalytics = ({
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds < thresholds.continuous) return;
+        const hasPosition =
+          Boolean(row.positionA && row.positionA.trim()) ||
+          Boolean(row.positionB && row.positionB.trim());
+        if (!hasPosition) return;
         const d = parseEventDate(row.timeA) ?? parseEventDate(row.timeB);
         const evtKey = d ? toDateKey(d) : null;
         if (allowedCont.matches(vidKey, evtKey)) return;
@@ -291,8 +283,7 @@ export const computeDashboardAnalytics = ({
           driver.transporter || driver.driverName || '',
           'continuous',
         );
-        const bizKey = dayKeyFor(row.timeA, row.timeB);
-        if (bizKey) bumpDay(bizKey, 'continuous');
+        if (evtKey) bumpDay(evtKey, 'continuous');
       });
     });
   });
