@@ -245,7 +245,7 @@ export const aggregateMasterFleet = ({
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const evtKey = eventDateKey(event.start, event.end);
         if (allowedSpeed.matches(b.vidKey, evtKey)) return;
-        if (speedTags.matchesBlob(event.overspeedPosition, evtKey)) {
+        if (speedTags.matchesPosition(event.overspeedPosition, evtKey)) {
           b.speedInAllowedLocations += 1;
           return;
         }
@@ -396,7 +396,7 @@ export const collectFilteredEvents = ({
           topSpeed: event.topSpeed,
           overspeedPosition: event.overspeedPosition,
           allowedVid: allowedSpeed.matches(vidKey, evtKey),
-          allowedLocation: speedTags.matchesBlob(
+          allowedLocation: speedTags.matchesPosition(
             event.overspeedPosition,
             evtKey,
           ),

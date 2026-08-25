@@ -215,7 +215,7 @@ export const computeDashboardAnalytics = ({
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const d = parseEventDate(event.start) ?? parseEventDate(event.end);
         const evtKey = d ? toDateKey(d) : null;
-        if (speedTags.matchesBlob(event.overspeedPosition, evtKey)) return;
+        if (speedTags.matchesPosition(event.overspeedPosition, evtKey)) return;
         if (allowedSpeed.matches(vidKey, evtKey)) return;
         bumpBucket(
           buckets,

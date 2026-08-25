@@ -189,7 +189,7 @@ export const computeTransporterAnalytics = ({
         if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const evtKey = eventDateKey(event.start, event.end);
-        if (speedTags.matchesBlob(event.overspeedPosition, evtKey)) return;
+        if (speedTags.matchesPosition(event.overspeedPosition, evtKey)) return;
         if (allowedSpeed.matches(vidKey, evtKey)) return;
         b.speed += 1;
       });
