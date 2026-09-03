@@ -10,12 +10,13 @@ import {
 } from 'lucide-react';
 import { useAppDispatch } from '../../app/store';
 import { addContinuousFile } from './unfilteredContinuousSlice';
+import { createContinuousBatch } from './unfilteredContinuousApi';
 import {
   detectContinuousKind,
   detectContinuousSource,
   parseContinuousFile,
 } from '../../lib/continuousParser';
-import { cn, newId } from '../../lib/utils';
+import { cn } from '../../lib/utils';
 import type { UnfilteredFileKind, User } from '../../types';
 
 interface Props {
@@ -70,19 +71,15 @@ export const ContinuousUpload = ({ user }: Props) => {
       const drivers = await parseContinuousFile(file, kind);
       const totalRows = drivers.reduce((s, d) => s + d.rows.length, 0);
       const source = detectContinuousSource(kind);
-      dispatch(
-        addContinuousFile({
-          id: newId(),
-          title: title.trim(),
-          uploadDate: new Date().toISOString(),
-          uploaderId: user.id,
-          uploaderName: user.name,
-          fileType: kind,
-          source,
-          drivers,
-          totalRows,
-        }),
-      );
+      const created = await createContinuousBatch({
+        title: title.trim(),
+        fileType: kind,
+        source,
+        drivers,
+        uploaderId: user.id,
+        uploaderName: user.name,
+      });
+      dispatch(addContinuousFile(created));
       setOkMsg(
         `Parsed ${drivers.length} driver${drivers.length === 1 ? '' : 's'} · ${totalRows} continuous trip${totalRows === 1 ? '' : 's'} (${source}).`,
       );

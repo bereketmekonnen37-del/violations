@@ -26,8 +26,12 @@ export const ProtectedRoute = ({
   allowTransporterStaff,
   denyTransporterStaff,
 }: Props) => {
-  const { isAuthenticated, user } = useAppSelector((s) => s.auth);
+  const { isAuthenticated, user, initializing } = useAppSelector((s) => s.auth);
   const location = useLocation();
+
+  if (initializing) {
+    return null;
+  }
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;

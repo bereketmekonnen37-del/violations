@@ -181,13 +181,9 @@ const persistedReducer = persistReducer(
     version: 5,
     storage,
     whitelist: [
-      'auth',
       'theme',
       'uploads',
       'profile',
-      'unfiltered',
-      'unfilteredNights',
-      'unfilteredContinuous',
       'drivers',
       'rules',
       'staffUsers',
