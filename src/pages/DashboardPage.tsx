@@ -24,7 +24,7 @@ import { formatDate, formatDateTime } from '../lib/utils';
 import { useUserScope } from '../hooks/useUserScope';
 import {
   computeDashboardAnalytics,
-  fillDailyWindow,
+  fillDailyRange,
 } from '../lib/dashboardAnalytics';
 import { filterFilesByTransporter } from '../lib/transporterScope';
 import { parseDurationSeconds } from '../lib/duration';
@@ -32,8 +32,6 @@ import { DailyViolationsChart } from '../features/dashboard/DailyViolationsChart
 import { TopOffenderCards } from '../features/dashboard/TopOffenderCards';
 import { TransporterAnalytics } from '../features/dashboard/TransporterAnalytics';
 import { computeTransporterAnalytics } from '../lib/transporterAnalytics';
-
-const DAILY_WINDOW = 14;
 
 export const DashboardPage = () => {
   const user = useAppSelector((s) => s.auth.user);
@@ -47,6 +45,7 @@ export const DashboardPage = () => {
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
   );
+  const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
   const { isBoss, isTransporterStaff, matchesTransporter } = useUserScope();
 
   const hasBossView = isBoss || isTransporterStaff;
@@ -89,6 +88,7 @@ export const DashboardPage = () => {
         thresholds,
         allowedVidsByType,
         allowedLocationsByType,
+        mergeNights,
       }),
     [
       speedFiles,
@@ -98,11 +98,12 @@ export const DashboardPage = () => {
       thresholds,
       allowedVidsByType,
       allowedLocationsByType,
+      mergeNights,
     ],
   );
 
   const dailySeries = useMemo(
-    () => fillDailyWindow(analytics.daily, DAILY_WINDOW),
+    () => fillDailyRange(analytics.daily),
     [analytics.daily],
   );
 
@@ -116,6 +117,7 @@ export const DashboardPage = () => {
         thresholds,
         allowedVidsByType,
         allowedLocationsByType,
+        mergeNights,
       }),
     [
       speedFiles,
@@ -125,6 +127,7 @@ export const DashboardPage = () => {
       thresholds,
       allowedVidsByType,
       allowedLocationsByType,
+      mergeNights,
     ],
   );
 
@@ -481,8 +484,8 @@ export const DashboardPage = () => {
                     className="text-sm"
                     style={{ color: 'var(--color-text-muted)' }}
                   >
-                    Last {DAILY_WINDOW} days · Speed, Nights and Continuous events
-                    counted against your rule thresholds.
+                    Every day on record, oldest to newest · Speed, Nights and
+                    Continuous events counted against your rule thresholds.
                   </p>
                 </div>
               </div>

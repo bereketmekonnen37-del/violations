@@ -1,4 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  type TooltipContentProps,
+} from 'recharts';
 import type { DailyBucket } from '../../lib/dashboardAnalytics';
 
 interface Props {
@@ -7,25 +17,17 @@ interface Props {
   height?: number;
 }
 
-type Kind = 'speed' | 'nights' | 'continuous';
+interface ChartPoint extends DailyBucket {
+  total: number;
+}
 
-const KIND_META: Record<Kind, { label: string; color: string; softColor: string }> = {
-  speed: {
-    label: 'Speed',
-    color: '#F48221', // brand accent orange
-    softColor: '#FDE3CE',
-  },
-  nights: {
-    label: 'Nights',
-    color: '#3E55A5', // brand blue
-    softColor: '#EEF1FA',
-  },
-  continuous: {
-    label: 'Continuous',
-    color: '#6B7FC4', // brand blue-light for a related-but-distinct hue
-    softColor: '#DFE4F2',
-  },
-};
+const BRAND_BLUE = '#3E55A5';
+
+const KIND_META = {
+  speed: { label: 'Speed', color: '#F48221' },
+  nights: { label: 'Nights', color: BRAND_BLUE },
+  continuous: { label: 'Continuous', color: '#6B7FC4' },
+} as const;
 
 const dayLabel = (isoDate: string): string => {
   const d = new Date(isoDate + 'T00:00:00');
@@ -40,257 +42,140 @@ const dayLabelLong = (isoDate: string): string => {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+    year: 'numeric',
   });
 };
 
-export const DailyViolationsChart = ({ data, height = 280 }: Props) => {
-  const VIEW_W = 1000; // svg viewBox width — scales to container
-  const PAD_L = 44;
-  const PAD_R = 16;
-  const PAD_T = 16;
-  const PAD_B = 40;
-  const innerH = height - PAD_T - PAD_B;
-  const innerW = VIEW_W - PAD_L - PAD_R;
-
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-
-  const maxVal = useMemo(() => {
-    let m = 0;
-    data.forEach((d) => {
-      m = Math.max(m, d.speed, d.nights, d.continuous);
-    });
-    // Round up to a "nice" number so gridlines aren't ugly.
-    if (m === 0) return 1;
-    if (m <= 5) return 5;
-    if (m <= 10) return 10;
-    const step = Math.pow(10, Math.floor(Math.log10(m)));
-    return Math.ceil(m / step) * step;
-  }, [data]);
-
-  const gridLines = useMemo(() => {
-    const lines: number[] = [];
-    const stepCount = 4;
-    for (let i = 0; i <= stepCount; i++) {
-      lines.push(Math.round((maxVal / stepCount) * i));
-    }
-    return lines;
-  }, [maxVal]);
-
-  const groupWidth = data.length > 0 ? innerW / data.length : innerW;
-  const barGroupWidth = Math.max(6, Math.min(groupWidth * 0.7, 42));
-  const barWidth = barGroupWidth / 3;
-
-  const yFor = (v: number): number => PAD_T + innerH - (v / maxVal) * innerH;
-  const xForGroup = (i: number): number => PAD_L + i * groupWidth + groupWidth / 2;
-
-  const isAllZero = useMemo(
-    () => data.every((d) => d.speed === 0 && d.nights === 0 && d.continuous === 0),
-    [data],
-  );
-
+const ChartTooltip = ({ active, payload }: TooltipContentProps) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const point = payload[0].payload as ChartPoint;
   return (
-    <div className="relative w-full">
-      {/* Legend */}
-      <div className="mb-3 flex flex-wrap items-center gap-4 text-xs">
-        {(Object.keys(KIND_META) as Kind[]).map((k) => (
-          <span
-            key={k}
-            className="inline-flex items-center gap-1.5 font-medium"
-            style={{ color: 'var(--color-text-secondary)' }}
-          >
+    <div
+      className="rounded-xl p-3 text-xs shadow-elev"
+      style={{
+        background: '#ffffff',
+        border: '1px solid var(--color-brand-blue-line)',
+        minWidth: 176,
+      }}
+    >
+      <p
+        className="mb-2 text-[11px] font-semibold uppercase tracking-wider"
+        style={{ color: 'var(--color-brand-blue)' }}
+      >
+        {dayLabelLong(point.date)}
+      </p>
+      {(Object.keys(KIND_META) as Array<keyof typeof KIND_META>).map((k) => (
+        <div
+          key={k}
+          className="flex items-center justify-between gap-6 py-0.5"
+          style={{ color: 'var(--color-text-secondary)' }}
+        >
+          <span className="inline-flex items-center gap-1.5">
             <span
               aria-hidden
-              className="inline-block h-2.5 w-2.5 rounded-sm"
+              className="inline-block h-2 w-2 rounded-sm"
               style={{ background: KIND_META[k].color }}
             />
             {KIND_META[k].label}
           </span>
-        ))}
-      </div>
-
-      <svg
-        viewBox={`0 0 ${VIEW_W} ${height}`}
-        preserveAspectRatio="none"
-        className="block w-full"
-        style={{ height }}
-        role="img"
-        aria-label="Daily violation counts across speed, nights and continuous"
-      >
-        <defs>
-          {(Object.keys(KIND_META) as Kind[]).map((k) => (
-            <linearGradient
-              id={`grad-${k}`}
-              key={k}
-              x1="0"
-              x2="0"
-              y1="0"
-              y2="1"
-            >
-              <stop offset="0%" stopColor={KIND_META[k].color} stopOpacity="0.95" />
-              <stop offset="100%" stopColor={KIND_META[k].color} stopOpacity="0.6" />
-            </linearGradient>
-          ))}
-        </defs>
-
-        {/* Grid lines + Y ticks */}
-        {gridLines.map((v) => {
-          const y = yFor(v);
-          return (
-            <g key={v}>
-              <line
-                x1={PAD_L}
-                x2={VIEW_W - PAD_R}
-                y1={y}
-                y2={y}
-                stroke="currentColor"
-                strokeOpacity={0.08}
-                strokeWidth={1}
-              />
-              <text
-                x={PAD_L - 8}
-                y={y + 3}
-                textAnchor="end"
-                fontSize={10}
-                fill="currentColor"
-                opacity={0.55}
-              >
-                {v}
-              </text>
-            </g>
-          );
-        })}
-
-        {/* Hover column highlight */}
-        {hoverIdx !== null && data[hoverIdx] && (
-          <rect
-            x={PAD_L + hoverIdx * groupWidth}
-            y={PAD_T}
-            width={groupWidth}
-            height={innerH}
-            fill="currentColor"
-            fillOpacity={0.05}
-            rx={6}
-          />
-        )}
-
-        {/* Bars */}
-        {data.map((d, i) => {
-          const cx = xForGroup(i);
-          const startX = cx - barGroupWidth / 2;
-          const bars: Array<{ kind: Kind; value: number }> = [
-            { kind: 'speed', value: d.speed },
-            { kind: 'nights', value: d.nights },
-            { kind: 'continuous', value: d.continuous },
-          ];
-          return (
-            <g
-              key={d.date}
-              onMouseEnter={() => setHoverIdx(i)}
-              onMouseLeave={() => setHoverIdx(null)}
-            >
-              {/* Invisible hit target so hover works even on zero-value days */}
-              <rect
-                x={PAD_L + i * groupWidth}
-                y={PAD_T}
-                width={groupWidth}
-                height={innerH}
-                fill="transparent"
-              />
-              {bars.map((b, j) => {
-                const h = b.value === 0 ? 0 : Math.max(2, ((height - PAD_T - PAD_B) * b.value) / maxVal);
-                const y = PAD_T + innerH - h;
-                return (
-                  <rect
-                    key={b.kind}
-                    x={startX + j * barWidth}
-                    y={y}
-                    width={barWidth - 1.5}
-                    height={h}
-                    rx={2}
-                    fill={`url(#grad-${b.kind})`}
-                    style={{ transition: 'y 200ms, height 200ms' }}
-                  />
-                );
-              })}
-            </g>
-          );
-        })}
-
-        {/* X-axis labels — draw a subset when many days */}
-        {data.map((d, i) => {
-          const showEvery = Math.max(1, Math.round(data.length / 7));
-          if (i % showEvery !== 0 && i !== data.length - 1) return null;
-          return (
-            <text
-              key={`x-${d.date}`}
-              x={xForGroup(i)}
-              y={height - 14}
-              textAnchor="middle"
-              fontSize={11}
-              fill="currentColor"
-              opacity={0.65}
-            >
-              {dayLabel(d.date)}
-            </text>
-          );
-        })}
-
-        {/* Baseline */}
-        <line
-          x1={PAD_L}
-          x2={VIEW_W - PAD_R}
-          y1={PAD_T + innerH}
-          y2={PAD_T + innerH}
-          stroke="currentColor"
-          strokeOpacity={0.15}
-          strokeWidth={1}
-        />
-      </svg>
-
-      {/* Tooltip */}
-      {hoverIdx !== null && data[hoverIdx] && (
-        <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-xl p-3 text-xs shadow-elev"
-          style={{
-            left: `${((PAD_L + hoverIdx * groupWidth + groupWidth / 2) / VIEW_W) * 100}%`,
-            top: 6,
-            background: '#ffffff',
-            border: '1px solid var(--color-brand-blue-line)',
-          }}
-        >
-          <p
-            className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider"
-            style={{ color: 'var(--color-brand-blue)' }}
+          <span
+            className="font-mono font-semibold"
+            style={{ color: 'var(--color-text-primary)' }}
           >
-            {dayLabelLong(data[hoverIdx].date)}
-          </p>
-          {(Object.keys(KIND_META) as Kind[]).map((k) => (
-            <div
-              key={k}
-              className="flex items-center justify-between gap-6 py-0.5"
-              style={{ color: 'var(--color-text-primary)' }}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <span
-                  className="inline-block h-2 w-2 rounded-sm"
-                  style={{ background: KIND_META[k].color }}
-                />
-                {KIND_META[k].label}
-              </span>
-              <span className="font-mono font-semibold">
-                {data[hoverIdx][k]}
-              </span>
-            </div>
-          ))}
+            {point[k]}
+          </span>
         </div>
-      )}
+      ))}
+      <div
+        className="mt-1.5 flex items-center justify-between gap-6 pt-1.5 text-[11px] font-semibold uppercase tracking-wider"
+        style={{ borderTop: '1px solid var(--color-brand-blue-line)' }}
+      >
+        <span style={{ color: 'var(--color-text-secondary)' }}>Total</span>
+        <span
+          className="font-mono text-sm"
+          style={{ color: 'var(--color-brand-blue-dark)' }}
+        >
+          {point.total}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+export const DailyViolationsChart = ({ data, height = 320 }: Props) => {
+  const points: ChartPoint[] = useMemo(
+    () =>
+      data.map((d) => ({ ...d, total: d.speed + d.nights + d.continuous })),
+    [data],
+  );
+
+  const isAllZero = useMemo(
+    () => points.every((p) => p.total === 0),
+    [points],
+  );
+
+  // Thin the X-axis labels so long histories (months of data) stay legible
+  // instead of overlapping.
+  const tickInterval = Math.max(0, Math.ceil(points.length / 10) - 1);
+
+  return (
+    <div className="relative w-full">
+      <ResponsiveContainer width="100%" height={height}>
+        <AreaChart
+          data={points}
+          margin={{ top: 8, right: 12, left: -12, bottom: 0 }}
+        >
+          <defs>
+            <linearGradient id="dailyTotalFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={BRAND_BLUE} stopOpacity={0.32} />
+              <stop offset="100%" stopColor={BRAND_BLUE} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid
+            vertical={false}
+            stroke="currentColor"
+            strokeOpacity={0.08}
+          />
+          <XAxis
+            dataKey="date"
+            tickFormatter={dayLabel}
+            interval={tickInterval}
+            tick={{ fontSize: 11, fill: 'currentColor', opacity: 0.6 }}
+            axisLine={{ stroke: 'currentColor', strokeOpacity: 0.15 }}
+            tickLine={false}
+            minTickGap={24}
+          />
+          <YAxis
+            allowDecimals={false}
+            tick={{ fontSize: 11, fill: 'currentColor', opacity: 0.6 }}
+            axisLine={false}
+            tickLine={false}
+            width={32}
+          />
+          <Tooltip
+            content={ChartTooltip}
+            cursor={{ stroke: BRAND_BLUE, strokeOpacity: 0.25, strokeWidth: 1, strokeDasharray: '4 4' }}
+          />
+          <Area
+            type="monotone"
+            dataKey="total"
+            name="Total violations"
+            stroke={BRAND_BLUE}
+            strokeWidth={2.5}
+            fill="url(#dailyTotalFill)"
+            dot={false}
+            activeDot={{ r: 5, strokeWidth: 2, stroke: '#ffffff' }}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
 
       {isAllZero && (
         <div
           className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm"
           style={{ color: 'var(--color-text-muted)' }}
         >
-          No violations recorded in this window yet.
+          No violations recorded yet.
         </div>
       )}
     </div>

@@ -70,6 +70,10 @@ interface AnalyticsInput {
   thresholds: EventThresholds;
   allowedVidsByType?: AllowedVidLists;
   allowedLocationsByType?: AllowedLocationLists;
+  /** When true (default), consecutive same-night rows are collapsed via
+   *  `mergeNightRows` before counting. Driven by the navbar "Merged nights"
+   *  toggle — false counts every raw night row uncollapsed. */
+  mergeNights?: boolean;
 }
 
 interface VioBucket {
@@ -184,6 +188,7 @@ export const computeDashboardAnalytics = ({
   thresholds,
   allowedVidsByType = EMPTY_ALLOWED,
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
+  mergeNights = true,
 }: AnalyticsInput): AnalyticsResult => {
   const resolve = buildDriverProfileLookup(driverRecords);
   const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
@@ -211,7 +216,7 @@ export const computeDashboardAnalytics = ({
       const vidKey = normalizeVid(driver.vid);
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
-        if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
+        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.speed) return;
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const d = parseEventDate(event.start) ?? parseEventDate(event.end);
         const evtKey = d ? toDateKey(d) : null;
@@ -232,10 +237,10 @@ export const computeDashboardAnalytics = ({
   nightFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
       const vidKey = normalizeVid(driver.vid);
-      const merged = mergeNightRows(driver.rows);
+      const merged = mergeNightRows(driver.rows, mergeNights);
       merged.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds < thresholds.nights) return;
+        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.nights) return;
         const d = parseEventDate(row.timeA) ?? parseEventDate(row.timeB);
         const evtKey = d ? toDateKey(d) : null;
         if (allowedNights.matches(vidKey, evtKey)) return;
@@ -262,7 +267,7 @@ export const computeDashboardAnalytics = ({
       const vidKey = normalizeVid(driver.vid);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds < thresholds.continuous) return;
+        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.continuous) return;
         const hasPosition =
           Boolean(row.positionA && row.positionA.trim()) ||
           Boolean(row.positionB && row.positionB.trim());
@@ -325,6 +330,31 @@ export const fillDailyWindow = (
     const d = new Date(anchor);
     d.setDate(anchor.getDate() - i);
     const key = toDateKey(d);
+    out.push(byKey.get(key) ?? { date: key, speed: 0, nights: 0, continuous: 0 });
+  }
+  return out;
+};
+
+/**
+ * Take the daily buckets and return every day from the oldest to the newest
+ * recorded violation (inclusive), filling any gap days with zeros so the
+ * dashboard trend chart covers the full history instead of a fixed window.
+ *
+ * When `daily` is empty, falls back to the last 14 calendar days ending
+ * today so the chart still renders a nice empty state.
+ */
+export const fillDailyRange = (daily: DailyBucket[]): DailyBucket[] => {
+  if (daily.length === 0) return fillDailyWindow(daily, 14);
+  const byKey = new Map(daily.map((d) => [d.date, d]));
+  const start = new Date(daily[0].date + 'T00:00:00');
+  const end = new Date(daily[daily.length - 1].date + 'T00:00:00');
+  const out: DailyBucket[] = [];
+  for (
+    const cursor = new Date(start);
+    cursor <= end;
+    cursor.setDate(cursor.getDate() + 1)
+  ) {
+    const key = toDateKey(cursor);
     out.push(byKey.get(key) ?? { date: key, speed: 0, nights: 0, continuous: 0 });
   }
   return out;

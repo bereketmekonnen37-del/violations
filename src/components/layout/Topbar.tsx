@@ -1,13 +1,16 @@
-import { LogOut, User as UserIcon } from 'lucide-react';
+import { GitMerge, LogOut, User as UserIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppSelector } from '../../app/store';
+import { useAppDispatch, useAppSelector } from '../../app/store';
 import { useAuth } from '../../hooks/useAuth';
+import { toggleNightMerge } from '../../features/settings/nightMergeSlice';
 import { Avatar } from '../ui/Avatar';
 
 export const Topbar = () => {
   const { user, logout } = useAuth();
   const photo = useAppSelector((s) => s.profile.photo);
+  const nightMergeEnabled = useAppSelector((s) => s.nightMerge.enabled);
+  const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -45,6 +48,35 @@ export const Topbar = () => {
       </div>
 
       <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => dispatch(toggleNightMerge())}
+          title={
+            nightMergeEnabled
+              ? 'Nights are merged: consecutive 18:00–06:00 events collapse into one row on Master Fleet, Dashboard and Transporter pages. Click to show every row separately.'
+              : 'Nights are shown one by one, unmerged. Click to re-enable merging consecutive 18:00–06:00 events into one row.'
+          }
+          aria-pressed={nightMergeEnabled}
+          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition"
+          style={
+            nightMergeEnabled
+              ? {
+                  background: 'var(--color-brand-blue-soft)',
+                  color: 'var(--color-brand-blue-dark)',
+                  border: '1px solid var(--color-brand-blue-line)',
+                }
+              : {
+                  background: 'var(--color-brand-blue)',
+                  color: '#ffffff',
+                  border: '1px solid var(--color-brand-blue-dark)',
+                }
+          }
+        >
+          <GitMerge size={14} />
+          <span className="hidden sm:inline">
+            {nightMergeEnabled ? 'Nights merged' : 'Nights unmerged'}
+          </span>
+        </button>
         <div className="relative" ref={menuRef}>
           <button
             type="button"

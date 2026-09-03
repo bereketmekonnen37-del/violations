@@ -121,10 +121,23 @@ export const isNightRowValid = (row: NightRow): boolean => {
  *   - duration          = sum of individual durations, reformatted
  *   - mergedCount       = count of raw rows folded in
  * Invalid rows (see `isNightRowValid`) are dropped before merging.
+ *
+ * `enabled` (default true) gates the collapsing step only — invalid-row
+ * filtering always applies. Pass false (driven by the navbar "Merged
+ * nights" toggle) to show every raw night row one by one, uncollapsed.
  */
-export const mergeNightRows = (rows: NightRow[]): MergedNightRow[] => {
+export const mergeNightRows = (
+  rows: NightRow[],
+  enabled = true,
+): MergedNightRow[] => {
   const valid = rows.filter(isNightRowValid);
   if (valid.length === 0) return [];
+
+  if (!enabled) {
+    return [...valid]
+      .map((row) => ({ ...row, mergedCount: 1 }))
+      .sort((a, b) => sortKey(a.timeA) - sortKey(b.timeA));
+  }
 
   const buckets = new Map<string, NightRow[]>();
   const orphans: NightRow[] = [];

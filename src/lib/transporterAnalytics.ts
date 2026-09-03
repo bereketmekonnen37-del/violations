@@ -101,6 +101,10 @@ interface AnalyticsInput {
   thresholds: EventThresholds;
   allowedVidsByType?: AllowedVidLists;
   allowedLocationsByType?: AllowedLocationLists;
+  /** When true (default), consecutive same-night rows are collapsed via
+   *  `mergeNightRows` before counting. Driven by the navbar "Merged nights"
+   *  toggle — false counts every raw night row uncollapsed. */
+  mergeNights?: boolean;
 }
 
 interface Bucket {
@@ -143,6 +147,7 @@ export const computeTransporterAnalytics = ({
   thresholds,
   allowedVidsByType = EMPTY_ALLOWED,
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
+  mergeNights = true,
 }: AnalyticsInput): TransporterAnalyticsRow[] => {
   const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
   const allowedNights = buildAllowedVidMatcher(allowedVidsByType.nights);
@@ -186,7 +191,7 @@ export const computeTransporterAnalytics = ({
       if (driver.vid) b.vids.add(vidKey);
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
-        if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
+        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.speed) return;
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const evtKey = eventDateKey(event.start, event.end);
         if (speedTags.matchesPosition(event.overspeedPosition, evtKey)) return;
@@ -203,10 +208,10 @@ export const computeTransporterAnalytics = ({
       if (!b) return;
       const vidKey = normalizeVid(driver.vid);
       if (driver.vid) b.vids.add(vidKey);
-      const merged = mergeNightRows(driver.rows);
+      const merged = mergeNightRows(driver.rows, mergeNights);
       merged.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds < thresholds.nights) return;
+        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.nights) return;
         const evtKey = eventDateKey(row.timeA, row.timeB);
         if (allowedNights.matches(vidKey, evtKey)) return;
         if (
@@ -229,7 +234,7 @@ export const computeTransporterAnalytics = ({
       if (driver.vid) b.vids.add(vidKey);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds < thresholds.continuous) return;
+        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.continuous) return;
         const hasPosition =
           Boolean(row.positionA && row.positionA.trim()) ||
           Boolean(row.positionB && row.positionB.trim());

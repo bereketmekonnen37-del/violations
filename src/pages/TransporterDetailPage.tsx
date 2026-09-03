@@ -65,6 +65,7 @@ export const TransporterDetailPage = () => {
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
   );
+  const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
   const { isTransporterStaff, matchesTransporter } = useUserScope();
 
   const speedFiles = useMemo(
@@ -90,6 +91,7 @@ export const TransporterDetailPage = () => {
         thresholds,
         allowedVidsByType,
         allowedLocationsByType,
+        mergeNights,
       }),
     [
       speedFiles,
@@ -99,6 +101,7 @@ export const TransporterDetailPage = () => {
       thresholds,
       allowedVidsByType,
       allowedLocationsByType,
+      mergeNights,
     ],
   );
 

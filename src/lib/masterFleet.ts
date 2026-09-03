@@ -162,6 +162,10 @@ interface AggregateInput {
   /** Per-category location-tag whitelists. An event whose position matches
    *  a tag in its category is excluded from that category's counts. */
   allowedLocationsByType?: AllowedLocationLists;
+  /** When true (default), consecutive same-night rows are collapsed via
+   *  `mergeNightRows` before counting. Driven by the navbar "Merged nights"
+   *  toggle — false shows every raw night row uncollapsed. */
+  mergeNights?: boolean;
 }
 
 interface Bucket {
@@ -218,6 +222,7 @@ export const aggregateMasterFleet = ({
   thresholds = DEFAULT_THRESHOLDS,
   allowedVidsByType = EMPTY_ALLOWED,
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
+  mergeNights = true,
 }: AggregateInput): MasterFleetRow[] => {
   const resolve: DriverProfileLookup = buildDriverProfileLookup(driverRecords);
   const buckets = new Map<string, Bucket>();
@@ -239,7 +244,7 @@ export const aggregateMasterFleet = ({
       if (!b) return;
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
-        if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
+        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.speed) return;
         // Drop rows that carry no position — a duration with nowhere to point
         // at isn't useful on the master sheet.
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
@@ -264,11 +269,11 @@ export const aggregateMasterFleet = ({
       );
       if (!b) return;
       // Collapse consecutive same-night rows for this VID into one before
-      // applying threshold / whitelist filters.
-      const merged = mergeNightRows(driver.rows);
+      // applying threshold / whitelist filters (unless the merge toggle is off).
+      const merged = mergeNightRows(driver.rows, mergeNights);
       merged.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds < thresholds.nights) return;
+        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.nights) return;
         const evtKey = eventDateKey(row.timeA, row.timeB);
         if (allowedNights.matches(b.vidKey, evtKey)) return;
         if (
@@ -294,7 +299,7 @@ export const aggregateMasterFleet = ({
       if (!b) return;
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds < thresholds.continuous) return;
+        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.continuous) return;
         // Skip rows with no position on either endpoint.
         const hasPosition =
           Boolean(row.positionA && row.positionA.trim()) ||
@@ -359,6 +364,7 @@ export const collectFilteredEvents = ({
   thresholds = DEFAULT_THRESHOLDS,
   allowedVidsByType = EMPTY_ALLOWED,
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
+  mergeNights = true,
 }: AggregateInput): FilteredEvents => {
   const resolve = buildDriverProfileLookup(driverRecords);
   const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
@@ -380,7 +386,7 @@ export const collectFilteredEvents = ({
       const transporter = profile.transporter || sourceTransporter(driver);
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
-        if (!Number.isFinite(seconds) || seconds < thresholds.speed) return;
+        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.speed) return;
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const evtKey = eventDateKey(event.start, event.end);
         speed.push({
@@ -412,10 +418,10 @@ export const collectFilteredEvents = ({
       const profile = resolve(vid);
       const driverName = profile.driverName || NOT_FOUND;
       const transporter = profile.transporter || sourceTransporter(driver);
-      const merged = mergeNightRows(driver.rows);
+      const merged = mergeNightRows(driver.rows, mergeNights);
       merged.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds < thresholds.nights) return;
+        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.nights) return;
         const evtKey = eventDateKey(row.timeA, row.timeB);
         const position = row.positionA || row.positionB || '';
         const allowedLocationA = nightsTags.matchesPosition(
@@ -459,7 +465,7 @@ export const collectFilteredEvents = ({
       const transporter = profile.transporter || sourceTransporter(driver);
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds < thresholds.continuous) return;
+        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.continuous) return;
         const hasPosition =
           Boolean(row.positionA && row.positionA.trim()) ||
           Boolean(row.positionB && row.positionB.trim());

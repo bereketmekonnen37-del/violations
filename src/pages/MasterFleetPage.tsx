@@ -160,6 +160,7 @@ export const MasterFleetPage = () => {
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
   );
+  const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
   const allowedLocationsTotal =
     allowedLocationsByType.speed.length +
     allowedLocationsByType.nights.length +
@@ -191,6 +192,7 @@ export const MasterFleetPage = () => {
         thresholds,
         allowedVidsByType,
         allowedLocationsByType,
+        mergeNights,
       }),
     [
       speedFiles,
@@ -200,6 +202,7 @@ export const MasterFleetPage = () => {
       thresholds,
       allowedVidsByType,
       allowedLocationsByType,
+      mergeNights,
     ],
   );
 
@@ -213,6 +216,7 @@ export const MasterFleetPage = () => {
         thresholds,
         allowedVidsByType,
         allowedLocationsByType,
+        mergeNights,
       }),
     [
       speedFiles,
@@ -222,6 +226,7 @@ export const MasterFleetPage = () => {
       thresholds,
       allowedVidsByType,
       allowedLocationsByType,
+      mergeNights,
     ],
   );
 
