@@ -166,7 +166,18 @@ interface AggregateInput {
    *  `mergeNightRows` before counting. Driven by the navbar "Merged nights"
    *  toggle — false shows every raw night row uncollapsed. */
   mergeNights?: boolean;
+  /** When set (seconds), any event/row whose duration exceeds this is
+   *  dropped entirely — from Speed, Nights and Continuous alike. Set on
+   *  the Rules page; `null`/`undefined` means no cap. */
+  maxDurationSeconds?: number | null;
 }
+
+/** True when a duration cap is set and this event exceeds it. */
+const exceedsMaxDuration = (
+  seconds: number,
+  maxDurationSeconds: number | null | undefined,
+): boolean =>
+  maxDurationSeconds != null && maxDurationSeconds > 0 && seconds > maxDurationSeconds;
 
 interface Bucket {
   vid: string;
@@ -223,6 +234,7 @@ export const aggregateMasterFleet = ({
   allowedVidsByType = EMPTY_ALLOWED,
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
   mergeNights = true,
+  maxDurationSeconds = null,
 }: AggregateInput): MasterFleetRow[] => {
   const resolve: DriverProfileLookup = buildDriverProfileLookup(driverRecords);
   const buckets = new Map<string, Bucket>();
@@ -245,6 +257,7 @@ export const aggregateMasterFleet = ({
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
         if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.speed) return;
+        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
         // Drop rows that carry no position — a duration with nowhere to point
         // at isn't useful on the master sheet.
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
@@ -274,6 +287,7 @@ export const aggregateMasterFleet = ({
       merged.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.nights) return;
+        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
         const evtKey = eventDateKey(row.timeA, row.timeB);
         if (allowedNights.matches(b.vidKey, evtKey)) return;
         if (
@@ -300,6 +314,7 @@ export const aggregateMasterFleet = ({
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.continuous) return;
+        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
         // Skip rows with no position on either endpoint.
         const hasPosition =
           Boolean(row.positionA && row.positionA.trim()) ||
@@ -365,6 +380,7 @@ export const collectFilteredEvents = ({
   allowedVidsByType = EMPTY_ALLOWED,
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
   mergeNights = true,
+  maxDurationSeconds = null,
 }: AggregateInput): FilteredEvents => {
   const resolve = buildDriverProfileLookup(driverRecords);
   const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
@@ -387,6 +403,7 @@ export const collectFilteredEvents = ({
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
         if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.speed) return;
+        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const evtKey = eventDateKey(event.start, event.end);
         speed.push({
@@ -422,6 +439,7 @@ export const collectFilteredEvents = ({
       merged.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.nights) return;
+        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
         const evtKey = eventDateKey(row.timeA, row.timeB);
         const position = row.positionA || row.positionB || '';
         const allowedLocationA = nightsTags.matchesPosition(
@@ -466,6 +484,7 @@ export const collectFilteredEvents = ({
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.continuous) return;
+        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
         const hasPosition =
           Boolean(row.positionA && row.positionA.trim()) ||
           Boolean(row.positionB && row.positionB.trim());
@@ -520,6 +539,7 @@ const MASTER_COLUMNS = [
   'Speed',
   'Continuous',
   'Total',
+  'Recommended Action',
   'Allowed VID',
   'Speed in Allowed Zones',
 ] as const;
@@ -532,12 +552,14 @@ interface SheetRow {
   Speed: number;
   Continuous: number;
   Total: number;
+  'Recommended Action': string;
   'Allowed VID': string;
   'Speed in Allowed Zones': number;
 }
 
 export const downloadMasterFleetCsv = (
   rows: MasterFleetRow[],
+  recommendedActionByVid: Record<string, string> = {},
   filename = `fleetwatch-master-fleet-${new Date().toISOString().slice(0, 10)}.csv`,
 ): number => {
   const sheetRows: SheetRow[] = rows.map((r) => ({
@@ -548,6 +570,7 @@ export const downloadMasterFleetCsv = (
     Speed: r.speed,
     Continuous: r.continuous,
     Total: r.total,
+    'Recommended Action': recommendedActionByVid[normalizeVid(r.vid)] || '',
     'Allowed VID': r.allowedVid ? 'YES' : '',
     'Speed in Allowed Zones': r.speedInAllowedLocations,
   }));

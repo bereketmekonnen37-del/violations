@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import {
-  Area,
-  AreaChart,
   CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -23,10 +24,13 @@ interface ChartPoint extends DailyBucket {
 
 const BRAND_BLUE = '#3E55A5';
 
+// Validated categorical triple (dataviz skill: worst adjacent-pair ΔE 24.0
+// normal-vision / 21.5 CVD — clears every gate). Orange stays under 3:1
+// contrast by design, mitigated by the legend + direct tooltip labels below.
 const KIND_META = {
   speed: { label: 'Speed', color: '#F48221' },
   nights: { label: 'Nights', color: BRAND_BLUE },
-  continuous: { label: 'Continuous', color: '#6B7FC4' },
+  continuous: { label: 'Continuous', color: '#059669' },
 } as const;
 
 const dayLabel = (isoDate: string): string => {
@@ -121,16 +125,10 @@ export const DailyViolationsChart = ({ data, height = 320 }: Props) => {
   return (
     <div className="relative w-full">
       <ResponsiveContainer width="100%" height={height}>
-        <AreaChart
+        <LineChart
           data={points}
           margin={{ top: 8, right: 12, left: -12, bottom: 0 }}
         >
-          <defs>
-            <linearGradient id="dailyTotalFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={BRAND_BLUE} stopOpacity={0.32} />
-              <stop offset="100%" stopColor={BRAND_BLUE} stopOpacity={0.02} />
-            </linearGradient>
-          </defs>
           <CartesianGrid
             vertical={false}
             stroke="currentColor"
@@ -156,18 +154,28 @@ export const DailyViolationsChart = ({ data, height = 320 }: Props) => {
             content={ChartTooltip}
             cursor={{ stroke: BRAND_BLUE, strokeOpacity: 0.25, strokeWidth: 1, strokeDasharray: '4 4' }}
           />
-          <Area
-            type="monotone"
-            dataKey="total"
-            name="Total violations"
-            stroke={BRAND_BLUE}
-            strokeWidth={2.5}
-            fill="url(#dailyTotalFill)"
-            dot={false}
-            activeDot={{ r: 5, strokeWidth: 2, stroke: '#ffffff' }}
-            isAnimationActive={false}
+          <Legend
+            verticalAlign="top"
+            align="right"
+            height={28}
+            iconType="line"
+            iconSize={14}
+            wrapperStyle={{ fontSize: 12, color: 'var(--color-text-secondary)' }}
           />
-        </AreaChart>
+          {(Object.keys(KIND_META) as Array<keyof typeof KIND_META>).map((k) => (
+            <Line
+              key={k}
+              type="monotone"
+              dataKey={k}
+              name={KIND_META[k].label}
+              stroke={KIND_META[k].color}
+              strokeWidth={2.25}
+              dot={false}
+              activeDot={{ r: 4.5, strokeWidth: 2, stroke: '#ffffff' }}
+              isAnimationActive={false}
+            />
+          ))}
+        </LineChart>
       </ResponsiveContainer>
 
       {isAllZero && (

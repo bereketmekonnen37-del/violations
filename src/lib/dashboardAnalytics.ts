@@ -74,7 +74,16 @@ interface AnalyticsInput {
    *  `mergeNightRows` before counting. Driven by the navbar "Merged nights"
    *  toggle — false counts every raw night row uncollapsed. */
   mergeNights?: boolean;
+  /** When set (seconds), any event/row whose duration exceeds this is
+   *  dropped entirely. Set on the Rules page; `null`/`undefined` = no cap. */
+  maxDurationSeconds?: number | null;
 }
+
+const exceedsMaxDuration = (
+  seconds: number,
+  maxDurationSeconds: number | null | undefined,
+): boolean =>
+  maxDurationSeconds != null && maxDurationSeconds > 0 && seconds > maxDurationSeconds;
 
 interface VioBucket {
   vidKey: string;
@@ -189,6 +198,7 @@ export const computeDashboardAnalytics = ({
   allowedVidsByType = EMPTY_ALLOWED,
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
   mergeNights = true,
+  maxDurationSeconds = null,
 }: AnalyticsInput): AnalyticsResult => {
   const resolve = buildDriverProfileLookup(driverRecords);
   const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
@@ -217,6 +227,7 @@ export const computeDashboardAnalytics = ({
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
         if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.speed) return;
+        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const d = parseEventDate(event.start) ?? parseEventDate(event.end);
         const evtKey = d ? toDateKey(d) : null;
@@ -241,6 +252,7 @@ export const computeDashboardAnalytics = ({
       merged.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.nights) return;
+        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
         const d = parseEventDate(row.timeA) ?? parseEventDate(row.timeB);
         const evtKey = d ? toDateKey(d) : null;
         if (allowedNights.matches(vidKey, evtKey)) return;
@@ -268,6 +280,7 @@ export const computeDashboardAnalytics = ({
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.continuous) return;
+        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
         const hasPosition =
           Boolean(row.positionA && row.positionA.trim()) ||
           Boolean(row.positionB && row.positionB.trim());

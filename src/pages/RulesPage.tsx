@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   CalendarClock,
   CalendarDays,
   CalendarRange,
@@ -14,6 +15,7 @@ import {
   Plus,
   RotateCcw,
   Route as RouteIcon,
+  ScissorsLineDashed,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -35,6 +37,7 @@ import {
   resetThresholds,
   setAllowedLocationDates,
   setAllowedVidDates,
+  setMaxDurationSeconds,
   setThresholds,
   type AllowedLocationCategory,
   type AllowedLocationEntry,
@@ -114,6 +117,7 @@ const toDateKey = (y: number, m: number, d: number): string =>
 export const RulesPage = () => {
   const dispatch = useAppDispatch();
   const thresholds = useAppSelector((s) => s.rules.thresholds);
+  const maxDurationSeconds = useAppSelector((s) => s.rules.maxDurationSeconds);
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
@@ -143,6 +147,11 @@ export const RulesPage = () => {
           thresholds={thresholds}
           onChange={(t) => dispatch(setThresholds(t))}
           onReset={() => dispatch(resetThresholds())}
+        />
+
+        <MaxDurationCard
+          maxDurationSeconds={maxDurationSeconds}
+          onChange={(seconds) => dispatch(setMaxDurationSeconds(seconds))}
         />
 
         <section className="surface rounded-2xl p-5 sm:p-7">
@@ -504,6 +513,153 @@ const NumberStepper = ({ label, value, min, max, onChange }: NumberStepperProps)
         </button>
       </div>
     </label>
+  );
+};
+
+/* ── max duration cap ────────────────────────────────────────────── */
+
+interface MaxDurationCardProps {
+  maxDurationSeconds: number | null;
+  onChange: (seconds: number | null) => void;
+}
+
+const MaxDurationCard = ({ maxDurationSeconds, onChange }: MaxDurationCardProps) => {
+  const [modalOpen, setModalOpen] = useState(false);
+  const hasCap = maxDurationSeconds != null;
+
+  return (
+    <section className="surface rounded-2xl p-5 sm:p-7">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="inline-flex items-center gap-2 text-base font-semibold text-ink-900 dark:text-white">
+            <ScissorsLineDashed size={16} /> Maximum duration cap
+          </h2>
+          <p className="mt-1 max-w-2xl text-xs text-ink-500 dark:text-ink-400">
+            Set an upper bound on event duration. Any Speed, Nights or
+            Continuous row longer than this is dropped everywhere — Dashboard,
+            Master Fleet and Transporter pages. Change or remove it anytime.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {hasCap && (
+            <button
+              type="button"
+              onClick={() => onChange(null)}
+              className="btn-ghost !py-1 !px-2 text-xs text-red-600 dark:text-red-400"
+            >
+              <Trash2 size={12} /> Remove cap
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="btn-primary !py-1.5 !px-3 text-xs"
+          >
+            <ScissorsLineDashed size={14} /> Set duration
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        {hasCap ? (
+          <div
+            className="inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold"
+            style={{
+              background: 'var(--color-brand-accent-soft)',
+              border: '1px solid var(--color-brand-accent-line)',
+              color: 'var(--color-brand-accent-dark)',
+            }}
+          >
+            <AlertTriangle size={14} />
+            Dropping any duration above{' '}
+            <span className="font-mono">{formatThreshold(maxDurationSeconds!)}</span>
+          </div>
+        ) : (
+          <p
+            className="rounded-xl px-3 py-2.5 text-xs"
+            style={{
+              background: 'var(--color-brand-blue-soft)',
+              border: '1px dashed var(--color-brand-blue-line)',
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            No cap set — every duration is kept, no matter how long.
+          </p>
+        )}
+      </div>
+
+      {modalOpen && (
+        <SetDurationModal
+          initialSeconds={maxDurationSeconds}
+          onSubmit={(seconds) => {
+            onChange(seconds);
+            setModalOpen(false);
+          }}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
+    </section>
+  );
+};
+
+interface SetDurationModalProps {
+  initialSeconds: number | null;
+  onSubmit: (seconds: number | null) => void;
+  onClose: () => void;
+}
+
+const SetDurationModal = ({
+  initialSeconds,
+  onSubmit,
+  onClose,
+}: SetDurationModalProps) => {
+  const initial = splitHM(initialSeconds ?? 3600);
+  const [h, setH] = useState(initial.h);
+  const [m, setM] = useState(initial.m);
+
+  const seconds = h * 3600 + m * 60;
+  const valid = seconds > 0;
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Set duration cap"
+      subtitle="Any event longer than this duration will be dropped from every count and list."
+      widthClassName="w-[92vw] max-w-[480px]"
+    >
+      <div className="flex flex-col gap-5">
+        <div className="grid grid-cols-2 gap-2">
+          <NumberStepper label="Hours" value={h} min={0} max={999} onChange={setH} />
+          <NumberStepper label="Minutes" value={m} min={0} max={59} onChange={setM} />
+        </div>
+        <p
+          className="rounded-xl px-3 py-2.5 text-xs"
+          style={{
+            background: 'var(--color-brand-blue-soft)',
+            border: '1px solid var(--color-brand-blue-line)',
+            color: 'var(--color-text-secondary)',
+          }}
+        >
+          {valid
+            ? `Any duration above ${formatThreshold(seconds)} will be dropped from Dashboard, Master Fleet and Transporter pages.`
+            : 'Enter a duration greater than zero.'}
+        </p>
+        <div className="flex flex-col-reverse items-stretch justify-end gap-2 border-t border-ink-100 pt-4 dark:border-ink-800 sm:flex-row sm:items-center">
+          <button type="button" onClick={onClose} className="btn-ghost">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => valid && onSubmit(seconds)}
+            disabled={!valid}
+            className="btn-primary"
+          >
+            <ScissorsLineDashed size={14} /> Apply cap
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 };
 

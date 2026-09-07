@@ -30,8 +30,6 @@ import { filterFilesByTransporter } from '../lib/transporterScope';
 import { parseDurationSeconds } from '../lib/duration';
 import { DailyViolationsChart } from '../features/dashboard/DailyViolationsChart';
 import { TopOffenderCards } from '../features/dashboard/TopOffenderCards';
-import { TransporterAnalytics } from '../features/dashboard/TransporterAnalytics';
-import { computeTransporterAnalytics } from '../lib/transporterAnalytics';
 
 export const DashboardPage = () => {
   const user = useAppSelector((s) => s.auth.user);
@@ -41,6 +39,7 @@ export const DashboardPage = () => {
   const rawContFiles = useAppSelector((s) => s.unfilteredContinuous.files);
   const driverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
+  const maxDurationSeconds = useAppSelector((s) => s.rules.maxDurationSeconds);
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
@@ -89,6 +88,7 @@ export const DashboardPage = () => {
         allowedVidsByType,
         allowedLocationsByType,
         mergeNights,
+        maxDurationSeconds,
       }),
     [
       speedFiles,
@@ -99,36 +99,13 @@ export const DashboardPage = () => {
       allowedVidsByType,
       allowedLocationsByType,
       mergeNights,
+      maxDurationSeconds,
     ],
   );
 
   const dailySeries = useMemo(
     () => fillDailyRange(analytics.daily),
     [analytics.daily],
-  );
-
-  const transporterRows = useMemo(
-    () =>
-      computeTransporterAnalytics({
-        speedFiles,
-        nightFiles,
-        continuousFiles,
-        driverRecords,
-        thresholds,
-        allowedVidsByType,
-        allowedLocationsByType,
-        mergeNights,
-      }),
-    [
-      speedFiles,
-      nightFiles,
-      continuousFiles,
-      driverRecords,
-      thresholds,
-      allowedVidsByType,
-      allowedLocationsByType,
-      mergeNights,
-    ],
   );
 
   const analyticsTotal =
@@ -153,7 +130,12 @@ export const DashboardPage = () => {
           driverBlocks += 1;
           d.events.forEach((e) => {
             const s = parseDurationSeconds(e.duration);
-            if (Number.isFinite(s) && s >= thresholds.speed) speedEvents += 1;
+            if (
+              Number.isFinite(s) &&
+              s >= thresholds.speed &&
+              !(maxDurationSeconds != null && s > maxDurationSeconds)
+            )
+              speedEvents += 1;
           });
         }),
       );
@@ -162,7 +144,12 @@ export const DashboardPage = () => {
           if ((d.transporter ?? '').trim().toLowerCase() !== norm) return;
           d.rows.forEach((r) => {
             const s = parseDurationSeconds(r.duration);
-            if (Number.isFinite(s) && s >= thresholds.nights) nightRows += 1;
+            if (
+              Number.isFinite(s) &&
+              s >= thresholds.nights &&
+              !(maxDurationSeconds != null && s > maxDurationSeconds)
+            )
+              nightRows += 1;
           });
         }),
       );
@@ -171,7 +158,12 @@ export const DashboardPage = () => {
           if ((d.transporter ?? '').trim().toLowerCase() !== norm) return;
           d.rows.forEach((r) => {
             const s = parseDurationSeconds(r.duration);
-            if (Number.isFinite(s) && s >= thresholds.continuous) continuousRows += 1;
+            if (
+              Number.isFinite(s) &&
+              s >= thresholds.continuous &&
+              !(maxDurationSeconds != null && s > maxDurationSeconds)
+            )
+              continuousRows += 1;
           });
         }),
       );
@@ -196,6 +188,7 @@ export const DashboardPage = () => {
     continuousFiles,
     driverRecords,
     thresholds,
+    maxDurationSeconds,
   ]);
 
   if (!user) return null;
@@ -534,16 +527,6 @@ export const DashboardPage = () => {
             <DailyViolationsChart data={dailySeries} />
           </div>
         </section>
-      )}
-
-      {(isBoss || isTransporterStaff) && (
-        <TransporterAnalytics
-          rows={
-            isTransporterStaff
-              ? transporterRows.filter((r) => matchesTransporter(r.name))
-              : transporterRows
-          }
-        />
       )}
 
       <section className="mt-10">

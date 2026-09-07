@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
   CalendarDays,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -20,7 +22,7 @@ import {
   Trophy,
   Users,
 } from 'lucide-react';
-import { useAppSelector } from '../app/store';
+import { useAppDispatch, useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Modal } from '../components/ui/Modal';
@@ -37,7 +39,13 @@ import {
   type MasterFleetRow,
 } from '../lib/masterFleet';
 import { filterFilesByTransporter } from '../lib/transporterScope';
+import { normalizeVid } from '../lib/locationRules';
 import { useUserScope } from '../hooks/useUserScope';
+import {
+  setRecommendedAction,
+  RECOMMENDED_ACTION_LABEL,
+  type RecommendedAction,
+} from '../features/masterFleet/masterFleetStatusSlice';
 
 const formatThreshold = (seconds: number): string => {
   if (seconds % 3600 === 0) return `${seconds / 3600}h`;
@@ -151,16 +159,19 @@ const TopOffenderCard = ({
 };
 
 export const MasterFleetPage = () => {
+  const dispatch = useAppDispatch();
   const rawSpeed = useAppSelector((s) => s.unfiltered.files);
   const rawNights = useAppSelector((s) => s.unfilteredNights.files);
   const rawCont = useAppSelector((s) => s.unfilteredContinuous.files);
   const driverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
+  const maxDurationSeconds = useAppSelector((s) => s.rules.maxDurationSeconds);
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
   );
   const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
+  const statusByVid = useAppSelector((s) => s.masterFleetStatus.statusByVid);
   const allowedLocationsTotal =
     allowedLocationsByType.speed.length +
     allowedLocationsByType.nights.length +
@@ -193,6 +204,7 @@ export const MasterFleetPage = () => {
         allowedVidsByType,
         allowedLocationsByType,
         mergeNights,
+        maxDurationSeconds,
       }),
     [
       speedFiles,
@@ -203,6 +215,7 @@ export const MasterFleetPage = () => {
       allowedVidsByType,
       allowedLocationsByType,
       mergeNights,
+      maxDurationSeconds,
     ],
   );
 
@@ -217,6 +230,7 @@ export const MasterFleetPage = () => {
         allowedVidsByType,
         allowedLocationsByType,
         mergeNights,
+        maxDurationSeconds,
       }),
     [
       speedFiles,
@@ -227,6 +241,7 @@ export const MasterFleetPage = () => {
       allowedVidsByType,
       allowedLocationsByType,
       mergeNights,
+      maxDurationSeconds,
     ],
   );
 
@@ -294,7 +309,7 @@ export const MasterFleetPage = () => {
             </button>
             <button
               type="button"
-              onClick={() => downloadMasterFleetCsv(rows)}
+              onClick={() => downloadMasterFleetCsv(rows, statusByVid)}
               disabled={rows.length === 0}
               className="btn-primary"
             >
@@ -438,7 +453,14 @@ export const MasterFleetPage = () => {
           </div>
         }
       >
-        <FullRankingTable rows={rows} filtered={filtered} />
+        <FullRankingTable
+          rows={rows}
+          filtered={filtered}
+          statusByVid={statusByVid}
+          onSetStatus={(vid, action) =>
+            dispatch(setRecommendedAction({ vid, action }))
+          }
+        />
       </Modal>
     </div>
   );
@@ -447,9 +469,16 @@ export const MasterFleetPage = () => {
 interface FullRankingTableProps {
   rows: MasterFleetRow[];
   filtered: MasterFleetRow[];
+  statusByVid: Record<string, RecommendedAction>;
+  onSetStatus: (vid: string, action: RecommendedAction | null) => void;
 }
 
-const FullRankingTable = ({ rows, filtered }: FullRankingTableProps) => (
+const FullRankingTable = ({
+  rows,
+  filtered,
+  statusByVid,
+  onSetStatus,
+}: FullRankingTableProps) => (
   <div className="overflow-hidden rounded-xl border border-ink-100 dark:border-ink-800">
     <div className="max-h-[70vh] overflow-auto">
       <table className="min-w-full text-sm">
@@ -463,13 +492,14 @@ const FullRankingTable = ({ rows, filtered }: FullRankingTableProps) => (
             <th className="px-4 py-3 text-right">Speed</th>
             <th className="px-4 py-3 text-right">Continuous</th>
             <th className="px-4 py-3 text-right">Total</th>
+            <th className="px-4 py-3">Recommended action</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
           {filtered.length === 0 ? (
             <tr>
               <td
-                colSpan={8}
+                colSpan={9}
                 className="px-4 py-8 text-center text-sm text-ink-500 dark:text-ink-400"
               >
                 No drivers match your search.
@@ -551,6 +581,12 @@ const FullRankingTable = ({ rows, filtered }: FullRankingTableProps) => (
                   <td className="px-4 py-2.5 text-right font-mono font-semibold text-ink-900 dark:text-white">
                     {r.total}
                   </td>
+                  <td className="px-4 py-2.5">
+                    <RecommendedActionCell
+                      status={statusByVid[normalizeVid(r.vid)]}
+                      onChange={(action) => onSetStatus(r.vid, action)}
+                    />
+                  </td>
                 </tr>
               );
             })
@@ -560,6 +596,139 @@ const FullRankingTable = ({ rows, filtered }: FullRankingTableProps) => (
     </div>
   </div>
 );
+
+/**
+ * Google-Sheets-style status cell: click to reveal the two-option dropdown,
+ * click a choice to set it (or click the same cell again to reopen and
+ * change it). Persisted to Redux so it survives reloads and travels into
+ * the CSV export.
+ */
+const RecommendedActionCell = ({
+  status,
+  onChange,
+}: {
+  status: RecommendedAction | undefined;
+  onChange: (action: RecommendedAction | null) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(
+    null,
+  );
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const reposition = () => {
+    const btn = buttonRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const menuHeight = 120; // rough estimate — options + optional clear row
+    const openUpward = rect.bottom + menuHeight > window.innerHeight;
+    setMenuPos({
+      top: openUpward ? rect.top - menuHeight : rect.bottom + 4,
+      left: rect.left,
+      width: Math.max(rect.width, 180),
+    });
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    reposition();
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        buttonRef.current &&
+        !buttonRef.current.contains(target) &&
+        menuRef.current &&
+        !menuRef.current.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    const onScrollOrResize = () => reposition();
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    // Capture phase so scrolling inside the table's own scroll container
+    // (which doesn't bubble) still repositions the portal-rendered menu.
+    document.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+  }, [open]);
+
+  const options: RecommendedAction[] = ['refresher', 'engaged'];
+
+  return (
+    <div className="inline-block w-full min-w-[180px]">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={
+          'flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition ' +
+          (status
+            ? 'border-brand-blue-line bg-brand-blue-soft text-brand-blue-dark hover:border-brand-blue'
+            : 'border-dashed border-ink-200 bg-white text-ink-400 hover:border-ink-400 hover:text-ink-600 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-500')
+        }
+      >
+        <span className="truncate">
+          {status ? RECOMMENDED_ACTION_LABEL[status] : 'Click to set…'}
+        </span>
+        <ChevronDown size={12} className="shrink-0 opacity-60" />
+      </button>
+
+      {open && menuPos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="listbox"
+            className="fixed z-50 overflow-hidden rounded-xl border border-ink-100 bg-white py-1 shadow-elev dark:border-ink-800 dark:bg-ink-900"
+            style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          >
+            {options.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                role="option"
+                aria-selected={status === opt}
+                onClick={() => {
+                  onChange(opt);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-medium text-ink-800 transition hover:bg-brand-blue-soft dark:text-ink-100 dark:hover:bg-ink-800"
+              >
+                {RECOMMENDED_ACTION_LABEL[opt]}
+                {status === opt && (
+                  <Check size={13} className="shrink-0 text-brand-blue" />
+                )}
+              </button>
+            ))}
+            {status && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(null);
+                  setOpen(false);
+                }}
+                className="mt-1 flex w-full items-center gap-2 border-t border-ink-100 px-3 py-2 text-left text-xs font-medium text-red-600 transition hover:bg-red-50 dark:border-ink-800 dark:text-red-400 dark:hover:bg-red-950/40"
+              >
+                Clear
+              </button>
+            )}
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+};
 
 type EventTab = 'speed' | 'nights' | 'continuous';
 

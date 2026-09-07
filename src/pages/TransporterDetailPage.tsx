@@ -61,6 +61,7 @@ export const TransporterDetailPage = () => {
   const rawCont = useAppSelector((s) => s.unfilteredContinuous.files);
   const driverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
+  const maxDurationSeconds = useAppSelector((s) => s.rules.maxDurationSeconds);
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
@@ -92,6 +93,7 @@ export const TransporterDetailPage = () => {
         allowedVidsByType,
         allowedLocationsByType,
         mergeNights,
+        maxDurationSeconds,
       }),
     [
       speedFiles,
@@ -102,6 +104,7 @@ export const TransporterDetailPage = () => {
       allowedVidsByType,
       allowedLocationsByType,
       mergeNights,
+      maxDurationSeconds,
     ],
   );
 

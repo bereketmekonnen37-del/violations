@@ -45,6 +45,10 @@ export interface RulesState {
   thresholds: RuleThresholds;
   allowedVidsByType: AllowedVidLists;
   allowedLocationsByType: AllowedLocationLists;
+  /** When set (seconds), any event/row whose duration exceeds this cap is
+   *  dropped from every count and list across the app — Dashboard, Master
+   *  Fleet, Transporter pages. `null` means no cap is applied. */
+  maxDurationSeconds: number | null;
 }
 
 export const DEFAULT_RULE_THRESHOLDS: RuleThresholds = {
@@ -69,6 +73,7 @@ const initialState: RulesState = {
   thresholds: DEFAULT_RULE_THRESHOLDS,
   allowedVidsByType: emptyVidLists(),
   allowedLocationsByType: emptyLocationLists(),
+  maxDurationSeconds: null,
 };
 
 const eqValue = (a: string, b: string): boolean =>
@@ -120,6 +125,12 @@ const rulesSlice = createSlice({
     },
     resetThresholds(state) {
       state.thresholds = DEFAULT_RULE_THRESHOLDS;
+    },
+
+    /** Set (or clear, with `null`) the global maximum-duration cap. */
+    setMaxDurationSeconds(state, action: PayloadAction<number | null>) {
+      state.maxDurationSeconds =
+        action.payload == null || action.payload <= 0 ? null : action.payload;
     },
 
     /* ── VIDs ─────────────────────────────────────────────────────── */
@@ -195,6 +206,7 @@ const rulesSlice = createSlice({
 export const {
   setThresholds,
   resetThresholds,
+  setMaxDurationSeconds,
   addAllowedVid,
   removeAllowedVid,
   setAllowedVidDates,

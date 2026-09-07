@@ -105,7 +105,16 @@ interface AnalyticsInput {
    *  `mergeNightRows` before counting. Driven by the navbar "Merged nights"
    *  toggle — false counts every raw night row uncollapsed. */
   mergeNights?: boolean;
+  /** When set (seconds), any event/row whose duration exceeds this is
+   *  dropped entirely. Set on the Rules page; `null`/`undefined` = no cap. */
+  maxDurationSeconds?: number | null;
 }
+
+const exceedsMaxDuration = (
+  seconds: number,
+  maxDurationSeconds: number | null | undefined,
+): boolean =>
+  maxDurationSeconds != null && maxDurationSeconds > 0 && seconds > maxDurationSeconds;
 
 interface Bucket {
   displayName: string;
@@ -148,6 +157,7 @@ export const computeTransporterAnalytics = ({
   allowedVidsByType = EMPTY_ALLOWED,
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
   mergeNights = true,
+  maxDurationSeconds = null,
 }: AnalyticsInput): TransporterAnalyticsRow[] => {
   const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
   const allowedNights = buildAllowedVidMatcher(allowedVidsByType.nights);
@@ -192,6 +202,7 @@ export const computeTransporterAnalytics = ({
       driver.events.forEach((event) => {
         const seconds = parseDurationSeconds(event.duration);
         if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.speed) return;
+        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const evtKey = eventDateKey(event.start, event.end);
         if (speedTags.matchesPosition(event.overspeedPosition, evtKey)) return;
@@ -212,6 +223,7 @@ export const computeTransporterAnalytics = ({
       merged.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.nights) return;
+        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
         const evtKey = eventDateKey(row.timeA, row.timeB);
         if (allowedNights.matches(vidKey, evtKey)) return;
         if (
@@ -235,6 +247,7 @@ export const computeTransporterAnalytics = ({
       driver.rows.forEach((row) => {
         const seconds = parseDurationSeconds(row.duration);
         if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.continuous) return;
+        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
         const hasPosition =
           Boolean(row.positionA && row.positionA.trim()) ||
           Boolean(row.positionB && row.positionB.trim());

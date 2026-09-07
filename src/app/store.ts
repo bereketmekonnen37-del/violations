@@ -24,6 +24,7 @@ import driversReducer from '../features/drivers/driversSlice';
 import rulesReducer from '../features/rules/rulesSlice';
 import staffUsersReducer from '../features/staffUsers/staffUsersSlice';
 import nightMergeReducer from '../features/settings/nightMergeSlice';
+import masterFleetStatusReducer from '../features/masterFleet/masterFleetStatusSlice';
 
 const rootReducer = combineReducers({
   auth: authReducer,
@@ -37,6 +38,7 @@ const rootReducer = combineReducers({
   rules: rulesReducer,
   staffUsers: staffUsersReducer,
   nightMerge: nightMergeReducer,
+  masterFleetStatus: masterFleetStatusReducer,
 });
 
 // Migration 2: `rules.allowedVids: string[]` became
@@ -175,12 +177,29 @@ const migrations = {
       },
     } as unknown as PersistedState;
   },
+  // Migration 6: `rules.maxDurationSeconds` — a global cap that drops any
+  // event/row whose duration exceeds it. Default to "no cap" for existing
+  // users so behavior is unchanged until they opt in on the Rules page.
+  6: (persisted: PersistedState): PersistedState => {
+    if (!persisted) return persisted;
+    const anyState = persisted as unknown as Record<string, unknown>;
+    const rules = anyState.rules as Record<string, unknown> | undefined;
+    if (!rules) return persisted;
+    if ('maxDurationSeconds' in rules) return persisted;
+    return {
+      ...anyState,
+      rules: {
+        ...rules,
+        maxDurationSeconds: null,
+      },
+    } as unknown as PersistedState;
+  },
 };
 
 const persistedReducer = persistReducer(
   {
     key: 'fleetwatch',
-    version: 5,
+    version: 6,
     storage,
     whitelist: [
       'auth',
@@ -194,6 +213,7 @@ const persistedReducer = persistReducer(
       'rules',
       'staffUsers',
       'nightMerge',
+      'masterFleetStatus',
     ],
     migrate: createMigrate(migrations, { debug: false }),
   },
