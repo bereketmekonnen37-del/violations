@@ -1,12 +1,16 @@
 import { useMemo, useState } from 'react';
-import { Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
+import { Loader2, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../app/store';
 import {
   addDriverRecord,
   removeDriverRecord,
   updateDriverRecord,
 } from './driversSlice';
-import { newId } from '../../lib/utils';
+import {
+  deleteDriverRecordRemote,
+  insertDriverRecordRemote,
+  updateDriverRecordRemote,
+} from './driversApi';
 
 export const DriversDataTable = () => {
   const dispatch = useAppDispatch();
@@ -19,6 +23,8 @@ export const DriversDataTable = () => {
   const [newTransporter, setNewTransporter] = useState('');
   const [newName, setNewName] = useState('');
   const [newVid, setNewVid] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -57,20 +63,39 @@ export const DriversDataTable = () => {
     const transporter = draftTransporter.trim();
     if (!vid) return;
     dispatch(updateDriverRecord({ id: editingId, vid, driverName, transporter }));
+    updateDriverRecordRemote(editingId, { vid, driverName, transporter }).catch(() => {
+      // Local state already reflects the change; a failed sync just means
+      // the next roster reload will restore the previous values.
+    });
     cancelEdit();
   };
 
-  const handleAdd = () => {
+  const handleDelete = (id: string) => {
+    dispatch(removeDriverRecord(id));
+    deleteDriverRecordRemote(id).catch(() => {
+      // Local state already reflects the delete; a failed sync just means
+      // it reappears on the next roster reload.
+    });
+  };
+
+  const handleAdd = async () => {
     const vid = newVid.trim();
     const driverName = newName.trim();
     const transporter = newTransporter.trim();
     if (!vid || (!driverName && !transporter)) return;
-    dispatch(
-      addDriverRecord({ id: newId(), vid, driverName, transporter }),
-    );
-    setNewTransporter('');
-    setNewName('');
-    setNewVid('');
+    setAdding(true);
+    setAddError(null);
+    try {
+      const record = await insertDriverRecordRemote({ vid, driverName, transporter });
+      dispatch(addDriverRecord(record));
+      setNewTransporter('');
+      setNewName('');
+      setNewVid('');
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : 'Could not add the driver.');
+    } finally {
+      setAdding(false);
+    }
   };
 
   return (
@@ -125,12 +150,21 @@ export const DriversDataTable = () => {
         <button
           type="button"
           onClick={handleAdd}
-          disabled={!newVid.trim() || (!newName.trim() && !newTransporter.trim())}
+          disabled={
+            adding || !newVid.trim() || (!newName.trim() && !newTransporter.trim())
+          }
           className="btn-primary !px-4"
         >
-          <Plus size={15} /> Add
+          {adding ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+          Add
         </button>
       </div>
+
+      {addError && (
+        <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+          {addError}
+        </div>
+      )}
 
       <div className="mt-5 overflow-x-auto rounded-xl border border-ink-100 dark:border-ink-800">
         <table className="min-w-full text-sm">
@@ -234,7 +268,7 @@ export const DriversDataTable = () => {
                             </button>
                             <button
                               type="button"
-                              onClick={() => dispatch(removeDriverRecord(r.id))}
+                              onClick={() => handleDelete(r.id)}
                               className="btn-ghost !px-3 !py-1.5 text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
                               aria-label="Delete"
                             >

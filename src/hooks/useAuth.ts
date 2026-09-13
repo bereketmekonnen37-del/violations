@@ -15,6 +15,7 @@ interface ProfileRow {
   name: string;
   role: UserRole;
   assigned_transporters: string[];
+  avatar_url: string | null;
 }
 
 const toUser = (row: ProfileRow): User => ({
@@ -23,12 +24,13 @@ const toUser = (row: ProfileRow): User => ({
   name: row.name,
   role: row.role,
   assignedTransporters: row.assigned_transporters ?? [],
+  avatar: row.avatar_url ?? undefined,
 });
 
 const fetchProfile = async (userId: string): Promise<User> => {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, name, role, assigned_transporters')
+    .select('id, email, name, role, assigned_transporters, avatar_url')
     .eq('id', userId)
     .single();
   if (error || !data) {

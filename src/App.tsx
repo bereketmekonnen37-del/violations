@@ -2,6 +2,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { useTheme } from './hooks/useTheme';
 import { useAuthBootstrap } from './hooks/useAuth';
 import { useUnfilteredBootstrap } from './hooks/useUnfilteredBootstrap';
+import { useAppDataBootstrap } from './hooks/useAppDataBootstrap';
 import { AppRoutes } from './routes/AppRoutes';
 
 const ThemeLoader = () => {
@@ -16,6 +17,7 @@ const AuthLoader = () => {
 
 const DataBootstrapLoader = () => {
   useUnfilteredBootstrap();
+  useAppDataBootstrap();
   return null;
 };
 

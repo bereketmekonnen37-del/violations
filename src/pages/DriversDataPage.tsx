@@ -5,6 +5,7 @@ import { StatCard } from '../components/ui/StatCard';
 import { DriversDataUpload } from '../features/drivers/DriversDataUpload';
 import { DriversDataTable } from '../features/drivers/DriversDataTable';
 import { clearDrivers } from '../features/drivers/driversSlice';
+import { clearDriverRosterRemote } from '../features/drivers/driversApi';
 import { formatDateTime } from '../lib/utils';
 import { useUserScope } from '../hooks/useUserScope';
 
@@ -31,6 +32,11 @@ export const DriversDataPage = () => {
               onClick={() => {
                 if (confirm('Clear the monthly drivers list?')) {
                   dispatch(clearDrivers());
+                  clearDriverRosterRemote().catch(() => {
+                    // Local state already cleared; a failed sync just means
+                    // the next load will restore the old roster — retry by
+                    // clearing again.
+                  });
                 }
               }}
               className="btn-ghost text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"

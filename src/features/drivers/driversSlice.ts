@@ -1,5 +1,10 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
-import type { DriversDataState, DriverRecord, UnfilteredFileKind } from '../../types';
+import type {
+  DriversDataState,
+  DriverRecord,
+  RemoteLoadStatus,
+  UnfilteredFileKind,
+} from '../../types';
 
 const initialState: DriversDataState = {
   period: '',
@@ -9,6 +14,8 @@ const initialState: DriversDataState = {
   fileName: null,
   fileType: null,
   records: [],
+  status: 'idle',
+  error: null,
 };
 
 interface ReplaceDriversPayload {
@@ -24,6 +31,22 @@ const driversSlice = createSlice({
   name: 'drivers',
   initialState,
   reducers: {
+    setDriversStatus(state, action: PayloadAction<RemoteLoadStatus>) {
+      state.status = action.payload;
+      if (action.payload !== 'error') state.error = null;
+    },
+    setDriversError(state, action: PayloadAction<string>) {
+      state.status = 'error';
+      state.error = action.payload;
+    },
+    hydrateDrivers(
+      state,
+      action: PayloadAction<Omit<DriversDataState, 'status' | 'error'>>,
+    ) {
+      Object.assign(state, action.payload);
+      state.status = 'loaded';
+      state.error = null;
+    },
     replaceDrivers(state, action: PayloadAction<ReplaceDriversPayload>) {
       const { period, uploaderId, uploaderName, fileName, fileType, records } =
         action.payload;
@@ -67,6 +90,9 @@ const driversSlice = createSlice({
 });
 
 export const {
+  setDriversStatus,
+  setDriversError,
+  hydrateDrivers,
   replaceDrivers,
   updatePeriod,
   updateDriverRecord,

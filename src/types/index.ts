@@ -10,18 +10,21 @@ export interface User {
   assignedTransporters?: string[];
 }
 
-/** Staff account managed by the boss from the User Management page. */
+/** Staff account managed by the boss from the User Management page. Backed
+ *  by a real Supabase Auth account + `profiles` row — passwords are never
+ *  readable, only settable (via the `manage-staff-user` edge function). */
 export interface ManagedStaffUser {
   id: string;
   name: string;
   email: string;
-  password: string;
   assignedTransporters: string[];
   createdAt: string;
 }
 
 export interface StaffUsersState {
   users: ManagedStaffUser[];
+  status: RemoteLoadStatus;
+  error: string | null;
 }
 
 export type Theme = 'light' | 'dark';
@@ -68,6 +71,8 @@ export interface ThemeState {
 
 export interface UploadsState {
   files: ViolationFile[];
+  status: RemoteLoadStatus;
+  error: string | null;
 }
 
 export interface ProfileState {
@@ -231,4 +236,6 @@ export interface DriversDataState {
   fileName: string | null;
   fileType: UnfilteredFileKind | null;
   records: DriverRecord[];
+  status: RemoteLoadStatus;
+  error: string | null;
 }

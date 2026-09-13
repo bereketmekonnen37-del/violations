@@ -6,6 +6,7 @@ import {
   FileStack,
   LayoutDashboard,
   LogOut,
+  MessageSquareText,
   Moon,
   Route,
   Settings,
@@ -143,6 +144,36 @@ export const NavRail = () => {
             {!collapsed && <span className="truncate">{item.label}</span>}
           </NavLink>
         ))}
+
+        {/* ── Coming soon ─────────────────────────────────── */}
+        <div
+          className="mt-2 pt-2"
+          style={{ borderTop: '1px solid rgba(255, 255, 255, 0.12)' }}
+        >
+          {!collapsed && (
+            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+              Coming soon
+            </p>
+          )}
+          <div
+            title="SMS Messaging &amp; Drivers — coming soon"
+            aria-disabled="true"
+            className={cn(
+              'flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/40',
+              collapsed && 'justify-center px-2',
+            )}
+          >
+            <MessageSquareText size={18} className="shrink-0" />
+            {!collapsed && (
+              <span className="flex flex-1 items-center justify-between gap-2 truncate">
+                <span className="truncate">SMS &amp; Drivers</span>
+                <span className="shrink-0 rounded-full bg-white/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white/70">
+                  Soon
+                </span>
+              </span>
+            )}
+          </div>
+        </div>
       </nav>
 
       {/* ── Sign-out footer ─────────────────────────────────── */}

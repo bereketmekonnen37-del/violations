@@ -14,8 +14,9 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { addFile, removeFile } from '../features/uploads/uploadsSlice';
+import { createViolationFile, deleteViolationFile } from '../features/uploads/uploadsApi';
 import { detectFileKind, parseFile } from '../lib/parsers';
-import { cn, formatDateTime, newId } from '../lib/utils';
+import { cn, formatDateTime } from '../lib/utils';
 import type { FileKind } from '../types';
 
 interface FormValues {
@@ -84,20 +85,15 @@ export const UploadPage = () => {
     setError(null);
     try {
       const records = await parseFile(file, kind);
-      const id = newId();
-      dispatch(
-        addFile({
-          id,
-          title: title.trim(),
-          uploadDate: new Date().toISOString(),
-          fileType: kind,
-          uploaderId: user.id,
-          uploaderName: user.name,
-          rowCount: records.length,
-          records,
-        }),
-      );
-      setSuccessId(id);
+      const created = await createViolationFile({
+        title: title.trim(),
+        fileType: kind,
+        uploaderId: user.id,
+        uploaderName: user.name,
+        records,
+      });
+      dispatch(addFile(created));
+      setSuccessId(created.id);
       setFile(null);
       setKind(null);
       if (inputRef.current) inputRef.current.value = '';
@@ -288,7 +284,13 @@ export const UploadPage = () => {
                     </div>
                     <button
                       type="button"
-                      onClick={() => dispatch(removeFile(f.id))}
+                      onClick={() => {
+                        dispatch(removeFile(f.id));
+                        deleteViolationFile(f.id).catch(() => {
+                          // Local state already reflects the delete; if the
+                          // remote call failed it'll reappear on next load.
+                        });
+                      }}
                       className="btn-ghost h-8 w-8 p-0 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
                       aria-label="Delete upload"
                     >

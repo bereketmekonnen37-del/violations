@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   FileStack,
   LayoutDashboard,
+  MessageSquareText,
   Moon,
   Route,
   Settings,
@@ -83,6 +84,19 @@ export const MobileNav = () => {
             </NavLink>
           </li>
         ))}
+        <li className="shrink-0">
+          <div
+            title="SMS Messaging &amp; Drivers — coming soon"
+            aria-disabled="true"
+            className="mobile-nav-idle relative flex min-w-[70px] cursor-not-allowed flex-col items-center gap-1 rounded-xl px-2 py-2 text-[10px] font-medium opacity-60"
+          >
+            <MessageSquareText size={17} />
+            SMS
+            <span className="absolute -top-1 right-1 rounded-full bg-brand-orange px-1 py-px text-[7px] font-bold uppercase tracking-wider text-white">
+              Soon
+            </span>
+          </div>
+        </li>
       </ul>
       <style>{`
         .mobile-nav-idle {

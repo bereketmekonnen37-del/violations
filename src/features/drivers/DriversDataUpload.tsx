@@ -9,7 +9,8 @@ import {
   X,
 } from 'lucide-react';
 import { useAppDispatch } from '../../app/store';
-import { replaceDrivers } from './driversSlice';
+import { replaceDrivers, setDriversStatus } from './driversSlice';
+import { replaceDriverRosterRemote } from './driversApi';
 import { detectDriversKind, parseDriversFile } from '../../lib/driversParser';
 import { cn } from '../../lib/utils';
 import type { UnfilteredFileKind, User } from '../../types';
@@ -69,6 +70,14 @@ export const DriversDataUpload = ({ user }: Props) => {
           'No driver records found. Make sure the file has VID and Driver Name columns.',
         );
       }
+      await replaceDriverRosterRemote({
+        period: period.trim(),
+        uploaderId: user.id,
+        uploaderName: user.name,
+        fileName: file.name,
+        fileType: kind,
+        records,
+      });
       dispatch(
         replaceDrivers({
           period: period.trim(),
@@ -79,6 +88,7 @@ export const DriversDataUpload = ({ user }: Props) => {
           records,
         }),
       );
+      dispatch(setDriversStatus('loaded'));
       setOkMsg(
         `Saved ${records.length} driver${records.length === 1 ? '' : 's'} for ${period.trim()}.`,
       );

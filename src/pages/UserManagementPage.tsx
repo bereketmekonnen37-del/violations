@@ -4,7 +4,9 @@ import {
   ChevronDown,
   Eye,
   EyeOff,
+  Info,
   KeyRound,
+  Loader2,
   Mail,
   Plus,
   Search,
@@ -18,11 +20,18 @@ import {
 import { useAppDispatch, useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
 import { EmptyState } from '../components/ui/EmptyState';
-import { newId } from '../lib/utils';
 import {
-  addStaffUser,
-  removeStaffUser,
-  updateStaffUser,
+  createStaffUserRemote,
+  deleteStaffUserRemote,
+  fetchStaffUsers,
+  updateStaffUserRemote,
+} from '../features/staffUsers/staffUsersApi';
+import {
+  removeStaffUserLocal,
+  setStaffUsers,
+  setStaffUsersError,
+  setStaffUsersStatus,
+  upsertStaffUser,
 } from '../features/staffUsers/staffUsersSlice';
 import type {
   DriverRecord,
@@ -87,10 +96,33 @@ const emptyForm: FormState = {
 export const UserManagementPage = () => {
   const dispatch = useAppDispatch();
   const staffUsers = useAppSelector((s) => s.staffUsers.users);
+  const staffUsersStatus = useAppSelector((s) => s.staffUsers.status);
+  const staffUsersLoadError = useAppSelector((s) => s.staffUsers.error);
   const unfilteredFiles = useAppSelector((s) => s.unfiltered.files);
   const nightFiles = useAppSelector((s) => s.unfilteredNights.files);
   const continuousFiles = useAppSelector((s) => s.unfilteredContinuous.files);
   const driverRecords = useAppSelector((s) => s.drivers.records);
+
+  useEffect(() => {
+    let cancelled = false;
+    dispatch(setStaffUsersStatus('loading'));
+    fetchStaffUsers()
+      .then((users) => {
+        if (!cancelled) dispatch(setStaffUsers(users));
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          dispatch(
+            setStaffUsersError(
+              e instanceof Error ? e.message : 'Could not load staff users.',
+            ),
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch]);
 
   const transporterOptions = useMemo(
     () =>
@@ -106,6 +138,7 @@ export const UserManagementPage = () => {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [query, setQuery] = useState('');
 
   const filteredUsers = useMemo(() => {
@@ -119,7 +152,7 @@ export const UserManagementPage = () => {
     );
   }, [staffUsers, query]);
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     const name = form.name.trim();
@@ -127,6 +160,10 @@ export const UserManagementPage = () => {
     const password = form.password;
     if (!name || !email || !password) {
       setError('Name, email and password are required.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
       return;
     }
     if (form.selected.length === 0) {
@@ -140,18 +177,22 @@ export const UserManagementPage = () => {
       setError('A staff user with that email already exists.');
       return;
     }
-    dispatch(
-      addStaffUser({
-        id: newId(),
+    setCreating(true);
+    try {
+      const created = await createStaffUserRemote({
         name,
         email,
         password,
         assignedTransporters: form.selected,
-        createdAt: new Date().toISOString(),
-      }),
-    );
-    setForm(emptyForm);
-    setShowPw(false);
+      });
+      dispatch(upsertStaffUser(created));
+      setForm(emptyForm);
+      setShowPw(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the staff account.');
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -162,11 +203,12 @@ export const UserManagementPage = () => {
         subtitle="Create staff accounts and scope them to specific transporters. Staff see the same views as the boss, filtered to only the transporters you assign — and cannot manage rules."
       />
 
-      <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-        <strong>Heads up:</strong> this list is still local-only. Entries created
-        here don&apos;t yet create real Supabase sign-in accounts — for now,
-        create real staff logins in the Supabase Dashboard (Authentication →
-        Users) and they&apos;ll be able to sign in immediately.
+      <div className="mb-6 flex items-start gap-2.5 rounded-xl border border-brand-blue-line bg-brand-blue-soft px-4 py-3 text-xs text-brand-blue-dark dark:border-brand-blue/40 dark:bg-brand-blue/10">
+        <Info size={14} className="mt-0.5 shrink-0" />
+        <span>
+          Staff created here are real sign-ins — they can log in immediately
+          with the email and password below, from any device.
+        </span>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.05fr_1fr]">
@@ -274,8 +316,16 @@ export const UserManagementPage = () => {
             </div>
           )}
 
-          <button type="submit" className="btn-primary w-full">
-            <Plus size={16} /> Create staff user
+          <button type="submit" className="btn-primary w-full" disabled={creating}>
+            {creating ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Creating…
+              </>
+            ) : (
+              <>
+                <Plus size={16} /> Create staff user
+              </>
+            )}
           </button>
         </form>
 
@@ -307,7 +357,19 @@ export const UserManagementPage = () => {
           </div>
 
           <div className="mt-4">
-            {filteredUsers.length === 0 ? (
+            {staffUsersStatus === 'loading' && staffUsers.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-sm text-ink-500 dark:text-ink-400">
+                <Loader2 size={16} className="animate-spin" /> Loading staff users…
+              </div>
+            ) : staffUsersStatus === 'error' ? (
+              <EmptyState
+                icon={Users}
+                title="Could not load staff users"
+                description={
+                  staffUsersLoadError ?? 'Something went wrong. Try refreshing the page.'
+                }
+              />
+            ) : filteredUsers.length === 0 ? (
               <EmptyState
                 icon={Users}
                 title={query ? 'No matching users' : 'No staff users yet'}
@@ -325,15 +387,21 @@ export const UserManagementPage = () => {
                     id={u.id}
                     name={u.name}
                     email={u.email}
-                    password={u.password}
                     transporters={u.assignedTransporters}
                     knownTransporters={transporterOptions}
-                    onDelete={() => {
-                      if (confirm(`Delete staff user ${u.email}?`)) {
-                        dispatch(removeStaffUser(u.id));
+                    onDelete={async () => {
+                      if (!confirm(`Delete staff user ${u.email}? This removes their sign-in immediately.`)) return;
+                      try {
+                        await deleteStaffUserRemote(u.id);
+                        dispatch(removeStaffUserLocal(u.id));
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : 'Could not delete this staff user.');
                       }
                     }}
-                    onSave={(patch) => dispatch(updateStaffUser({ id: u.id, ...patch }))}
+                    onSave={async (patch) => {
+                      const updated = await updateStaffUserRemote({ userId: u.id, ...patch });
+                      dispatch(upsertStaffUser(updated));
+                    }}
                   />
                 ))}
               </ul>
@@ -523,7 +591,6 @@ interface RowProps {
   id: string;
   name: string;
   email: string;
-  password: string;
   transporters: string[];
   knownTransporters: string[];
   onDelete: () => void;
@@ -532,13 +599,12 @@ interface RowProps {
     email?: string;
     password?: string;
     assignedTransporters?: string[];
-  }) => void;
+  }) => Promise<void>;
 }
 
 const StaffUserRow = ({
   name,
   email,
-  password,
   transporters,
   knownTransporters,
   onDelete,
@@ -550,17 +616,31 @@ const StaffUserRow = ({
   const [draftPw, setDraftPw] = useState('');
   const [draftTransporters, setDraftTransporters] = useState<string[]>(transporters);
   const [showPw, setShowPw] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const save = () => {
-    onSave({
-      name: draftName,
-      email: draftEmail,
-      password: draftPw,
-      assignedTransporters: draftTransporters,
-    });
-    setDraftPw('');
-    setShowPw(false);
-    setEditing(false);
+  const save = async () => {
+    if (draftPw && draftPw.length < 6) {
+      setSaveError('New password must be at least 6 characters.');
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSave({
+        name: draftName,
+        email: draftEmail,
+        password: draftPw || undefined,
+        assignedTransporters: draftTransporters,
+      });
+      setDraftPw('');
+      setShowPw(false);
+      setEditing(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not save changes.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const cancel = () => {
@@ -569,6 +649,7 @@ const StaffUserRow = ({
     setDraftPw('');
     setDraftTransporters(transporters);
     setShowPw(false);
+    setSaveError(null);
     setEditing(false);
   };
 
@@ -597,6 +678,7 @@ const StaffUserRow = ({
               onChange={(e) => setDraftPw(e.target.value)}
               placeholder="New password (leave blank to keep current)"
               className="input-base pr-10"
+              autoComplete="new-password"
             />
             <button
               type="button"
@@ -621,11 +703,18 @@ const StaffUserRow = ({
             </div>
           </div>
 
+          {saveError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+              {saveError}
+            </div>
+          )}
+
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={cancel} className="btn-ghost">
+            <button type="button" onClick={cancel} className="btn-ghost" disabled={saving}>
               Cancel
             </button>
-            <button type="button" onClick={save} className="btn-primary">
+            <button type="button" onClick={save} className="btn-primary" disabled={saving}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : null}
               Save changes
             </button>
           </div>
@@ -642,10 +731,7 @@ const StaffUserRow = ({
               </span>
             </div>
             <p className="mt-0.5 truncate text-xs text-ink-500 dark:text-ink-400">
-              {email} · password{' '}
-              <span className="font-mono">
-                {'•'.repeat(Math.min(10, password.length))}
-              </span>
+              {email}
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {transporters.length === 0 ? (

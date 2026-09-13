@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CalendarClock,
@@ -46,6 +46,7 @@ import {
   type RuleThresholds,
 } from '../features/rules/rulesSlice';
 import { extractRuleTag } from '../lib/locationRules';
+import { saveAppRules } from '../features/rules/rulesApi';
 
 /* ── helpers ─────────────────────────────────────────────────────── */
 
@@ -122,6 +123,37 @@ export const RulesPage = () => {
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
   );
+  const hydrated = useAppSelector((s) => s.rules.hydrated);
+  const userId = useAppSelector((s) => s.auth.user?.id);
+
+  // Persist any local Rules change to Supabase so every boss/staff session
+  // sees it. Debounced so a burst of edits (e.g. toggling several dates in
+  // the calendar) doesn't fire one request per click, and gated on
+  // `hydrated` so the very first render — before the bootstrap fetch has
+  // replaced local defaults with the server copy — never overwrites it.
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipFirst = useRef(true);
+  useEffect(() => {
+    if (!hydrated || !userId) return;
+    if (skipFirst.current) {
+      skipFirst.current = false;
+      return;
+    }
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveAppRules(
+        { thresholds, allowedVidsByType, allowedLocationsByType, maxDurationSeconds },
+        userId,
+      ).catch(() => {
+        // Local state already reflects the change; a failed sync just
+        // means the next edit (or reload) will retry it.
+      });
+    }, 600);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thresholds, allowedVidsByType, allowedLocationsByType, maxDurationSeconds, hydrated, userId]);
 
   const [activeCategory, setActiveCategory] = useState<Category>('speed');
 

@@ -12,10 +12,12 @@ export interface MasterFleetStatusState {
   /** VID (normalized) → selected recommended-action status. Missing key
    *  means no status has been selected — renders as an empty cell. */
   statusByVid: Record<string, RecommendedAction>;
+  hydrated: boolean;
 }
 
 const initialState: MasterFleetStatusState = {
   statusByVid: {},
+  hydrated: false,
 };
 
 interface SetActionPayload {
@@ -27,6 +29,13 @@ const masterFleetStatusSlice = createSlice({
   name: 'masterFleetStatus',
   initialState,
   reducers: {
+    hydrateMasterFleetStatus(
+      state,
+      action: PayloadAction<Record<string, RecommendedAction>>,
+    ) {
+      state.statusByVid = action.payload;
+      state.hydrated = true;
+    },
     setRecommendedAction(state, action: PayloadAction<SetActionPayload>) {
       const key = normalizeVid(action.payload.vid);
       if (!key) return;
@@ -39,5 +48,6 @@ const masterFleetStatusSlice = createSlice({
   },
 });
 
-export const { setRecommendedAction } = masterFleetStatusSlice.actions;
+export const { hydrateMasterFleetStatus, setRecommendedAction } =
+  masterFleetStatusSlice.actions;
 export default masterFleetStatusSlice.reducer;

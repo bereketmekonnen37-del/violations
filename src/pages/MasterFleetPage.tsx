@@ -46,6 +46,7 @@ import {
   RECOMMENDED_ACTION_LABEL,
   type RecommendedAction,
 } from '../features/masterFleet/masterFleetStatusSlice';
+import { setMasterFleetStatusRemote } from '../features/masterFleet/masterFleetStatusApi';
 
 const formatThreshold = (seconds: number): string => {
   if (seconds % 3600 === 0) return `${seconds / 3600}h`;
@@ -172,6 +173,16 @@ export const MasterFleetPage = () => {
   );
   const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
   const statusByVid = useAppSelector((s) => s.masterFleetStatus.statusByVid);
+  const currentUserId = useAppSelector((s) => s.auth.user?.id);
+  const setStatus = (vid: string, action: RecommendedAction | null) => {
+    dispatch(setRecommendedAction({ vid, action }));
+    if (currentUserId) {
+      setMasterFleetStatusRemote(normalizeVid(vid), action, currentUserId).catch(() => {
+        // Local state already reflects the change; a failed sync just means
+        // it'll be overwritten by the next successful fetch. Non-fatal.
+      });
+    }
+  };
   const allowedLocationsTotal =
     allowedLocationsByType.speed.length +
     allowedLocationsByType.nights.length +
@@ -457,9 +468,7 @@ export const MasterFleetPage = () => {
           rows={rows}
           filtered={filtered}
           statusByVid={statusByVid}
-          onSetStatus={(vid, action) =>
-            dispatch(setRecommendedAction({ vid, action }))
-          }
+          onSetStatus={setStatus}
         />
       </Modal>
     </div>

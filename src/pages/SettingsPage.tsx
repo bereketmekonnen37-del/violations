@@ -1,10 +1,11 @@
 import { useForm } from 'react-hook-form';
-import { Camera, CheckCircle2, Moon, Sun, Trash2 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { Camera, CheckCircle2, Loader2, Moon, Sun, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Avatar } from '../components/ui/Avatar';
 import { setPhoto, setPreferredTheme } from '../features/settings/profileSlice';
+import { changeOwnPassword, updateOwnProfile } from '../features/settings/profileApi';
 import { setTheme } from '../features/theme/themeSlice';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
@@ -30,6 +31,11 @@ export const SettingsPage = () => {
   const fileInput = useRef<HTMLInputElement>(null);
   const [savedProfile, setSavedProfile] = useState(false);
   const [savedPassword, setSavedPassword] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   const profileForm = useForm<ProfileForm>({
     defaultValues: { name: user?.name ?? '', email: user?.email ?? '' },
@@ -38,33 +44,82 @@ export const SettingsPage = () => {
     defaultValues: { current: '', next: '', confirm: '' },
   });
 
-  const onProfileSubmit = (v: ProfileForm) => {
-    updateProfile({ name: v.name.trim(), email: v.email.trim() });
-    setSavedProfile(true);
-    setTimeout(() => setSavedProfile(false), 2500);
+  // Seed the local photo cache from the synced profile (e.g. after signing
+  // in on a new device) so Settings/Topbar show the same avatar everywhere.
+  useEffect(() => {
+    if (!photo && user?.avatar) {
+      dispatch(setPhoto(user.avatar));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.avatar]);
+
+  const onProfileSubmit = async (v: ProfileForm) => {
+    if (!user) return;
+    setProfileError(null);
+    setSavingProfile(true);
+    const name = v.name.trim();
+    const email = v.email.trim();
+    try {
+      await updateOwnProfile(user.id, {
+        name,
+        email: email !== user.email ? email : undefined,
+      });
+      updateProfile({ name, email });
+      setSavedProfile(true);
+      setTimeout(() => setSavedProfile(false), 2500);
+    } catch (e) {
+      setProfileError(e instanceof Error ? e.message : 'Could not save your profile.');
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
-  const onPasswordSubmit = (v: PasswordForm) => {
+  const onPasswordSubmit = async (v: PasswordForm) => {
+    if (!user) return;
     if (v.next !== v.confirm) {
       passwordForm.setError('confirm', { message: 'Passwords do not match.' });
       return;
     }
-    setSavedPassword(true);
-    passwordForm.reset({ current: '', next: '', confirm: '' });
-    setTimeout(() => setSavedPassword(false), 2500);
+    setPasswordError(null);
+    setSavingPassword(true);
+    try {
+      await changeOwnPassword(user.email, v.current, v.next);
+      setSavedPassword(true);
+      passwordForm.reset({ current: '', next: '', confirm: '' });
+      setTimeout(() => setSavedPassword(false), 2500);
+    } catch (e) {
+      setPasswordError(e instanceof Error ? e.message : 'Could not update your password.');
+    } finally {
+      setSavingPassword(false);
+    }
   };
 
   const onPickPhoto = (file: File | null) => {
-    if (!file) return;
+    if (!file || !user) return;
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result;
-      if (typeof result === 'string') {
-        dispatch(setPhoto(result));
-        updateProfile({ avatar: result });
-      }
+      if (typeof result !== 'string') return;
+      dispatch(setPhoto(result));
+      updateProfile({ avatar: result });
+      setPhotoBusy(true);
+      updateOwnProfile(user.id, { avatarUrl: result })
+        .catch(() => {
+          // Local state already reflects the new photo; sync will retry
+          // implicitly the next time the profile is saved.
+        })
+        .finally(() => setPhotoBusy(false));
     };
     reader.readAsDataURL(file);
+  };
+
+  const onRemovePhoto = () => {
+    dispatch(setPhoto(null));
+    if (user) {
+      updateOwnProfile(user.id, { avatarUrl: null }).catch(() => {
+        // Non-fatal — see onPickPhoto.
+      });
+    }
   };
 
   const setThemeChoice = (t: Theme) => {
@@ -94,13 +149,19 @@ export const SettingsPage = () => {
               type="button"
               onClick={() => fileInput.current?.click()}
               className="btn-secondary"
+              disabled={photoBusy}
             >
-              <Camera size={15} /> Upload photo
+              {photoBusy ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <Camera size={15} />
+              )}
+              Upload photo
             </button>
             {photo && (
               <button
                 type="button"
-                onClick={() => dispatch(setPhoto(null))}
+                onClick={onRemovePhoto}
                 className="btn-ghost text-red-600 dark:text-red-400"
               >
                 <Trash2 size={15} /> Remove
@@ -157,13 +218,19 @@ export const SettingsPage = () => {
               </p>
             )}
           </label>
+          {profileError && (
+            <div className="sm:col-span-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+              {profileError}
+            </div>
+          )}
           <div className="flex items-center justify-end gap-3 sm:col-span-2">
             {savedProfile && (
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                 <CheckCircle2 size={14} /> Profile updated
               </span>
             )}
-            <button type="submit" className="btn-primary">
+            <button type="submit" className="btn-primary" disabled={savingProfile}>
+              {savingProfile && <Loader2 size={14} className="animate-spin" />}
               Save changes
             </button>
           </div>
@@ -222,13 +289,19 @@ export const SettingsPage = () => {
               </p>
             )}
           </label>
+          {passwordError && (
+            <div className="sm:col-span-3 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+              {passwordError}
+            </div>
+          )}
           <div className="flex items-center justify-end gap-3 sm:col-span-3">
             {savedPassword && (
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                 <CheckCircle2 size={14} /> Password updated
               </span>
             )}
-            <button type="submit" className="btn-primary">
+            <button type="submit" className="btn-primary" disabled={savingPassword}>
+              {savingPassword && <Loader2 size={14} className="animate-spin" />}
               Update password
             </button>
           </div>

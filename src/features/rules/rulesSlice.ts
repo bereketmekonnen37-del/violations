@@ -49,6 +49,10 @@ export interface RulesState {
    *  dropped from every count and list across the app — Dashboard, Master
    *  Fleet, Transporter pages. `null` means no cap is applied. */
   maxDurationSeconds: number | null;
+  /** True once the shared rules have been loaded from (or seeded to)
+   *  Supabase. Gates the RulesPage's auto-save so a fresh mount doesn't
+   *  immediately overwrite the server copy with stale local defaults. */
+  hydrated: boolean;
 }
 
 export const DEFAULT_RULE_THRESHOLDS: RuleThresholds = {
@@ -74,6 +78,7 @@ const initialState: RulesState = {
   allowedVidsByType: emptyVidLists(),
   allowedLocationsByType: emptyLocationLists(),
   maxDurationSeconds: null,
+  hydrated: false,
 };
 
 const eqValue = (a: string, b: string): boolean =>
@@ -116,10 +121,26 @@ interface SetLocationDatesPayload {
   dates: string[];
 }
 
+interface HydratePayload {
+  thresholds: RuleThresholds;
+  allowedVidsByType: AllowedVidLists;
+  allowedLocationsByType: AllowedLocationLists;
+  maxDurationSeconds: number | null;
+}
+
 const rulesSlice = createSlice({
   name: 'rules',
   initialState,
   reducers: {
+    /** Replace the whole shared-rules shape from Supabase (or from a
+     *  first-time seed of the pre-existing local copy) and mark hydrated. */
+    hydrateRules(state, action: PayloadAction<HydratePayload>) {
+      state.thresholds = action.payload.thresholds;
+      state.allowedVidsByType = action.payload.allowedVidsByType;
+      state.allowedLocationsByType = action.payload.allowedLocationsByType;
+      state.maxDurationSeconds = action.payload.maxDurationSeconds;
+      state.hydrated = true;
+    },
     setThresholds(state, action: PayloadAction<RuleThresholds>) {
       state.thresholds = action.payload;
     },
@@ -204,6 +225,7 @@ const rulesSlice = createSlice({
 });
 
 export const {
+  hydrateRules,
   setThresholds,
   resetThresholds,
   setMaxDurationSeconds,
