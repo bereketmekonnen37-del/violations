@@ -99,14 +99,16 @@ export interface MergedNightRow extends NightRow {
 }
 
 /**
- * True when the row has a usable duration AND at least one position filled.
- * Rows that fail this check are excluded from Master Fleet counts entirely
- * (per the boss: "remove any data that doesn't have a duration of any
- * position in it").
+ * True when the row has at least one position filled. `requireDuration`
+ * (default true, unchanged behavior for Dashboard/Transporter callers) also
+ * requires a usable duration; Master Fleet passes `false` so a row with no
+ * duration still counts instead of being silently dropped.
  */
-export const isNightRowValid = (row: NightRow): boolean => {
-  const seconds = parseDurationSeconds(row.duration);
-  if (!Number.isFinite(seconds) || seconds <= 0) return false;
+export const isNightRowValid = (row: NightRow, requireDuration = true): boolean => {
+  if (requireDuration) {
+    const seconds = parseDurationSeconds(row.duration);
+    if (!Number.isFinite(seconds) || seconds <= 0) return false;
+  }
   const hasPosition =
     Boolean(row.positionA && row.positionA.trim()) ||
     Boolean(row.positionB && row.positionB.trim());
@@ -125,12 +127,14 @@ export const isNightRowValid = (row: NightRow): boolean => {
  * `enabled` (default true) gates the collapsing step only — invalid-row
  * filtering always applies. Pass false (driven by the navbar "Merged
  * nights" toggle) to show every raw night row one by one, uncollapsed.
+ * `requireDuration` is forwarded to `isNightRowValid` (see there).
  */
 export const mergeNightRows = (
   rows: NightRow[],
   enabled = true,
+  requireDuration = true,
 ): MergedNightRow[] => {
-  const valid = rows.filter(isNightRowValid);
+  const valid = rows.filter((row) => isNightRowValid(row, requireDuration));
   if (valid.length === 0) return [];
 
   if (!enabled) {
@@ -162,10 +166,10 @@ export const mergeNightRows = (
     const sorted = [...group].sort((a, b) => sortKey(a.timeA) - sortKey(b.timeA));
     const first = sorted[0];
     const last = sorted[sorted.length - 1];
-    const totalSeconds = sorted.reduce(
-      (acc, r) => acc + parseDurationSeconds(r.duration),
-      0,
-    );
+    const totalSeconds = sorted.reduce((acc, r) => {
+      const s = parseDurationSeconds(r.duration);
+      return acc + (Number.isFinite(s) ? s : 0);
+    }, 0);
     merged.push({
       id: first.id,
       timeA: first.timeA,

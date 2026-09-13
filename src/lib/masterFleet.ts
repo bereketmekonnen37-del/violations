@@ -179,6 +179,49 @@ const exceedsMaxDuration = (
 ): boolean =>
   maxDurationSeconds != null && maxDurationSeconds > 0 && seconds > maxDurationSeconds;
 
+interface DurationQualification {
+  /** Parsed duration in seconds, or 0 when the row carries no duration. */
+  seconds: number;
+  /** False when the duration is missing/zero/unparseable ("no duration"). */
+  hasDuration: boolean;
+}
+
+/**
+ * A row with no duration (blank, "0", or unparseable) is never dropped for
+ * lacking one — it still counts. A row that DOES have a duration is still
+ * subject to the category threshold and the optional max-duration cap,
+ * unchanged. This only concerns Master Fleet (this file); Dashboard and
+ * Transporter analytics keep dropping zero-duration rows as before.
+ */
+const qualifyDuration = (raw: string): DurationQualification => {
+  const parsed = parseDurationSeconds(raw);
+  const hasDuration = Number.isFinite(parsed) && parsed > 0;
+  return { seconds: hasDuration ? parsed : 0, hasDuration };
+};
+
+/** True when the category threshold/cap should exclude this row — only
+ *  ever applies when the row actually has a duration to check. */
+const failsDurationRules = (
+  q: DurationQualification,
+  threshold: number,
+  maxDurationSeconds: number | null | undefined,
+): boolean =>
+  q.hasDuration &&
+  (q.seconds < threshold || exceedsMaxDuration(q.seconds, maxDurationSeconds));
+
+/**
+ * Identity used to catch duplicate rows: same VID, same driver name, same
+ * duration. When two rows in the same category share all three, only the
+ * first one encountered is kept — later ones are treated as re-parsed
+ * duplicates (e.g. the same file uploaded twice) rather than distinct events.
+ */
+const duplicateKey = (
+  vidKey: string,
+  driverName: string,
+  q: DurationQualification,
+): string =>
+  `${vidKey}|${driverName.trim().toLowerCase()}|${q.hasDuration ? q.seconds : 'none'}`;
+
 interface Bucket {
   vid: string;
   vidKey: string;
@@ -244,6 +287,9 @@ export const aggregateMasterFleet = ({
   const speedTags = buildAllowedTagMatcher(allowedLocationsByType.speed);
   const nightsTags = buildAllowedTagMatcher(allowedLocationsByType.nights);
   const contTags = buildAllowedTagMatcher(allowedLocationsByType.continuous);
+  const seenSpeed = new Set<string>();
+  const seenNights = new Set<string>();
+  const seenContinuous = new Set<string>();
 
   speedFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
@@ -255,9 +301,8 @@ export const aggregateMasterFleet = ({
       );
       if (!b) return;
       driver.events.forEach((event) => {
-        const seconds = parseDurationSeconds(event.duration);
-        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.speed) return;
-        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
+        const q = qualifyDuration(event.duration);
+        if (failsDurationRules(q, thresholds.speed, maxDurationSeconds)) return;
         // Drop rows that carry no position — a duration with nowhere to point
         // at isn't useful on the master sheet.
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
@@ -267,6 +312,9 @@ export const aggregateMasterFleet = ({
           b.speedInAllowedLocations += 1;
           return;
         }
+        const dupKey = duplicateKey(b.vidKey, driver.driverName, q);
+        if (seenSpeed.has(dupKey)) return;
+        seenSpeed.add(dupKey);
         b.speed += 1;
       });
     });
@@ -282,12 +330,12 @@ export const aggregateMasterFleet = ({
       );
       if (!b) return;
       // Collapse consecutive same-night rows for this VID into one before
-      // applying threshold / whitelist filters (unless the merge toggle is off).
-      const merged = mergeNightRows(driver.rows, mergeNights);
+      // applying threshold / whitelist filters (unless the merge toggle is
+      // off). `false` keeps rows with no duration instead of dropping them.
+      const merged = mergeNightRows(driver.rows, mergeNights, false);
       merged.forEach((row) => {
-        const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.nights) return;
-        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
+        const q = qualifyDuration(row.duration);
+        if (failsDurationRules(q, thresholds.nights, maxDurationSeconds)) return;
         const evtKey = eventDateKey(row.timeA, row.timeB);
         if (allowedNights.matches(b.vidKey, evtKey)) return;
         if (
@@ -296,6 +344,9 @@ export const aggregateMasterFleet = ({
         ) {
           return;
         }
+        const dupKey = duplicateKey(b.vidKey, driver.driverName, q);
+        if (seenNights.has(dupKey)) return;
+        seenNights.add(dupKey);
         b.nights += 1;
         if (row.mergedCount > 1) b.hasMergedNights = true;
       });
@@ -312,9 +363,8 @@ export const aggregateMasterFleet = ({
       );
       if (!b) return;
       driver.rows.forEach((row) => {
-        const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.continuous) return;
-        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
+        const q = qualifyDuration(row.duration);
+        if (failsDurationRules(q, thresholds.continuous, maxDurationSeconds)) return;
         // Skip rows with no position on either endpoint.
         const hasPosition =
           Boolean(row.positionA && row.positionA.trim()) ||
@@ -328,6 +378,9 @@ export const aggregateMasterFleet = ({
         ) {
           return;
         }
+        const dupKey = duplicateKey(b.vidKey, driver.driverName, q);
+        if (seenContinuous.has(dupKey)) return;
+        seenContinuous.add(dupKey);
         b.continuous += 1;
       });
     });
@@ -392,6 +445,9 @@ export const collectFilteredEvents = ({
   const speed: FilteredSpeedEvent[] = [];
   const nights: FilteredNightEvent[] = [];
   const continuous: FilteredContinuousEvent[] = [];
+  const seenSpeed = new Set<string>();
+  const seenNights = new Set<string>();
+  const seenContinuous = new Set<string>();
 
   speedFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
@@ -401,11 +457,13 @@ export const collectFilteredEvents = ({
       const driverName = profile.driverName || NOT_FOUND;
       const transporter = profile.transporter || sourceTransporter(driver);
       driver.events.forEach((event) => {
-        const seconds = parseDurationSeconds(event.duration);
-        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.speed) return;
-        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
+        const q = qualifyDuration(event.duration);
+        if (failsDurationRules(q, thresholds.speed, maxDurationSeconds)) return;
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const evtKey = eventDateKey(event.start, event.end);
+        const dupKey = duplicateKey(vidKey, driver.driverName, q);
+        if (seenSpeed.has(dupKey)) return;
+        seenSpeed.add(dupKey);
         speed.push({
           id: event.id,
           vid,
@@ -415,7 +473,7 @@ export const collectFilteredEvents = ({
           start: event.start,
           end: event.end,
           duration: event.duration,
-          durationSeconds: seconds,
+          durationSeconds: q.seconds,
           topSpeed: event.topSpeed,
           overspeedPosition: event.overspeedPosition,
           allowedVid: allowedSpeed.matches(vidKey, evtKey),
@@ -435,11 +493,10 @@ export const collectFilteredEvents = ({
       const profile = resolve(vid);
       const driverName = profile.driverName || NOT_FOUND;
       const transporter = profile.transporter || sourceTransporter(driver);
-      const merged = mergeNightRows(driver.rows, mergeNights);
+      const merged = mergeNightRows(driver.rows, mergeNights, false);
       merged.forEach((row) => {
-        const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.nights) return;
-        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
+        const q = qualifyDuration(row.duration);
+        if (failsDurationRules(q, thresholds.nights, maxDurationSeconds)) return;
         const evtKey = eventDateKey(row.timeA, row.timeB);
         const position = row.positionA || row.positionB || '';
         const allowedLocationA = nightsTags.matchesPosition(
@@ -450,6 +507,9 @@ export const collectFilteredEvents = ({
           row.positionB,
           evtKey,
         );
+        const dupKey = duplicateKey(vidKey, driver.driverName, q);
+        if (seenNights.has(dupKey)) return;
+        seenNights.add(dupKey);
         nights.push({
           id: row.id,
           vid,
@@ -459,7 +519,7 @@ export const collectFilteredEvents = ({
           timeA: row.timeA,
           timeB: row.timeB,
           duration: row.duration,
-          durationSeconds: seconds,
+          durationSeconds: q.seconds,
           length: row.length,
           position,
           positionA: row.positionA,
@@ -482,9 +542,8 @@ export const collectFilteredEvents = ({
       const driverName = profile.driverName || NOT_FOUND;
       const transporter = profile.transporter || sourceTransporter(driver);
       driver.rows.forEach((row) => {
-        const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.continuous) return;
-        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
+        const q = qualifyDuration(row.duration);
+        if (failsDurationRules(q, thresholds.continuous, maxDurationSeconds)) return;
         const hasPosition =
           Boolean(row.positionA && row.positionA.trim()) ||
           Boolean(row.positionB && row.positionB.trim());
@@ -499,6 +558,9 @@ export const collectFilteredEvents = ({
           row.positionB,
           evtKey,
         );
+        const dupKey = duplicateKey(vidKey, driver.driverName, q);
+        if (seenContinuous.has(dupKey)) return;
+        seenContinuous.add(dupKey);
         continuous.push({
           id: row.id,
           vid,
@@ -508,7 +570,7 @@ export const collectFilteredEvents = ({
           timeA: row.timeA,
           timeB: row.timeB,
           duration: row.duration,
-          durationSeconds: seconds,
+          durationSeconds: q.seconds,
           length: row.length,
           position,
           positionA: row.positionA,
