@@ -58,6 +58,8 @@ export interface ViolationFile {
 export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+  /** True until the initial Supabase session check on app load has finished. */
+  initializing: boolean;
 }
 
 export interface ThemeState {
@@ -116,8 +118,12 @@ export interface UnfilteredFile {
   totalEvents: number;
 }
 
+export type RemoteLoadStatus = 'idle' | 'loading' | 'loaded' | 'error';
+
 export interface UnfilteredState {
   files: UnfilteredFile[];
+  status: RemoteLoadStatus;
+  error: string | null;
 }
 
 /* ──────────────── Unfiltered nights feature ──────────────── */
@@ -161,6 +167,8 @@ export interface UnfilteredNightFile {
 
 export interface UnfilteredNightsState {
   files: UnfilteredNightFile[];
+  status: RemoteLoadStatus;
+  error: string | null;
 }
 
 /* ──────────────── Unfiltered continuous feature ──────────────── */
@@ -202,6 +210,8 @@ export interface UnfilteredContinuousFile {
 
 export interface UnfilteredContinuousState {
   files: UnfilteredContinuousFile[];
+  status: RemoteLoadStatus;
+  error: string | null;
 }
 
 /* ──────────────── Drivers monthly data feature ──────────────── */

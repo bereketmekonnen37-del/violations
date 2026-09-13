@@ -10,11 +10,6 @@ interface FormValues {
   password: string;
 }
 
-const DEMO = [
-  { label: 'Boss', email: 'boss@demo.com', password: 'boss123' },
-  { label: 'Staff', email: 'staff@demo.com', password: 'staff123' },
-];
-
 export const LoginPage = () => {
   const { isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
@@ -23,7 +18,6 @@ export const LoginPage = () => {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { isSubmitting, errors },
   } = useForm<FormValues>({
     defaultValues: { email: '', password: '' },
@@ -223,63 +217,6 @@ export const LoginPage = () => {
                 <ArrowRight size={16} />
               </button>
             </form>
-
-            <div className="mt-8">
-              <p
-                className="text-[11px] font-semibold uppercase tracking-[0.18em]"
-                style={{ color: 'var(--color-brand-accent)' }}
-              >
-                Demo credentials
-              </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {DEMO.map((d) => (
-                  <button
-                    key={d.email}
-                    type="button"
-                    onClick={() => {
-                      setValue('email', d.email);
-                      setValue('password', d.password);
-                    }}
-                    className="rounded-xl p-3 text-left transition"
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid var(--color-brand-blue-line)',
-                      color: 'var(--color-text-primary)',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor =
-                        'var(--color-brand-blue)';
-                      e.currentTarget.style.background =
-                        'var(--color-brand-blue-soft)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor =
-                        'var(--color-brand-blue-line)';
-                      e.currentTarget.style.background = '#ffffff';
-                    }}
-                  >
-                    <p
-                      className="text-xs font-semibold uppercase tracking-wider"
-                      style={{ color: 'var(--color-brand-blue)' }}
-                    >
-                      {d.label}
-                    </p>
-                    <p
-                      className="mt-1 text-sm font-medium"
-                      style={{ color: 'var(--color-brand-blue-dark)' }}
-                    >
-                      {d.email}
-                    </p>
-                    <p
-                      className="font-mono text-[11px]"
-                      style={{ color: 'var(--color-text-muted)' }}
-                    >
-                      {d.password}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
 

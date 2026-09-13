@@ -9,12 +9,13 @@ import {
 } from 'lucide-react';
 import { useAppDispatch } from '../../app/store';
 import { addUnfilteredFile } from './unfilteredSlice';
+import { createUnfilteredBatch } from './unfilteredApi';
 import {
   detectUnfilteredKind,
   detectUnfilteredSource,
   parseUnfilteredFile,
 } from '../../lib/unfilteredParser';
-import { cn, newId } from '../../lib/utils';
+import { cn } from '../../lib/utils';
 import type { UnfilteredFileKind, User } from '../../types';
 
 interface Props {
@@ -73,19 +74,15 @@ export const UnfilteredUpload = ({ user, onUploaded }: Props) => {
       const drivers = await parseUnfilteredFile(file, kind);
       const totalEvents = drivers.reduce((s, d) => s + d.events.length, 0);
       const source = detectUnfilteredSource(kind);
-      dispatch(
-        addUnfilteredFile({
-          id: newId(),
-          title: title.trim(),
-          uploadDate: new Date().toISOString(),
-          uploaderId: user.id,
-          uploaderName: user.name,
-          fileType: kind,
-          source,
-          drivers,
-          totalEvents,
-        }),
-      );
+      const created = await createUnfilteredBatch({
+        title: title.trim(),
+        fileType: kind,
+        source,
+        drivers,
+        uploaderId: user.id,
+        uploaderName: user.name,
+      });
+      dispatch(addUnfilteredFile(created));
       setOkMsg(
         `Parsed ${drivers.length} driver${drivers.length === 1 ? '' : 's'} · ${totalEvents} overspeed event${
           totalEvents === 1 ? '' : 's'

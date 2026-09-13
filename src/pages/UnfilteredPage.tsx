@@ -6,6 +6,8 @@ import {
   FileSpreadsheet,
   FileText,
   Layers,
+  Loader2,
+  RefreshCw,
   Trash2,
   Users,
 } from 'lucide-react';
@@ -19,8 +21,10 @@ import { DriverCard } from '../features/unfiltered/DriverCard';
 import { DriverModal } from '../features/unfiltered/DriverModal';
 import { UnfilteredFilters } from '../features/unfiltered/UnfilteredFilters';
 import { UnfilteredUpload } from '../features/unfiltered/UnfilteredUpload';
+import { deleteUnfilteredBatch, fetchUnfilteredFiles } from '../features/unfiltered/unfilteredApi';
 import {
   removeUnfilteredFile,
+  setUnfilteredFiles,
 } from '../features/unfiltered/unfilteredSlice';
 import {
   useUnfilteredData,
@@ -40,7 +44,33 @@ import { useUserScope } from '../hooks/useUserScope';
 const StaffView = () => {
   const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.auth.user)!;
+  const status = useAppSelector((s) => s.unfiltered.status);
   const { files, totalEvents } = useUnfilteredData(user.id);
+  const [refreshing, setRefreshing] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setListError(null);
+    try {
+      const fresh = await fetchUnfilteredFiles();
+      dispatch(setUnfilteredFiles(fresh));
+    } catch (e) {
+      setListError(e instanceof Error ? e.message : 'Could not refresh files.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setListError(null);
+    try {
+      await deleteUnfilteredBatch(id);
+      dispatch(removeUnfilteredFile(id));
+    } catch (e) {
+      setListError(e instanceof Error ? e.message : 'Could not delete this file.');
+    }
+  };
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -58,13 +88,39 @@ const StaffView = () => {
             <h3 className="text-base font-semibold text-ink-900 dark:text-white">
               Your uploads
             </h3>
-            <Badge tone="neutral">{files.length}</Badge>
+            <div className="flex items-center gap-2">
+              <Badge tone="neutral">{files.length}</Badge>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="btn-ghost h-8 w-8 p-0"
+                aria-label="Refresh uploads"
+              >
+                {refreshing ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <RefreshCw size={14} />
+                )}
+              </button>
+            </div>
           </div>
           <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
             History of your unfiltered submissions ({totalEvents} parsed events).
           </p>
+          {listError && (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+              {listError}
+            </div>
+          )}
           <div className="mt-5 space-y-2">
-            {files.length === 0 ? (
+            {files.length === 0 && status === 'loading' ? (
+              <EmptyState
+                icon={Loader2}
+                title="Loading your uploads…"
+                description="Fetching your files from the server."
+              />
+            ) : files.length === 0 ? (
               <EmptyState
                 icon={FileSpreadsheet}
                 title="No uploads yet"
@@ -93,7 +149,7 @@ const StaffView = () => {
                   </div>
                   <button
                     type="button"
-                    onClick={() => dispatch(removeUnfilteredFile(f.id))}
+                    onClick={() => handleDelete(f.id)}
                     className="btn-ghost h-8 w-8 p-0 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
                     aria-label="Delete upload"
                   >
@@ -110,9 +166,26 @@ const StaffView = () => {
 };
 
 const BossView = () => {
+  const dispatch = useAppDispatch();
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
   const rawFiles = useAppSelector((s) => s.unfiltered.files);
+  const status = useAppSelector((s) => s.unfiltered.status);
   const { isTransporterStaff, matchesTransporter } = useUserScope();
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setListError(null);
+    try {
+      const fresh = await fetchUnfilteredFiles();
+      dispatch(setUnfilteredFiles(fresh));
+    } catch (e) {
+      setListError(e instanceof Error ? e.message : 'Could not refresh files.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const allFiles = useMemo(
     () => filterFilesByTransporter(rawFiles, isTransporterStaff, matchesTransporter),
     [rawFiles, isTransporterStaff, matchesTransporter],
@@ -162,22 +235,48 @@ const BossView = () => {
           title="Unfiltered speed"
           subtitle="Pick an uploaded file to inspect it — or download the master sheet combining every upload (Mela + Global)."
           actions={
-            <button
-              type="button"
-              onClick={onDownloadMaster}
-              disabled={allFiles.length === 0}
-              className="btn-primary"
-            >
-              <Download size={16} /> Download master sheet
-              {masterCount > 0 && (
-                <span className="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold dark:bg-ink-900/20">
-                  {masterCount}
-                </span>
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="btn-secondary"
+              >
+                {refreshing ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <RefreshCw size={16} />
+                )}
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={onDownloadMaster}
+                disabled={allFiles.length === 0}
+                className="btn-primary"
+              >
+                <Download size={16} /> Download master sheet
+                {masterCount > 0 && (
+                  <span className="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold dark:bg-ink-900/20">
+                    {masterCount}
+                  </span>
+                )}
+              </button>
+            </div>
           }
         />
-        {allFiles.length === 0 ? (
+        {listError && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+            {listError}
+          </div>
+        )}
+        {allFiles.length === 0 && status === 'loading' ? (
+          <EmptyState
+            icon={Loader2}
+            title="Loading uploaded files…"
+            description="Fetching every staff submission from the server."
+          />
+        ) : allFiles.length === 0 ? (
           <EmptyState
             icon={FileText}
             title="No unfiltered uploads yet"

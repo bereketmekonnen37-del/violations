@@ -10,12 +10,13 @@ import {
 } from 'lucide-react';
 import { useAppDispatch } from '../../app/store';
 import { addNightFile } from './unfilteredNightsSlice';
+import { createNightBatch } from './unfilteredNightsApi';
 import {
   detectNightsKind,
   detectNightsSource,
   parseNightsFile,
 } from '../../lib/nightsParser';
-import { cn, newId } from '../../lib/utils';
+import { cn } from '../../lib/utils';
 import type { UnfilteredFileKind, User } from '../../types';
 
 interface Props {
@@ -70,19 +71,15 @@ export const NightsUpload = ({ user }: Props) => {
       const drivers = await parseNightsFile(file, kind);
       const totalRows = drivers.reduce((s, d) => s + d.rows.length, 0);
       const source = detectNightsSource(kind);
-      dispatch(
-        addNightFile({
-          id: newId(),
-          title: title.trim(),
-          uploadDate: new Date().toISOString(),
-          uploaderId: user.id,
-          uploaderName: user.name,
-          fileType: kind,
-          source,
-          drivers,
-          totalRows,
-        }),
-      );
+      const created = await createNightBatch({
+        title: title.trim(),
+        fileType: kind,
+        source,
+        drivers,
+        uploaderId: user.id,
+        uploaderName: user.name,
+      });
+      dispatch(addNightFile(created));
       setOkMsg(
         `Parsed ${drivers.length} driver${drivers.length === 1 ? '' : 's'} · ${totalRows} night row${totalRows === 1 ? '' : 's'} (${source}).`,
       );

@@ -162,6 +162,13 @@ export const UserManagementPage = () => {
         subtitle="Create staff accounts and scope them to specific transporters. Staff see the same views as the boss, filtered to only the transporters you assign — and cannot manage rules."
       />
 
+      <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+        <strong>Heads up:</strong> this list is still local-only. Entries created
+        here don&apos;t yet create real Supabase sign-in accounts — for now,
+        create real staff logins in the Supabase Dashboard (Authentication →
+        Users) and they&apos;ll be able to sign in immediately.
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-[1.05fr_1fr]">
         {/* ── Create form ─────────────────────────────────── */}
         <form
