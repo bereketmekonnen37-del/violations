@@ -178,13 +178,25 @@ export const computeTransporterAnalytics = ({
     }
   });
 
+  // Same priority as `aggregateMasterFleet` / `collectFilteredEvents`: the
+  // boss's canonical driver-record transporter wins first, falling back to
+  // whatever the raw upload's driver block says, then the driver name.
+  // Previously this prioritized the raw block value instead, so a VID whose
+  // upload cell read e.g. "Yonas" (vs. the canonical "Yonas Mekonen" on
+  // file) landed in a different bucket here than on Master Fleet / the
+  // transporter detail page — inflating this page's count for one name
+  // while the detail page, grouping by the canonical name, showed almost
+  // nothing under it.
   const resolveTransporter = (
     vid: string,
     blockTransporter: string,
+    driverName: string,
   ): string => {
-    if (blockTransporter && blockTransporter.trim()) return blockTransporter.trim();
     const key = normalizeVid(vid);
-    return vidToTransporter.get(key) ?? '';
+    const canonical = vidToTransporter.get(key);
+    if (canonical) return canonical.trim();
+    if (blockTransporter && blockTransporter.trim()) return blockTransporter.trim();
+    return driverName ? driverName.trim() : '';
   };
 
   const buckets = new Map<string, Bucket>();
@@ -194,7 +206,7 @@ export const computeTransporterAnalytics = ({
 
   speedFiles.forEach((file) =>
     file.drivers.forEach((driver) => {
-      const t = resolveTransporter(driver.vid, driver.transporter);
+      const t = resolveTransporter(driver.vid, driver.transporter, driver.driverName);
       const b = getBucket(buckets, t);
       if (!b) return;
       const vidKey = normalizeVid(driver.vid);
@@ -214,7 +226,7 @@ export const computeTransporterAnalytics = ({
 
   nightFiles.forEach((file) =>
     file.drivers.forEach((driver) => {
-      const t = resolveTransporter(driver.vid, driver.transporter);
+      const t = resolveTransporter(driver.vid, driver.transporter, driver.driverName);
       const b = getBucket(buckets, t);
       if (!b) return;
       const vidKey = normalizeVid(driver.vid);
@@ -239,7 +251,7 @@ export const computeTransporterAnalytics = ({
 
   continuousFiles.forEach((file) =>
     file.drivers.forEach((driver) => {
-      const t = resolveTransporter(driver.vid, driver.transporter);
+      const t = resolveTransporter(driver.vid, driver.transporter, driver.driverName);
       const b = getBucket(buckets, t);
       if (!b) return;
       const vidKey = normalizeVid(driver.vid);
