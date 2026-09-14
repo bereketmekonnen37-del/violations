@@ -24,7 +24,7 @@ interface Props {
 const gpsLabel = (g: ViolationRecord['gpsFunctionality']) => {
   if (g === 'on') return { tone: 'success' as const, label: 'GPS Active' };
   if (g === 'off') return { tone: 'danger' as const, label: 'GPS Fault' };
-  return { tone: 'warning' as const, label: 'GPS Unknown' };
+  return null;
 };
 
 const severityTone = (count: number) => {
@@ -73,9 +73,11 @@ export const ViolationCard = ({ record, index, driverViolationCount }: Props) =>
             <Badge tone="neutral">
               <IdCard size={11} /> VID {record.vid || '—'}
             </Badge>
-            <Badge tone={gps.tone}>
-              <Radio size={11} /> {gps.label}
-            </Badge>
+            {gps && (
+              <Badge tone={gps.tone}>
+                <Radio size={11} /> {gps.label}
+              </Badge>
+            )}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-500 dark:text-ink-400">
             <span className="inline-flex items-center gap-1.5">

@@ -135,9 +135,11 @@ export const DriverModal = ({ driver, onClose }: Props) => {
               <article className="rounded-2xl border border-ink-100 p-5 dark:border-ink-800 sm:p-6">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="neutral">{event.eventType || 'Overspeed'}</Badge>
-                  <Badge tone={event.gpsCoords ? 'success' : 'warning'}>
-                    <Radio size={11} /> {event.gpsCoords ? 'GPS Present' : 'GPS Missing'}
-                  </Badge>
+                  {event.gpsCoords && (
+                    <Badge tone="success">
+                      <Radio size={11} /> GPS Present
+                    </Badge>
+                  )}
                 </div>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
