@@ -1,9 +1,10 @@
 import { useForm } from 'react-hook-form';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Lock, Mail, PartyPopper } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { Logo } from '../components/ui/Logo';
+import { EnkutatashHero } from '../components/branding/EnkutatashHero';
 
 interface FormValues {
   email: string;
@@ -43,54 +44,50 @@ export const LoginPage = () => {
         color: 'var(--color-text-primary)',
       }}
     >
-      {/* Left visual panel */}
+      {/* Left visual panel — cinematic Ethiopian New Year (Enkutatash) showcase */}
       <section
-        className="relative hidden overflow-hidden lg:block"
+        className="enku-panel relative hidden overflow-hidden lg:block"
         style={{ borderRight: '1px solid var(--color-brand-blue-line)' }}
       >
-        <img
-          src="/loginimg.jpg"
-          alt="Professional truck driver in cabin"
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(180deg, rgba(42, 58, 114, 0.72) 0%, rgba(15, 20, 40, 0.55) 100%)',
-          }}
-        />
+        {/* Dusk-to-gold gradient sky, slowly breathing */}
+        <div className="enku-sky absolute inset-0" />
+        {/* Ethiopian flag-color glow orbs, drifting */}
+        <div className="enku-orb enku-orb-green absolute" />
+        <div className="enku-orb enku-orb-yellow absolute" />
+        <div className="enku-orb enku-orb-red absolute" />
+        {/* Slow rotating light sweep for a cinematic spotlight feel */}
+        <div className="enku-sweep absolute inset-0" />
+        {/* Falling Adey Abeba (Meskel daisy) petals */}
+        <EnkutatashHero />
+        {/* Bottom vignette so copy stays legible over the animation */}
+        <div className="enku-vignette absolute inset-0" />
+
         <div className="relative z-10 flex h-full flex-col justify-between p-10 text-white">
           <Logo variant="primary" />
           <div className="max-w-md">
-            <p
-              className="text-[11px] font-semibold uppercase tracking-[0.18em]"
-              style={{ color: 'var(--color-brand-accent)' }}
-            >
-              Fleetwatch Platform
-            </p>
-            <h1 className="mt-3 text-4xl font-semibold leading-[1.05] tracking-tight">
-              Driver violations,
-              <br />
-              <span style={{ color: 'var(--color-brand-accent)' }}>
-                under one calm command center.
-              </span>
-            </h1>
-            <p className="mt-5 max-w-sm text-sm leading-relaxed text-white/85">
-              Upload daily reports, surface high-risk drivers, and keep every
-              transporter accountable — without spreadsheets, email threads or
-              guesswork.
-            </p>
             <div
-              className="mt-8 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium backdrop-blur"
+              className="enku-badge inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium backdrop-blur"
               style={{
                 background: 'rgba(255, 255, 255, 0.14)',
                 border: '1px solid rgba(255, 255, 255, 0.24)',
                 color: '#ffffff',
               }}
             >
-              <ShieldCheck size={14} /> Built for fleet operators
+              <PartyPopper size={14} /> Enkutatash · Ethiopian New Year
             </div>
+            <h1 className="enku-title mt-4 text-5xl font-semibold leading-[1.05] tracking-tight">
+              Happy New Year
+              <br />
+              <span className="enku-year">2019</span>
+            </h1>
+            <p className="mt-3 text-lg font-medium text-white/90">
+              እንኳን ለ2019 ዓ.ም አደረሳችሁ
+            </p>
+            <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/85">
+              From every one of us at Fleetwatch — wishing our partners and
+              investors a bright, prosperous Enkutatash and a safer year of
+              the road ahead.
+            </p>
           </div>
         </div>
       </section>
@@ -227,6 +224,109 @@ export const LoginPage = () => {
           © {new Date().getFullYear()} Fleetwatch. Internal preview build.
         </footer>
       </section>
+
+      <style>{`
+        .enku-sky {
+          background: linear-gradient(
+            160deg,
+            #1a1035 0%,
+            #2a1b52 22%,
+            #5a2a63 45%,
+            #a5432f 68%,
+            #d98a2b 88%,
+            #f4b942 100%
+          );
+          background-size: 180% 180%;
+          animation: enku-sky-shift 18s ease-in-out infinite;
+        }
+        @keyframes enku-sky-shift {
+          0%, 100% { background-position: 0% 30%; }
+          50% { background-position: 100% 70%; }
+        }
+        .enku-orb {
+          border-radius: 9999px;
+          filter: blur(60px);
+          opacity: 0.55;
+          mix-blend-mode: screen;
+        }
+        .enku-orb-green {
+          width: 260px; height: 260px; left: -60px; top: 10%;
+          background: #078930;
+          animation: enku-float-a 14s ease-in-out infinite;
+        }
+        .enku-orb-yellow {
+          width: 320px; height: 320px; right: -80px; top: 35%;
+          background: #fcdd09;
+          animation: enku-float-b 16s ease-in-out infinite;
+        }
+        .enku-orb-red {
+          width: 240px; height: 240px; left: 20%; bottom: -80px;
+          background: #da121a;
+          animation: enku-float-a 20s ease-in-out infinite reverse;
+        }
+        @keyframes enku-float-a {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(30px, -25px) scale(1.08); }
+        }
+        @keyframes enku-float-b {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(-25px, 20px) scale(1.05); }
+        }
+        .enku-sweep {
+          background: conic-gradient(
+            from 0deg at 50% 50%,
+            transparent 0deg,
+            rgba(255, 240, 200, 0.12) 40deg,
+            transparent 90deg,
+            transparent 360deg
+          );
+          animation: enku-sweep-rotate 22s linear infinite;
+          opacity: 0.8;
+        }
+        @keyframes enku-sweep-rotate {
+          to { transform: rotate(360deg); }
+        }
+        .enku-vignette {
+          background: linear-gradient(
+            180deg,
+            rgba(15, 10, 30, 0.15) 0%,
+            rgba(15, 10, 30, 0.1) 45%,
+            rgba(10, 8, 20, 0.65) 100%
+          );
+        }
+        .enku-badge {
+          animation: enku-badge-in 0.8s ease-out both;
+        }
+        .enku-title {
+          animation: enku-rise-in 0.9s 0.1s ease-out both;
+          text-shadow: 0 2px 30px rgba(252, 221, 9, 0.35);
+        }
+        .enku-year {
+          background: linear-gradient(90deg, #fcdd09, #ffe98a, #f4b942, #fcdd09);
+          background-size: 300% auto;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          animation: enku-shine 5s linear infinite;
+          filter: drop-shadow(0 0 18px rgba(252, 221, 9, 0.45));
+        }
+        @keyframes enku-shine {
+          to { background-position: 300% center; }
+        }
+        @keyframes enku-rise-in {
+          from { opacity: 0; transform: translateY(14px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes enku-badge-in {
+          from { opacity: 0; transform: translateY(-6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .enku-sky, .enku-orb, .enku-sweep, .enku-year, .enku-title, .enku-badge {
+            animation: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };
