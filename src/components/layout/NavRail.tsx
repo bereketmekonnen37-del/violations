@@ -155,24 +155,27 @@ export const NavRail = () => {
               Coming soon
             </p>
           )}
-          <div
-            title="SMS Messaging &amp; Drivers — coming soon"
-            aria-disabled="true"
-            className={cn(
-              'flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/40',
-              collapsed && 'justify-center px-2',
-            )}
+          <NavLink
+            to="/sms-messaging"
+            title={collapsed ? 'SMS Messaging & Drivers' : undefined}
+            className={({ isActive }) =>
+              cn(
+                'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                collapsed && 'justify-center px-2',
+                isActive ? 'nav-link-active' : 'nav-link-idle',
+              )
+            }
           >
             <MessageSquareText size={18} className="shrink-0" />
             {!collapsed && (
               <span className="flex flex-1 items-center justify-between gap-2 truncate">
                 <span className="truncate">SMS &amp; Drivers</span>
-                <span className="shrink-0 rounded-full bg-white/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white/70">
+                <span className="shrink-0 rounded-full bg-brand-orange/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">
                   Soon
                 </span>
               </span>
             )}
-          </div>
+          </NavLink>
         </div>
       </nav>
 

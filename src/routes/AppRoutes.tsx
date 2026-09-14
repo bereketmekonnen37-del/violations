@@ -8,6 +8,7 @@ import { LoginPage } from '../pages/LoginPage';
 import { MasterFleetPage } from '../pages/MasterFleetPage';
 import { RulesPage } from '../pages/RulesPage';
 import { SettingsPage } from '../pages/SettingsPage';
+import { SmsMessagingPage } from '../pages/SmsMessagingPage';
 import { UnfilteredContinuousPage } from '../pages/UnfilteredContinuousPage';
 import { UnfilteredNightsPage } from '../pages/UnfilteredNightsPage';
 import { UnfilteredPage } from '../pages/UnfilteredPage';
@@ -112,6 +113,7 @@ export const AppRoutes = () => {
           element={<UnfilteredContinuousPage />}
         />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/sms-messaging" element={<SmsMessagingPage />} />
       </Route>
 
       <Route
