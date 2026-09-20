@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   ChevronsLeft,
   ChevronsRight,
+  Database,
   FileStack,
   LayoutDashboard,
   LogOut,
@@ -47,9 +48,7 @@ const BOSS_ITEMS: Item[] = [
   { to: '/transporters', label: 'Transporters', icon: Truck },
   { to: '/rules', label: 'Rules', icon: ShieldCheck },
   { to: '/user-management', label: 'User Management', icon: UserCog },
-  { to: '/unfiltered', label: 'Unfiltered Speed', icon: Sparkles },
-  { to: '/unfiltered-nights', label: 'Unfiltered Nights', icon: Moon },
-  { to: '/unfiltered-continuous', label: 'Unfiltered Continuous', icon: Route },
+  { to: '/uploaded-data', label: 'Uploaded Data', icon: Database },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -62,9 +61,7 @@ const TRANSPORTER_STAFF_ITEMS: Item[] = [
   { to: '/violations', label: 'Filtered Violations', icon: FileStack },
   { to: '/master-fleet', label: 'Master Fleet', icon: Trophy },
   { to: '/transporters', label: 'Transporters', icon: Truck },
-  { to: '/unfiltered', label: 'Unfiltered Speed', icon: Sparkles },
-  { to: '/unfiltered-nights', label: 'Unfiltered Nights', icon: Moon },
-  { to: '/unfiltered-continuous', label: 'Unfiltered Continuous', icon: Route },
+  { to: '/uploaded-data', label: 'Uploaded Data', icon: Database },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 

@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import {
+  Database,
   FileStack,
   LayoutDashboard,
   MessageSquareText,
@@ -34,9 +35,7 @@ const BOSS = [
   { to: '/transporters', label: 'Transporters', icon: Truck },
   { to: '/rules', label: 'Rules', icon: ShieldCheck },
   { to: '/user-management', label: 'Users', icon: UserCog },
-  { to: '/unfiltered', label: 'Speed', icon: Sparkles },
-  { to: '/unfiltered-nights', label: 'Nights', icon: Moon },
-  { to: '/unfiltered-continuous', label: 'Continuous', icon: Route },
+  { to: '/uploaded-data', label: 'Uploaded', icon: Database },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -46,9 +45,7 @@ const TRANSPORTER_STAFF = [
   { to: '/violations', label: 'Files', icon: FileStack },
   { to: '/master-fleet', label: 'Master', icon: Trophy },
   { to: '/transporters', label: 'Transporters', icon: Truck },
-  { to: '/unfiltered', label: 'Speed', icon: Sparkles },
-  { to: '/unfiltered-nights', label: 'Nights', icon: Moon },
-  { to: '/unfiltered-continuous', label: 'Continuous', icon: Route },
+  { to: '/uploaded-data', label: 'Uploaded', icon: Database },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 

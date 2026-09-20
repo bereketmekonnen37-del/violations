@@ -12,6 +12,7 @@ import { SmsMessagingPage } from '../pages/SmsMessagingPage';
 import { UnfilteredContinuousPage } from '../pages/UnfilteredContinuousPage';
 import { UnfilteredNightsPage } from '../pages/UnfilteredNightsPage';
 import { UnfilteredPage } from '../pages/UnfilteredPage';
+import { UploadedDataPage } from '../pages/UploadedDataPage';
 import { UploadPage } from '../pages/UploadPage';
 import { UserManagementPage } from '../pages/UserManagementPage';
 import { ViolationFilesPage } from '../pages/ViolationFilesPage';
@@ -103,6 +104,14 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute allow={['boss']}>
               <UserManagementPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/uploaded-data"
+          element={
+            <ProtectedRoute allow={['boss']} allowTransporterStaff>
+              <UploadedDataPage />
             </ProtectedRoute>
           }
         />
