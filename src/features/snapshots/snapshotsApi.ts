@@ -28,7 +28,7 @@ const toMeta = (row: MetaRow): SnapshotMeta => ({
 const explain = (message: string): Error =>
   new Error(
     /master_fleet_snapshots|schema cache|does not exist/i.test(message)
-      ? 'The snapshots table is missing. Run the 20260920000000_master_fleet_snapshots.sql migration in Supabase, then try again.'
+      ? 'The saved-violations table is missing. Run the 20260920000000_master_fleet_snapshots.sql migration in Supabase, then try again.'
       : message,
   );
 
@@ -110,7 +110,7 @@ export const createSnapshot = async ({
     })
     .select('id, name, created_at, created_by_name, summary')
     .single();
-  if (error || !row) throw explain(error?.message ?? 'Could not save the snapshot.');
+  if (error || !row) throw explain(error?.message ?? 'Could not save your violations.');
   return toMeta(row as MetaRow);
 };
 

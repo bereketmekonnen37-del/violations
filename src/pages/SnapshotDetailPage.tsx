@@ -223,7 +223,7 @@ export const SnapshotDetailPage = () => {
         if (!cancelled) {
           setState({
             status: 'error',
-            message: e instanceof Error ? e.message : 'Could not open this snapshot.',
+            message: e instanceof Error ? e.message : 'Could not open this saved copy.',
           });
         }
       });
@@ -240,7 +240,7 @@ export const SnapshotDetailPage = () => {
       to="/snapshots"
       className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-900 dark:text-ink-400 dark:hover:text-white"
     >
-      <ArrowLeft size={15} /> All snapshots
+      <ArrowLeft size={15} /> All saved violations
     </Link>
   );
 
@@ -248,7 +248,7 @@ export const SnapshotDetailPage = () => {
     return (
       <div className="mx-auto w-full max-w-7xl">
         {back}
-        <EmptyState icon={Loader2} title="Opening snapshot…" description="Unpacking the saved data." />
+        <EmptyState icon={Loader2} title="Opening saved violations…" description="Unpacking the saved data." />
       </div>
     );
   }
@@ -258,7 +258,7 @@ export const SnapshotDetailPage = () => {
         {back}
         <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-          {state.status === 'error' ? state.message : 'Could not open this snapshot.'}
+          {state.status === 'error' ? state.message : 'Could not open this saved copy.'}
         </div>
       </div>
     );
@@ -298,7 +298,7 @@ export const SnapshotDetailPage = () => {
     <div className="mx-auto w-full max-w-7xl">
       {back}
       <PageHeader
-        eyebrow="Snapshot folder"
+        eyebrow="Saved violations"
         title={meta.name}
         subtitle={`Saved ${formatDateTime(meta.createdAt)}${
           meta.createdByName ? ` by ${meta.createdByName}` : ''
@@ -363,7 +363,7 @@ export const SnapshotDetailPage = () => {
         <Card title="Most violated transporters" subtitle="Top 10 by total violations, split by type.">
           <StackedRankChart
             rows={transporters.filter((t) => t.total > 0).slice(0, 10)}
-            emptyText="No transporter violations in this snapshot."
+            emptyText="No transporter violations in this saved copy."
           />
         </Card>
         <Card title="Violations by type" subtitle="Share of all counted violations.">
@@ -381,7 +381,7 @@ export const SnapshotDetailPage = () => {
               continuous: r.continuous,
               total: r.total,
             }))}
-            emptyText="No VID violations in this snapshot."
+            emptyText="No VID violations in this saved copy."
             labelWidth={190}
           />
         </Card>
@@ -400,8 +400,8 @@ export const SnapshotDetailPage = () => {
       {/* Rules */}
       <Card
         className="mt-6"
-        title="Rules in this snapshot"
-        subtitle="The rules that were active when it was saved. Struck-through rules were removed for this snapshot."
+        title="Rules in this saved copy"
+        subtitle="The rules that were active when it was saved. Struck-through rules were removed for this saved copy."
       >
         <ul className="grid gap-2 md:grid-cols-2">
           {data.ruleItems.map((item) => (
@@ -484,7 +484,7 @@ export const SnapshotDetailPage = () => {
       <Card
         className="mt-6"
         title="Saved data"
-        subtitle="The exact Master Fleet tabs as they were when this snapshot was saved."
+        subtitle="The exact Master Fleet tabs as they were when this saved copy was saved."
       >
         <div className="mb-4 inline-flex flex-wrap rounded-xl border border-ink-100 bg-ink-50 p-1 dark:border-ink-800 dark:bg-ink-900">
           {(Object.keys(TAB_META) as TabKey[]).map((t) => {
@@ -523,7 +523,7 @@ export const SnapshotDetailPage = () => {
             rowKey={(r) => r.vid}
             rowClass={(r) => (r.allowedVid ? RED_ROW : PLAIN_ROW)}
             matches={(r, q) => has(r.vid, q) || has(r.driverName, q) || has(r.transporter, q)}
-            emptyText="No ranked drivers in this snapshot."
+            emptyText="No ranked drivers in this saved copy."
             columns={[
               { header: '#', cell: (_, i) => <span className="font-mono text-xs text-ink-500">{i + 1}</span> },
               { header: 'VID', cell: (r) => <span className="font-mono">{r.vid}</span> },
@@ -544,7 +544,7 @@ export const SnapshotDetailPage = () => {
             rowKey={(r) => r.id}
             rowClass={(r) => (r.allowedVid || r.allowedLocation ? RED_ROW : PLAIN_ROW)}
             matches={(r, q) => has(r.vid, q) || has(r.driverName, q) || has(r.transporter, q) || has(r.overspeedPosition, q) || has(r.start, q)}
-            emptyText="No speed events in this snapshot."
+            emptyText="No speed events in this saved copy."
             columns={[
               { header: 'VID', cell: (r) => <span className="font-mono">{r.vid}</span> },
               { header: 'Driver', cell: (r) => r.driverName || dash },
@@ -582,7 +582,7 @@ export const SnapshotDetailPage = () => {
                   : PLAIN_ROW
             }
             matches={(r, q) => has(r.vid, q) || has(r.driverName, q) || has(r.transporter, q) || has(r.positionA, q) || has(r.positionB, q) || has(r.timeA, q)}
-            emptyText={`No ${tab} events in this snapshot.`}
+            emptyText={`No ${tab} events in this saved copy.`}
             columns={[
               { header: 'VID', cell: (r) => <span className="font-mono">{r.vid}</span> },
               { header: 'Driver', cell: (r) => r.driverName || dash },
@@ -617,7 +617,7 @@ export const SnapshotDetailPage = () => {
             rowKey={(r) => `${r.kind}-${r.id}`}
             rowClass={reasonRowClass}
             matches={filteredReasonFilter}
-            emptyText="No event was affected by a rule in this snapshot."
+            emptyText="No event was affected by a rule in this saved copy."
             columns={[
               {
                 header: 'Type',
@@ -658,8 +658,8 @@ export const SnapshotDetailPage = () => {
       </Card>
 
       <p className="mt-6 flex items-center gap-1.5 text-[11px] text-ink-400">
-        <FolderArchive size={12} /> Snapshot folders never change after saving — press "Save this
-        data" on Master fleet to capture a new one.
+        <FolderArchive size={12} /> Saved copies never change — press "Save current violations" on Master
+        fleet to save a new one.
       </p>
     </div>
   );

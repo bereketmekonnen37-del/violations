@@ -9,7 +9,7 @@ import {
   ChevronRight,
   Crown,
   Download,
-  FolderArchive,
+  Save,
   Funnel,
   Gauge,
   GitMerge,
@@ -362,7 +362,7 @@ export const MasterFleetPage = () => {
                 disabled={noUploads}
                 className="btn-accent"
               >
-                <FolderArchive size={16} /> Save this data
+                <Save size={16} /> Save current violations
               </button>
             )}
             <button

@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   FolderArchive,
   Loader2,
+  Save,
   ShieldCheck,
   ShieldOff,
 } from 'lucide-react';
@@ -31,7 +32,7 @@ interface Props {
 }
 
 const defaultName = (): string =>
-  `Snapshot ${new Date().toLocaleDateString(undefined, {
+  `Current violations ${new Date().toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
     day: '2-digit',
@@ -96,7 +97,7 @@ export const SaveSnapshotModal = ({
       onClose();
       navigate(`/snapshots/${meta.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save the snapshot.');
+      setError(e instanceof Error ? e.message : 'Could not save your violations.');
     } finally {
       setSaving(false);
     }
@@ -106,8 +107,8 @@ export const SaveSnapshotModal = ({
     <Modal
       open={open}
       onClose={() => !saving && onClose()}
-      title="Save this data as a snapshot"
-      subtitle="Name the folder, then choose which of the current rules apply to this snapshot."
+      title="Save my current violations"
+      subtitle="Name this saved copy, then choose which of the current rules apply to it."
       widthClassName="w-[94vw] max-w-[760px]"
     >
       <div className="flex flex-col gap-5">
@@ -139,7 +140,7 @@ export const SaveSnapshotModal = ({
                 Active rules
               </h3>
               <p className="mt-0.5 text-xs text-ink-500 dark:text-ink-400">
-                Switch a rule off to leave it out of this snapshot. Your live
+                Switch a rule off to leave it out of this saved copy. Your live
                 Rules page is not changed.
               </p>
             </div>
@@ -235,9 +236,9 @@ export const SaveSnapshotModal = ({
             {saving ? (
               <Loader2 size={15} className="animate-spin" />
             ) : (
-              <FolderArchive size={15} />
+              <Save size={15} />
             )}
-            {saving ? 'Saving…' : 'Save snapshot'}
+            {saving ? 'Saving…' : 'Save current violations'}
           </button>
         </div>
       </div>

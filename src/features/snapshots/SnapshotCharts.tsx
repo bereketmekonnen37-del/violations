@@ -111,7 +111,7 @@ export const TypeDonut = ({
 }: {
   totals: { speed: number; nights: number; continuous: number; total: number };
 }) => {
-  if (totals.total === 0) return <Empty>No counted violations in this snapshot.</Empty>;
+  if (totals.total === 0) return <Empty>No counted violations in this saved copy.</Empty>;
   const data = KINDS.map((k) => ({ name: KIND_LABELS[k], value: totals[k], color: KIND_COLORS[k] }));
   return (
     <div className="relative">

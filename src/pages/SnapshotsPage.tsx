@@ -32,7 +32,7 @@ export const SnapshotsPage = () => {
     try {
       setSnapshots(await listSnapshots());
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load snapshots.');
+      setError(e instanceof Error ? e.message : 'Could not load saved violations.');
     } finally {
       setLoading(false);
     }
@@ -51,7 +51,7 @@ export const SnapshotsPage = () => {
       setSnapshots((prev) => prev?.filter((s) => s.id !== pendingDelete.id) ?? prev);
       setPendingDelete(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not delete the snapshot.');
+      setError(e instanceof Error ? e.message : 'Could not delete this saved copy.');
       setPendingDelete(null);
     } finally {
       setDeleting(false);
@@ -62,8 +62,8 @@ export const SnapshotsPage = () => {
     <div className="mx-auto w-full max-w-7xl">
       <PageHeader
         eyebrow="Manager workspace"
-        title="Snapshots"
-        subtitle="Saved copies of the Master Fleet data. Each folder keeps the exact ranking, tabs and rules from the moment you saved it."
+        title="Saved violations"
+        subtitle="Your saved current violations. Each folder keeps the exact ranking, tabs and rules from the moment you saved it."
         actions={
           <>
             <button type="button" onClick={load} disabled={loading} className="btn-secondary">
@@ -84,12 +84,12 @@ export const SnapshotsPage = () => {
       )}
 
       {snapshots == null && loading ? (
-        <EmptyState icon={Loader2} title="Loading snapshots…" />
+        <EmptyState icon={Loader2} title="Loading saved violations…" />
       ) : snapshots && snapshots.length === 0 ? (
         <EmptyState
           icon={FolderArchive}
-          title="No snapshots yet"
-          description='Open Master fleet and press "Save this data" to create your first snapshot folder.'
+          title="Nothing saved yet"
+          description='Open Master fleet and press "Save current violations" to save your first copy.'
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -117,7 +117,7 @@ export const SnapshotsPage = () => {
                   type="button"
                   onClick={() => setPendingDelete(s)}
                   aria-label={`Delete ${s.name}`}
-                  title="Delete this snapshot"
+                  title="Delete this saved copy"
                   className="btn-ghost h-8 w-8 shrink-0 p-0 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
                 >
                   <Trash2 size={14} />
@@ -163,7 +163,7 @@ export const SnapshotsPage = () => {
       <Modal
         open={pendingDelete != null}
         onClose={() => !deleting && setPendingDelete(null)}
-        title="Delete this snapshot?"
+        title="Delete this saved copy?"
         subtitle={pendingDelete?.name}
         widthClassName="w-[92vw] max-w-[440px]"
       >
@@ -178,7 +178,7 @@ export const SnapshotsPage = () => {
             </button>
             <button type="button" onClick={confirmDelete} disabled={deleting} className="btn-danger">
               {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              Delete snapshot
+              Delete saved copy
             </button>
           </div>
         </div>
