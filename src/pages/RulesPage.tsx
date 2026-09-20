@@ -15,6 +15,7 @@ import {
   Plus,
   RotateCcw,
   Route as RouteIcon,
+  Ruler,
   ScissorsLineDashed,
   ShieldCheck,
   SlidersHorizontal,
@@ -39,11 +40,13 @@ import {
   setAllowedVidDates,
   setMaxDurationSeconds,
   setThresholds,
+  setUnderestimatedRule,
   type AllowedLocationCategory,
   type AllowedLocationEntry,
   type AllowedVidCategory,
   type AllowedVidEntry,
   type RuleThresholds,
+  type UnderestimatedRule,
 } from '../features/rules/rulesSlice';
 import { extractRuleTag } from '../lib/locationRules';
 import { saveAppRules } from '../features/rules/rulesApi';
@@ -119,6 +122,9 @@ export const RulesPage = () => {
   const dispatch = useAppDispatch();
   const thresholds = useAppSelector((s) => s.rules.thresholds);
   const maxDurationSeconds = useAppSelector((s) => s.rules.maxDurationSeconds);
+  const underestimatedRule = useAppSelector(
+    (s) => s.rules.underestimatedRule ?? null,
+  );
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
@@ -142,7 +148,13 @@ export const RulesPage = () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveAppRules(
-        { thresholds, allowedVidsByType, allowedLocationsByType, maxDurationSeconds },
+        {
+          thresholds,
+          allowedVidsByType,
+          allowedLocationsByType,
+          maxDurationSeconds,
+          underestimatedRule,
+        },
         userId,
       ).catch(() => {
         // Local state already reflects the change; a failed sync just
@@ -153,7 +165,15 @@ export const RulesPage = () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thresholds, allowedVidsByType, allowedLocationsByType, maxDurationSeconds, hydrated, userId]);
+  }, [
+    thresholds,
+    allowedVidsByType,
+    allowedLocationsByType,
+    maxDurationSeconds,
+    underestimatedRule,
+    hydrated,
+    userId,
+  ]);
 
   const [activeCategory, setActiveCategory] = useState<Category>('speed');
 
@@ -184,6 +204,12 @@ export const RulesPage = () => {
         <MaxDurationCard
           maxDurationSeconds={maxDurationSeconds}
           onChange={(seconds) => dispatch(setMaxDurationSeconds(seconds))}
+        />
+
+        <UnderestimatedRuleCard
+          rule={underestimatedRule}
+          continuousThreshold={thresholds.continuous}
+          onChange={(rule) => dispatch(setUnderestimatedRule(rule))}
         />
 
         <section className="surface rounded-2xl p-5 sm:p-7">
@@ -688,6 +714,179 @@ const SetDurationModal = ({
             className="btn-primary"
           >
             <ScissorsLineDashed size={14} /> Apply cap
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+/* ── continuous under-estimated rule ─────────────────────────────── */
+
+interface UnderestimatedRuleCardProps {
+  rule: UnderestimatedRule | null;
+  continuousThreshold: number;
+  onChange: (rule: UnderestimatedRule | null) => void;
+}
+
+const UnderestimatedRuleCard = ({
+  rule,
+  continuousThreshold,
+  onChange,
+}: UnderestimatedRuleCardProps) => {
+  const [modalOpen, setModalOpen] = useState(false);
+  // A rule shorter than the Continuous minimum can never match, because
+  // events under the minimum are dropped before the rule is checked.
+  const neverMatches = rule != null && rule.maxDurationSeconds < continuousThreshold;
+
+  return (
+    <section className="surface rounded-2xl p-5 sm:p-7">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="inline-flex items-center gap-2 text-base font-semibold text-ink-900 dark:text-white">
+            <Ruler size={16} /> Under-estimated continuous rule
+          </h2>
+          <p className="mt-1 max-w-2xl text-xs text-ink-500 dark:text-ink-400">
+            A Continuous event whose duration is at most the hours you set{' '}
+            <em>and</em> whose distance is at least the km you set is not a
+            violation: it is not counted or ranked. It still shows on the Master
+            Fleet Continuous list, tagged as an under-estimated violation with
+            its VID, time and location.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {rule && (
+            <button
+              type="button"
+              onClick={() => onChange(null)}
+              className="btn-ghost !py-1 !px-2 text-xs text-red-600 dark:text-red-400"
+            >
+              <Trash2 size={12} /> Remove rule
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="btn-primary !py-1.5 !px-3 text-xs"
+          >
+            <Ruler size={14} /> {rule ? 'Edit rule' : 'Set rule'}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        {rule ? (
+          <div className="flex flex-col gap-2">
+            <div
+              className="inline-flex w-fit items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold"
+              style={{
+                background: 'var(--color-brand-accent-soft)',
+                border: '1px solid var(--color-brand-accent-line)',
+                color: 'var(--color-brand-accent-dark)',
+              }}
+            >
+              <AlertTriangle size={14} />
+              Duration ≤{' '}
+              <span className="font-mono">{formatThreshold(rule.maxDurationSeconds)}</span>{' '}
+              and distance ≥ <span className="font-mono">{rule.minKm} km</span>
+            </div>
+            {neverMatches && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Heads up: the Continuous minimum is{' '}
+                {formatThreshold(continuousThreshold)}, which is longer than this
+                rule's duration, so no event can match it. Raise the duration to
+                at least {formatThreshold(continuousThreshold)}.
+              </p>
+            )}
+          </div>
+        ) : (
+          <p
+            className="rounded-xl px-3 py-2.5 text-xs"
+            style={{
+              background: 'var(--color-brand-blue-soft)',
+              border: '1px dashed var(--color-brand-blue-line)',
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            No rule set — every Continuous event over the minimum counts as a
+            violation.
+          </p>
+        )}
+      </div>
+
+      {modalOpen && (
+        <SetUnderestimatedModal
+          initial={rule}
+          continuousThreshold={continuousThreshold}
+          onSubmit={(next) => {
+            onChange(next);
+            setModalOpen(false);
+          }}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
+    </section>
+  );
+};
+
+interface SetUnderestimatedModalProps {
+  initial: UnderestimatedRule | null;
+  continuousThreshold: number;
+  onSubmit: (rule: UnderestimatedRule) => void;
+  onClose: () => void;
+}
+
+const SetUnderestimatedModal = ({
+  initial,
+  continuousThreshold,
+  onSubmit,
+  onClose,
+}: SetUnderestimatedModalProps) => {
+  const start = splitHM(initial?.maxDurationSeconds ?? continuousThreshold);
+  const [h, setH] = useState(start.h);
+  const [m, setM] = useState(start.m);
+  const [km, setKm] = useState(initial?.minKm ?? 100);
+
+  const seconds = h * 3600 + m * 60;
+  const valid = seconds > 0 && km > 0;
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Under-estimated continuous rule"
+      subtitle="Duration at most the time below AND distance at least the km below."
+      widthClassName="w-[92vw] max-w-[480px]"
+    >
+      <div className="flex flex-col gap-5">
+        <div className="grid grid-cols-3 gap-2">
+          <NumberStepper label="Hours ≤" value={h} min={0} max={72} onChange={setH} />
+          <NumberStepper label="Minutes" value={m} min={0} max={59} onChange={setM} />
+          <NumberStepper label="Distance ≥ km" value={km} min={0} max={100000} onChange={setKm} />
+        </div>
+        <p
+          className="rounded-xl px-3 py-2.5 text-xs"
+          style={{
+            background: 'var(--color-brand-blue-soft)',
+            border: '1px solid var(--color-brand-blue-line)',
+            color: 'var(--color-text-secondary)',
+          }}
+        >
+          {valid
+            ? `Continuous events of ${formatThreshold(seconds)} or less that cover ${km} km or more will not count as violations. They are listed on Master Fleet as under-estimated.`
+            : 'Enter a duration and a distance greater than zero.'}
+        </p>
+        <div className="flex flex-col-reverse items-stretch justify-end gap-2 border-t border-ink-100 pt-4 dark:border-ink-800 sm:flex-row sm:items-center">
+          <button type="button" onClick={onClose} className="btn-ghost">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => valid && onSubmit({ maxDurationSeconds: seconds, minKm: km })}
+            disabled={!valid}
+            className="btn-primary"
+          >
+            <Ruler size={14} /> Apply rule
           </button>
         </div>
       </div>

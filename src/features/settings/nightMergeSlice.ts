@@ -4,7 +4,7 @@ export interface NightMergeState {
   /** When true (default), consecutive night rows for the same VID inside the
    *  18:00–06:00 shift window are collapsed into one row across Master
    *  Fleet, Dashboard analytics and Transporter analytics. Toggled from the
-   *  navbar to show every raw night row one by one instead. */
+   *  Master Fleet Nights tab to show every raw night row one by one instead. */
   enabled: boolean;
 }
 

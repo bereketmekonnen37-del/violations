@@ -41,6 +41,17 @@ export interface AllowedLocationLists {
   continuous: AllowedLocationEntry[];
 }
 
+/**
+ * Continuous "under-estimated" rule. A Continuous event whose duration is
+ * `<= maxDurationSeconds` AND whose distance is `>= minKm` is NOT a violation:
+ * it is left out of every count and ranking, and instead appears on the
+ * Master Fleet Continuous list under an "Under-estimated" tag.
+ */
+export interface UnderestimatedRule {
+  maxDurationSeconds: number;
+  minKm: number;
+}
+
 export interface RulesState {
   thresholds: RuleThresholds;
   allowedVidsByType: AllowedVidLists;
@@ -49,6 +60,8 @@ export interface RulesState {
    *  dropped from every count and list across the app — Dashboard, Master
    *  Fleet, Transporter pages. `null` means no cap is applied. */
   maxDurationSeconds: number | null;
+  /** Continuous under-estimated rule; `null` means it is switched off. */
+  underestimatedRule: UnderestimatedRule | null;
   /** True once the shared rules have been loaded from (or seeded to)
    *  Supabase. Gates the RulesPage's auto-save so a fresh mount doesn't
    *  immediately overwrite the server copy with stale local defaults. */
@@ -78,6 +91,7 @@ const initialState: RulesState = {
   allowedVidsByType: emptyVidLists(),
   allowedLocationsByType: emptyLocationLists(),
   maxDurationSeconds: null,
+  underestimatedRule: null,
   hydrated: false,
 };
 
@@ -126,6 +140,7 @@ interface HydratePayload {
   allowedVidsByType: AllowedVidLists;
   allowedLocationsByType: AllowedLocationLists;
   maxDurationSeconds: number | null;
+  underestimatedRule?: UnderestimatedRule | null;
 }
 
 const rulesSlice = createSlice({
@@ -139,6 +154,7 @@ const rulesSlice = createSlice({
       state.allowedVidsByType = action.payload.allowedVidsByType;
       state.allowedLocationsByType = action.payload.allowedLocationsByType;
       state.maxDurationSeconds = action.payload.maxDurationSeconds;
+      state.underestimatedRule = action.payload.underestimatedRule ?? null;
       state.hydrated = true;
     },
     setThresholds(state, action: PayloadAction<RuleThresholds>) {
@@ -152,6 +168,16 @@ const rulesSlice = createSlice({
     setMaxDurationSeconds(state, action: PayloadAction<number | null>) {
       state.maxDurationSeconds =
         action.payload == null || action.payload <= 0 ? null : action.payload;
+    },
+
+    /** Set (or clear, with `null`) the Continuous under-estimated rule. */
+    setUnderestimatedRule(
+      state,
+      action: PayloadAction<UnderestimatedRule | null>,
+    ) {
+      const rule = action.payload;
+      state.underestimatedRule =
+        rule && rule.maxDurationSeconds > 0 && rule.minKm > 0 ? rule : null;
     },
 
     /* ── VIDs ─────────────────────────────────────────────────────── */
@@ -229,6 +255,7 @@ export const {
   setThresholds,
   resetThresholds,
   setMaxDurationSeconds,
+  setUnderestimatedRule,
   addAllowedVid,
   removeAllowedVid,
   setAllowedVidDates,

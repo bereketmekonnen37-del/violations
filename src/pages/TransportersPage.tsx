@@ -16,6 +16,9 @@ export const TransportersPage = () => {
   const driverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
   const maxDurationSeconds = useAppSelector((s) => s.rules.maxDurationSeconds);
+  const underestimatedRule = useAppSelector(
+    (s) => s.rules.underestimatedRule ?? null,
+  );
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
@@ -48,6 +51,7 @@ export const TransportersPage = () => {
         allowedLocationsByType,
         mergeNights,
         maxDurationSeconds,
+        underestimatedRule,
       }),
     [
       speedFiles,
@@ -59,6 +63,7 @@ export const TransportersPage = () => {
       allowedLocationsByType,
       mergeNights,
       maxDurationSeconds,
+      underestimatedRule,
     ],
   );
 

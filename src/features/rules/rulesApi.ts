@@ -3,6 +3,7 @@ import type {
   AllowedLocationLists,
   AllowedVidLists,
   RuleThresholds,
+  UnderestimatedRule,
 } from './rulesSlice';
 
 export interface AppRulesPayload {
@@ -10,22 +11,33 @@ export interface AppRulesPayload {
   allowedVidsByType: AllowedVidLists;
   allowedLocationsByType: AllowedLocationLists;
   maxDurationSeconds: number | null;
+  underestimatedRule: UnderestimatedRule | null;
 }
+
+/** The under-estimated rule rides along inside the existing `thresholds`
+ *  jsonb column (as `underestimated`), so no schema migration is needed. */
+type StoredThresholds = RuleThresholds & {
+  underestimated?: UnderestimatedRule | null;
+};
 
 interface AppRulesRow {
   id: string;
-  thresholds: RuleThresholds;
+  thresholds: StoredThresholds;
   allowed_vids: AllowedVidLists;
   allowed_locations: AllowedLocationLists;
   max_duration_seconds: number | null;
 }
 
-const toPayload = (row: AppRulesRow): AppRulesPayload => ({
-  thresholds: row.thresholds,
-  allowedVidsByType: row.allowed_vids,
-  allowedLocationsByType: row.allowed_locations,
-  maxDurationSeconds: row.max_duration_seconds,
-});
+const toPayload = (row: AppRulesRow): AppRulesPayload => {
+  const { underestimated, ...thresholds } = row.thresholds;
+  return {
+    thresholds,
+    allowedVidsByType: row.allowed_vids,
+    allowedLocationsByType: row.allowed_locations,
+    maxDurationSeconds: row.max_duration_seconds,
+    underestimatedRule: underestimated ?? null,
+  };
+};
 
 /** Returns `null` when no shared rules row exists yet (fresh project). */
 export const fetchAppRules = async (): Promise<AppRulesPayload | null> => {
@@ -45,7 +57,10 @@ export const saveAppRules = async (
 ): Promise<void> => {
   const { error } = await supabase.from('app_rules').upsert({
     id: 'default',
-    thresholds: payload.thresholds,
+    thresholds: {
+      ...payload.thresholds,
+      underestimated: payload.underestimatedRule,
+    },
     allowed_vids: payload.allowedVidsByType,
     allowed_locations: payload.allowedLocationsByType,
     max_duration_seconds: payload.maxDurationSeconds,

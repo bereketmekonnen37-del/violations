@@ -13,6 +13,7 @@ import type { DriverRecord } from '../types';
 import type {
   AllowedLocationLists,
   AllowedVidLists,
+  UnderestimatedRule,
 } from '../features/rules/rulesSlice';
 import {
   CONTINUOUS_MIN_SECONDS,
@@ -27,6 +28,7 @@ import {
   normalizeVid,
 } from './locationRules';
 import { mergeNightRows } from './nightsMerger';
+import { isUnderestimated } from './underestimated';
 
 const EMPTY_ALLOWED: AllowedVidLists = {
   speed: [],
@@ -57,6 +59,9 @@ export interface MasterFleetRow {
   /** At least one of this VID's night rows was merged (two or more raw
    *  night events collapsed into one). Drives the "merged" badge in the UI. */
   hasMergedNights: boolean;
+  /** Continuous events matching the under-estimated rule — tagged, kept out
+   *  of `continuous`, `total` and the ranking. */
+  underestimatedContinuous: number;
 }
 
 export interface FilteredSpeedEvent {
@@ -125,6 +130,8 @@ export interface FilteredContinuousEvent {
   allowedLocationA: boolean;
   /** True when Position B specifically contained an allowed-location tag. */
   allowedLocationB: boolean;
+  /** Matches the under-estimated rule: not counted, listed with a tag. */
+  underestimated: boolean;
 }
 
 export interface FilteredEvents {
@@ -163,13 +170,16 @@ interface AggregateInput {
    *  a tag in its category is excluded from that category's counts. */
   allowedLocationsByType?: AllowedLocationLists;
   /** When true (default), consecutive same-night rows are collapsed via
-   *  `mergeNightRows` before counting. Driven by the navbar "Merged nights"
+   *  `mergeNightRows` before counting. Driven by the "Nights merged"
    *  toggle — false shows every raw night row uncollapsed. */
   mergeNights?: boolean;
   /** When set (seconds), any event/row whose duration exceeds this is
    *  dropped entirely — from Speed, Nights and Continuous alike. Set on
    *  the Rules page; `null`/`undefined` means no cap. */
   maxDurationSeconds?: number | null;
+  /** Continuous under-estimated rule (duration <= X and distance >= Y km).
+   *  Matching rows are tagged and excluded from every count/ranking. */
+  underestimatedRule?: UnderestimatedRule | null;
 }
 
 /** True when a duration cap is set and this event exceeds it. */
@@ -232,6 +242,7 @@ interface Bucket {
   continuous: number;
   speedInAllowedLocations: number;
   hasMergedNights: boolean;
+  underestimatedContinuous: number;
 }
 
 const getBucket = (
@@ -254,6 +265,7 @@ const getBucket = (
       continuous: 0,
       speedInAllowedLocations: 0,
       hasMergedNights: false,
+      underestimatedContinuous: 0,
     };
     buckets.set(vidKey, b);
   }
@@ -278,6 +290,7 @@ export const aggregateMasterFleet = ({
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
   mergeNights = true,
   maxDurationSeconds = null,
+  underestimatedRule = null,
 }: AggregateInput): MasterFleetRow[] => {
   const resolve: DriverProfileLookup = buildDriverProfileLookup(driverRecords);
   const buckets = new Map<string, Bucket>();
@@ -381,6 +394,10 @@ export const aggregateMasterFleet = ({
         const dupKey = duplicateKey(b.vidKey, driver.driverName, q);
         if (seenContinuous.has(dupKey)) return;
         seenContinuous.add(dupKey);
+        if (isUnderestimated(underestimatedRule, q.seconds, row.length)) {
+          b.underestimatedContinuous += 1;
+          return;
+        }
         b.continuous += 1;
       });
     });
@@ -415,6 +432,7 @@ export const aggregateMasterFleet = ({
       allowedVid: isAllowed,
       speedInAllowedLocations: b.speedInAllowedLocations,
       hasMergedNights: b.hasMergedNights,
+      underestimatedContinuous: b.underestimatedContinuous,
     });
   });
 
@@ -434,6 +452,7 @@ export const collectFilteredEvents = ({
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
   mergeNights = true,
   maxDurationSeconds = null,
+  underestimatedRule = null,
 }: AggregateInput): FilteredEvents => {
   const resolve = buildDriverProfileLookup(driverRecords);
   const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
@@ -579,6 +598,11 @@ export const collectFilteredEvents = ({
           allowedLocation: allowedLocationA || allowedLocationB,
           allowedLocationA,
           allowedLocationB,
+          underestimated: isUnderestimated(
+            underestimatedRule,
+            q.seconds,
+            row.length,
+          ),
         });
       });
     });
@@ -604,6 +628,7 @@ const MASTER_COLUMNS = [
   'Recommended Action',
   'Allowed VID',
   'Speed in Allowed Zones',
+  'Under-estimated (Continuous)',
 ] as const;
 
 interface SheetRow {
@@ -617,6 +642,7 @@ interface SheetRow {
   'Recommended Action': string;
   'Allowed VID': string;
   'Speed in Allowed Zones': number;
+  'Under-estimated (Continuous)': number;
 }
 
 export const downloadMasterFleetCsv = (
@@ -635,6 +661,7 @@ export const downloadMasterFleetCsv = (
     'Recommended Action': recommendedActionByVid[normalizeVid(r.vid)] || '',
     'Allowed VID': r.allowedVid ? 'YES' : '',
     'Speed in Allowed Zones': r.speedInAllowedLocations,
+    'Under-estimated (Continuous)': r.underestimatedContinuous,
   }));
   const ws = XLSX.utils.json_to_sheet(sheetRows, {
     header: MASTER_COLUMNS as unknown as string[],
@@ -738,12 +765,13 @@ export const downloadFilteredContinuousCsv = (
       Position: e.position,
       'Allowed VID': e.allowedVid ? 'YES' : '',
       'Allowed Location': e.allowedLocation ? 'YES' : '',
+      'Under-estimated': e.underestimated ? 'YES' : '',
     })),
     {
       header: [
         'VID', 'Driver Name', 'Transporter', 'Period',
         'Time A', 'Time B', 'Duration', 'Length', 'Position',
-        'Allowed VID', 'Allowed Location',
+        'Allowed VID', 'Allowed Location', 'Under-estimated',
       ],
     },
   );

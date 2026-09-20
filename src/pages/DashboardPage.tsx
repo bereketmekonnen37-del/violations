@@ -28,6 +28,7 @@ import {
 } from '../lib/dashboardAnalytics';
 import { filterFilesByTransporter } from '../lib/transporterScope';
 import { parseDurationSeconds } from '../lib/duration';
+import { isUnderestimated } from '../lib/underestimated';
 import { DailyViolationsChart } from '../features/dashboard/DailyViolationsChart';
 import { TopOffenderCards } from '../features/dashboard/TopOffenderCards';
 
@@ -40,6 +41,9 @@ export const DashboardPage = () => {
   const driverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
   const maxDurationSeconds = useAppSelector((s) => s.rules.maxDurationSeconds);
+  const underestimatedRule = useAppSelector(
+    (s) => s.rules.underestimatedRule ?? null,
+  );
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
@@ -89,6 +93,7 @@ export const DashboardPage = () => {
         allowedLocationsByType,
         mergeNights,
         maxDurationSeconds,
+        underestimatedRule,
       }),
     [
       speedFiles,
@@ -100,6 +105,7 @@ export const DashboardPage = () => {
       allowedLocationsByType,
       mergeNights,
       maxDurationSeconds,
+      underestimatedRule,
     ],
   );
 
@@ -161,7 +167,8 @@ export const DashboardPage = () => {
             if (
               Number.isFinite(s) &&
               s >= thresholds.continuous &&
-              !(maxDurationSeconds != null && s > maxDurationSeconds)
+              !(maxDurationSeconds != null && s > maxDurationSeconds) &&
+              !isUnderestimated(underestimatedRule, s, r.length)
             )
               continuousRows += 1;
           });
@@ -189,6 +196,7 @@ export const DashboardPage = () => {
     driverRecords,
     thresholds,
     maxDurationSeconds,
+    underestimatedRule,
   ]);
 
   if (!user) return null;

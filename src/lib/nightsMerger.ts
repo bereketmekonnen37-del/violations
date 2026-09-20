@@ -125,8 +125,9 @@ export const isNightRowValid = (row: NightRow, requireDuration = true): boolean 
  * Invalid rows (see `isNightRowValid`) are dropped before merging.
  *
  * `enabled` (default true) gates the collapsing step only — invalid-row
- * filtering always applies. Pass false (driven by the navbar "Merged
- * nights" toggle) to show every raw night row one by one, uncollapsed.
+ * filtering always applies. Pass false (driven by the "Nights merged"
+ * toggle on the Master Fleet Nights tab) to show every raw night row one by
+ * one, uncollapsed.
  * `requireDuration` is forwarded to `isNightRowValid` (see there).
  */
 export const mergeNightRows = (

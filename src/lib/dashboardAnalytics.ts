@@ -7,6 +7,7 @@ import type {
 import type {
   AllowedLocationLists,
   AllowedVidLists,
+  UnderestimatedRule,
 } from '../features/rules/rulesSlice';
 import {
   buildDriverProfileLookup,
@@ -23,6 +24,7 @@ import {
 } from './locationRules';
 import type { EventThresholds } from './masterFleet';
 import { mergeNightRows } from './nightsMerger';
+import { isUnderestimated } from './underestimated';
 
 const EMPTY_ALLOWED: AllowedVidLists = {
   speed: [],
@@ -71,12 +73,14 @@ interface AnalyticsInput {
   allowedVidsByType?: AllowedVidLists;
   allowedLocationsByType?: AllowedLocationLists;
   /** When true (default), consecutive same-night rows are collapsed via
-   *  `mergeNightRows` before counting. Driven by the navbar "Merged nights"
+   *  `mergeNightRows` before counting. Driven by the "Nights merged"
    *  toggle — false counts every raw night row uncollapsed. */
   mergeNights?: boolean;
   /** When set (seconds), any event/row whose duration exceeds this is
    *  dropped entirely. Set on the Rules page; `null`/`undefined` = no cap. */
   maxDurationSeconds?: number | null;
+  /** Continuous under-estimated rule; matching rows are not violations. */
+  underestimatedRule?: UnderestimatedRule | null;
 }
 
 const exceedsMaxDuration = (
@@ -199,6 +203,7 @@ export const computeDashboardAnalytics = ({
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
   mergeNights = true,
   maxDurationSeconds = null,
+  underestimatedRule = null,
 }: AnalyticsInput): AnalyticsResult => {
   const resolve = buildDriverProfileLookup(driverRecords);
   const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
@@ -294,6 +299,7 @@ export const computeDashboardAnalytics = ({
         ) {
           return;
         }
+        if (isUnderestimated(underestimatedRule, seconds, row.length)) return;
         bumpBucket(
           buckets,
           driver.vid,

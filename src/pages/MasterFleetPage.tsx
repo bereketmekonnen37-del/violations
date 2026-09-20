@@ -17,6 +17,7 @@ import {
   Medal,
   Moon,
   Route as RouteIcon,
+  Ruler,
   Search,
   ShieldCheck,
   Trophy,
@@ -47,6 +48,8 @@ import {
   type RecommendedAction,
 } from '../features/masterFleet/masterFleetStatusSlice';
 import { setMasterFleetStatusRemote } from '../features/masterFleet/masterFleetStatusApi';
+import { toggleNightMerge } from '../features/settings/nightMergeSlice';
+import type { UnderestimatedRule } from '../features/rules/rulesSlice';
 
 const formatThreshold = (seconds: number): string => {
   if (seconds % 3600 === 0) return `${seconds / 3600}h`;
@@ -167,6 +170,9 @@ export const MasterFleetPage = () => {
   const driverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
   const maxDurationSeconds = useAppSelector((s) => s.rules.maxDurationSeconds);
+  const underestimatedRule = useAppSelector(
+    (s) => s.rules.underestimatedRule ?? null,
+  );
   const allowedVidsByType = useAppSelector((s) => s.rules.allowedVidsByType);
   const allowedLocationsByType = useAppSelector(
     (s) => s.rules.allowedLocationsByType,
@@ -216,6 +222,7 @@ export const MasterFleetPage = () => {
         allowedLocationsByType,
         mergeNights,
         maxDurationSeconds,
+        underestimatedRule,
       }),
     [
       speedFiles,
@@ -227,6 +234,7 @@ export const MasterFleetPage = () => {
       allowedLocationsByType,
       mergeNights,
       maxDurationSeconds,
+      underestimatedRule,
     ],
   );
 
@@ -242,6 +250,7 @@ export const MasterFleetPage = () => {
         allowedLocationsByType,
         mergeNights,
         maxDurationSeconds,
+        underestimatedRule,
       }),
     [
       speedFiles,
@@ -253,6 +262,7 @@ export const MasterFleetPage = () => {
       allowedLocationsByType,
       mergeNights,
       maxDurationSeconds,
+      underestimatedRule,
     ],
   );
 
@@ -436,6 +446,7 @@ export const MasterFleetPage = () => {
             setQuery={setEventQuery}
             events={filteredEvents}
             thresholds={thresholds}
+            underestimatedRule={underestimatedRule}
           />
 
             </>
@@ -562,6 +573,14 @@ const FullRankingTable = ({
                           className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-900/60 dark:text-red-100 dark:ring-red-800"
                         >
                           <ShieldCheck size={10} /> Allowed VID
+                        </span>
+                      )}
+                      {r.underestimatedContinuous > 0 && (
+                        <span
+                          title={`${r.underestimatedContinuous} continuous event(s) matched the under-estimated rule and are not counted`}
+                          className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/50 dark:text-amber-100 dark:ring-amber-800"
+                        >
+                          <Ruler size={10} /> {r.underestimatedContinuous} under-estimated
                         </span>
                       )}
                       {r.speedInAllowedLocations > 0 && (
@@ -858,6 +877,7 @@ interface FilteredEventsPanelProps {
   setQuery: (q: string) => void;
   events: FilteredEvents;
   thresholds: EventThresholds;
+  underestimatedRule: UnderestimatedRule | null;
 }
 
 const FilteredEventsPanel = ({
@@ -867,7 +887,10 @@ const FilteredEventsPanel = ({
   setQuery,
   events,
   thresholds,
+  underestimatedRule,
 }: FilteredEventsPanelProps) => {
+  const dispatch = useAppDispatch();
+  const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
   const [monthValue, setMonthValue] = useState('');
   const [dayValue, setDayValue] = useState('');
 
@@ -908,6 +931,8 @@ const FilteredEventsPanel = ({
   const contRows = contDated.filter((e) =>
     matchesQuery(query, e.vid, e.driverName, e.timeA, e.duration, e.position),
   );
+
+  const underestimatedCount = contRows.filter((e) => e.underestimated).length;
 
   const clearDateFilter = () => {
     setMonthValue('');
@@ -1020,7 +1045,51 @@ const FilteredEventsPanel = ({
             ? nightRows.length
             : contRows.length}{' '}
         of {counts[activeTab]}
+        {activeTab === 'continuous' && underestimatedRule && (
+          <> · {underestimatedCount} under-estimated (not counted)</>
+        )}
       </p>
+
+      {activeTab === 'nights' && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-brand-blue-line bg-brand-blue-soft/50 px-3 py-2.5 text-xs">
+          <button
+            type="button"
+            onClick={() => dispatch(toggleNightMerge())}
+            aria-pressed={mergeNights}
+            title={
+              mergeNights
+                ? 'Nights are merged: consecutive 18:00–06:00 events collapse into one row on Master Fleet, Dashboard and Transporter pages. Click to show every row separately.'
+                : 'Nights are shown one by one, unmerged. Click to re-enable merging consecutive 18:00–06:00 events into one row.'
+            }
+            className={
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ' +
+              (mergeNights
+                ? 'border-brand-blue-line bg-white text-brand-blue-dark hover:border-brand-blue'
+                : 'border-brand-blue-dark bg-brand-blue text-white hover:bg-brand-blue-hover')
+            }
+          >
+            <GitMerge size={14} />
+            {mergeNights ? 'Nights merged' : 'Nights unmerged'}
+          </button>
+          <span className="text-ink-600 dark:text-ink-300">
+            {mergeNights
+              ? 'Events from the same 18:00–06:00 night are merged into one row per VID.'
+              : 'Every night event is shown as its own row.'}
+          </span>
+        </div>
+      )}
+
+      {activeTab === 'continuous' && underestimatedRule && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+          <Ruler size={14} />
+          <span>
+            <strong>Under-estimated rule:</strong> duration ≤{' '}
+            {formatThreshold(underestimatedRule.maxDurationSeconds)} and distance ≥{' '}
+            {underestimatedRule.minKm} km. Matching events carry the amber tag
+            below and are not counted or ranked.
+          </span>
+        </div>
+      )}
 
       <div className="mt-4 max-h-[65vh] min-h-[420px] overflow-auto rounded-xl border border-ink-100 dark:border-ink-800">
         {activeTab === 'speed' && (
@@ -1224,12 +1293,22 @@ const FilteredEventsPanel = ({
                     className={
                       e.allowedVid || e.allowedLocation
                         ? 'bg-red-50/60 dark:bg-red-950/20'
-                        : 'bg-white dark:bg-ink-900'
+                        : e.underestimated
+                          ? 'bg-amber-50/70 dark:bg-amber-950/20'
+                          : 'bg-white dark:bg-ink-900'
                     }
                   >
                     <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span>{e.vid}</span>
+                        {e.underestimated && (
+                          <span
+                            title="Duration and distance match the under-estimated rule, so this event is not counted as a violation"
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/50 dark:text-amber-100 dark:ring-amber-800"
+                          >
+                            <Ruler size={10} /> Under-estimated
+                          </span>
+                        )}
                         {e.allowedVid && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-900/60 dark:text-red-100 dark:ring-red-800">
                             <ShieldCheck size={10} /> Allowed

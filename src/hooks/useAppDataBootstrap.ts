@@ -67,6 +67,7 @@ export const useAppDataBootstrap = () => {
             allowedVidsByType: local.allowedVidsByType,
             allowedLocationsByType: local.allowedLocationsByType,
             maxDurationSeconds: local.maxDurationSeconds,
+            underestimatedRule: local.underestimatedRule ?? null,
           };
           if (isBoss) {
             try {
