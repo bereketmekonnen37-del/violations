@@ -154,9 +154,9 @@ export const DEFAULT_THRESHOLDS: EventThresholds = {
 
 const normalizeVidKey = (vid: string): string => normalizeVid(vid);
 
-const cleanVidDisplay = (vid: string): string => String(vid ?? '').trim();
+export const cleanVidDisplay = (vid: string): string => String(vid ?? '').trim();
 
-interface AggregateInput {
+export interface AggregateInput {
   speedFiles: UnfilteredFile[];
   nightFiles: UnfilteredNightFile[];
   continuousFiles: UnfilteredContinuousFile[];
@@ -183,13 +183,13 @@ interface AggregateInput {
 }
 
 /** True when a duration cap is set and this event exceeds it. */
-const exceedsMaxDuration = (
+export const exceedsMaxDuration = (
   seconds: number,
   maxDurationSeconds: number | null | undefined,
 ): boolean =>
   maxDurationSeconds != null && maxDurationSeconds > 0 && seconds > maxDurationSeconds;
 
-interface DurationQualification {
+export interface DurationQualification {
   /** Parsed duration in seconds, or 0 when the row carries no duration. */
   seconds: number;
   /** False when the duration is missing/zero/unparseable ("no duration"). */
@@ -203,7 +203,7 @@ interface DurationQualification {
  * unchanged. This only concerns Master Fleet (this file); Dashboard and
  * Transporter analytics keep dropping zero-duration rows as before.
  */
-const qualifyDuration = (raw: string): DurationQualification => {
+export const qualifyDuration = (raw: string): DurationQualification => {
   const parsed = parseDurationSeconds(raw);
   const hasDuration = Number.isFinite(parsed) && parsed > 0;
   return { seconds: hasDuration ? parsed : 0, hasDuration };
@@ -225,7 +225,7 @@ const failsDurationRules = (
  * first one encountered is kept — later ones are treated as re-parsed
  * duplicates (e.g. the same file uploaded twice) rather than distinct events.
  */
-const duplicateKey = (
+export const duplicateKey = (
   vidKey: string,
   driverName: string,
   q: DurationQualification,
@@ -275,7 +275,7 @@ const getBucket = (
   return b;
 };
 
-const sourceTransporter = (driver: {
+export const sourceTransporter = (driver: {
   transporter?: string;
   driverName?: string;
 }): string => driver.transporter || driver.driverName || '';
@@ -679,7 +679,7 @@ export const downloadMasterFleetCsv = (
   return rows.length;
 };
 
-const triggerCsvDownload = (csv: string, filename: string) => {
+export const triggerCsvDownload = (csv: string, filename: string) => {
   const blob = new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

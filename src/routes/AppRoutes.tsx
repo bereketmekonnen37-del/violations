@@ -8,6 +8,8 @@ import { LoginPage } from '../pages/LoginPage';
 import { MasterFleetPage } from '../pages/MasterFleetPage';
 import { RulesPage } from '../pages/RulesPage';
 import { SettingsPage } from '../pages/SettingsPage';
+import { SnapshotDetailPage } from '../pages/SnapshotDetailPage';
+import { SnapshotsPage } from '../pages/SnapshotsPage';
 import { SmsMessagingPage } from '../pages/SmsMessagingPage';
 import { UnfilteredContinuousPage } from '../pages/UnfilteredContinuousPage';
 import { UnfilteredNightsPage } from '../pages/UnfilteredNightsPage';
@@ -72,6 +74,22 @@ export const AppRoutes = () => {
           element={
             <ProtectedRoute allow={['boss']} allowTransporterStaff>
               <MasterFleetPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/snapshots"
+          element={
+            <ProtectedRoute allow={['boss']}>
+              <SnapshotsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/snapshots/:snapshotId"
+          element={
+            <ProtectedRoute allow={['boss']}>
+              <SnapshotDetailPage />
             </ProtectedRoute>
           }
         />

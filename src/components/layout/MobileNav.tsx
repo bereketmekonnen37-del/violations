@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   Database,
   FileStack,
+  FolderArchive,
   LayoutDashboard,
   MessageSquareText,
   Moon,
@@ -32,6 +33,7 @@ const BOSS = [
   { to: '/violations', label: 'Files', icon: FileStack },
   { to: '/drivers-data', label: 'Drivers', icon: Users },
   { to: '/master-fleet', label: 'Master', icon: Trophy },
+  { to: '/snapshots', label: 'Snapshots', icon: FolderArchive },
   { to: '/transporters', label: 'Transporters', icon: Truck },
   { to: '/rules', label: 'Rules', icon: ShieldCheck },
   { to: '/user-management', label: 'Users', icon: UserCog },

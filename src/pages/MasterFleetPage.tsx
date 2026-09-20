@@ -9,6 +9,8 @@ import {
   ChevronRight,
   Crown,
   Download,
+  FolderArchive,
+  Funnel,
   Gauge,
   GitMerge,
   IdCard,
@@ -50,6 +52,17 @@ import {
 import { setMasterFleetStatusRemote } from '../features/masterFleet/masterFleetStatusApi';
 import { toggleNightMerge } from '../features/settings/nightMergeSlice';
 import type { UnderestimatedRule } from '../features/rules/rulesSlice';
+import { SaveSnapshotModal } from '../features/snapshots/SaveSnapshotModal';
+import { KindIcon, RuleReasonBadge } from '../components/ui/RuleReasonBadge';
+import { reasonRowClass, REASON_ORDER } from '../components/ui/ruleReasonStyles';
+import {
+  collectRuleFilteredEvents,
+  downloadRuleFilteredCsv,
+  KIND_LABEL,
+  RULE_REASON_LABEL,
+  type RuleFilteredEvent,
+  type RuleReasonCode,
+} from '../lib/ruleFiltered';
 
 const formatThreshold = (seconds: number): string => {
   if (seconds % 3600 === 0) return `${seconds / 3600}h`;
@@ -193,9 +206,10 @@ export const MasterFleetPage = () => {
     allowedLocationsByType.speed.length +
     allowedLocationsByType.nights.length +
     allowedLocationsByType.continuous.length;
-  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isBoss, isTransporterStaff, matchesTransporter } = useUserScope();
   const [query, setQuery] = useState('');
   const [rankingOpen, setRankingOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
 
   const speedFiles = useMemo(
     () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesTransporter),
@@ -266,9 +280,35 @@ export const MasterFleetPage = () => {
     ],
   );
 
-  const [activeTab, setActiveTab] = useState<'speed' | 'nights' | 'continuous'>(
-    'speed',
+  const ruleFiltered = useMemo(
+    () =>
+      collectRuleFilteredEvents({
+        speedFiles,
+        nightFiles,
+        continuousFiles,
+        driverRecords,
+        thresholds,
+        allowedVidsByType,
+        allowedLocationsByType,
+        mergeNights,
+        maxDurationSeconds,
+        underestimatedRule,
+      }),
+    [
+      speedFiles,
+      nightFiles,
+      continuousFiles,
+      driverRecords,
+      thresholds,
+      allowedVidsByType,
+      allowedLocationsByType,
+      mergeNights,
+      maxDurationSeconds,
+      underestimatedRule,
+    ],
   );
+
+  const [activeTab, setActiveTab] = useState<EventTab>('speed');
   const [eventQuery, setEventQuery] = useState('');
 
   const totals = useMemo(
@@ -315,6 +355,16 @@ export const MasterFleetPage = () => {
         )}). Edit thresholds and whitelists in Rules.`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {isBoss && (
+              <button
+                type="button"
+                onClick={() => setSaveOpen(true)}
+                disabled={noUploads}
+                className="btn-accent"
+              >
+                <FolderArchive size={16} /> Save this data
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setRankingOpen(true)}
@@ -410,17 +460,29 @@ export const MasterFleetPage = () => {
           )}
 
           {rows.length === 0 ? (
-            <div className="mt-8">
-              <EmptyState
-                icon={Users}
-                title="No events pass the thresholds"
-                description={`Nothing met the minimum durations — Speed ≥ ${formatThreshold(
-                  thresholds.speed,
-                )}, Nights ≥ ${formatThreshold(
-                  thresholds.nights,
-                )}, Continuous ≥ ${formatThreshold(thresholds.continuous)}.`}
+            <>
+              <div className="mt-8">
+                <EmptyState
+                  icon={Users}
+                  title="No events pass the thresholds"
+                  description={`Nothing met the minimum durations — Speed ≥ ${formatThreshold(
+                    thresholds.speed,
+                  )}, Nights ≥ ${formatThreshold(
+                    thresholds.nights,
+                  )}, Continuous ≥ ${formatThreshold(thresholds.continuous)}. Open the Filtered tab to see what the rules removed.`}
+                />
+              </div>
+              <FilteredEventsPanel
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                query={eventQuery}
+                setQuery={setEventQuery}
+                events={filteredEvents}
+                ruleFiltered={ruleFiltered}
+                thresholds={thresholds}
+                underestimatedRule={underestimatedRule}
               />
-            </div>
+            </>
           ) : (
             <>
           <div className="mt-8">
@@ -445,6 +507,7 @@ export const MasterFleetPage = () => {
             query={eventQuery}
             setQuery={setEventQuery}
             events={filteredEvents}
+            ruleFiltered={ruleFiltered}
             thresholds={thresholds}
             underestimatedRule={underestimatedRule}
           />
@@ -452,6 +515,25 @@ export const MasterFleetPage = () => {
             </>
           )}
         </>
+      )}
+
+      {saveOpen && (
+        <SaveSnapshotModal
+          open
+          onClose={() => setSaveOpen(false)}
+          speedFiles={speedFiles}
+          nightFiles={nightFiles}
+          continuousFiles={continuousFiles}
+          driverRecords={driverRecords}
+          rules={{
+            thresholds,
+            maxDurationSeconds,
+            underestimatedRule,
+            allowedVidsByType,
+            allowedLocationsByType,
+            mergeNights,
+          }}
+        />
       )}
 
       <Modal
@@ -758,13 +840,16 @@ const RecommendedActionCell = ({
   );
 };
 
-type EventTab = 'speed' | 'nights' | 'continuous';
+type EventTab = 'speed' | 'nights' | 'continuous' | 'filtered';
 
 const TAB_META: Record<EventTab, { label: string; icon: typeof Gauge }> = {
   speed: { label: 'Speed', icon: Gauge },
   nights: { label: 'Nights', icon: Moon },
   continuous: { label: 'Continuous', icon: RouteIcon },
+  filtered: { label: 'Filtered', icon: Funnel },
 };
+
+const FILTERED_PAGE = 300;
 
 const matchesQuery = (q: string, ...fields: string[]): boolean => {
   if (!q) return true;
@@ -876,6 +961,7 @@ interface FilteredEventsPanelProps {
   query: string;
   setQuery: (q: string) => void;
   events: FilteredEvents;
+  ruleFiltered: RuleFilteredEvent[];
   thresholds: EventThresholds;
   underestimatedRule: UnderestimatedRule | null;
 }
@@ -886,6 +972,7 @@ const FilteredEventsPanel = ({
   query,
   setQuery,
   events,
+  ruleFiltered,
   thresholds,
   underestimatedRule,
 }: FilteredEventsPanelProps) => {
@@ -916,10 +1003,21 @@ const FilteredEventsPanel = ({
     [events.continuous, monthValue, dayValue],
   );
 
+  const filteredDated = useMemo(
+    () =>
+      ruleFiltered.filter((e) =>
+        matchesDateFilter(e.from, e.to, monthValue, dayValue),
+      ),
+    [ruleFiltered, monthValue, dayValue],
+  );
+  const [reasonFilter, setReasonFilter] = useState<RuleReasonCode | 'all'>('all');
+  const [filteredShown, setFilteredShown] = useState(FILTERED_PAGE);
+
   const counts: Record<EventTab, number> = {
     speed: speedDated.length,
     nights: nightsDated.length,
     continuous: contDated.length,
+    filtered: filteredDated.length,
   };
 
   const speedRows = speedDated.filter((e) =>
@@ -931,6 +1029,36 @@ const FilteredEventsPanel = ({
   const contRows = contDated.filter((e) =>
     matchesQuery(query, e.vid, e.driverName, e.timeA, e.duration, e.position),
   );
+
+  const filteredRows = filteredDated.filter(
+    (e) =>
+      (reasonFilter === 'all' || e.reasons.includes(reasonFilter)) &&
+      matchesQuery(
+        query,
+        e.vid,
+        e.driverName,
+        e.transporter,
+        e.from,
+        e.positionA,
+        e.positionB,
+        e.reasonDetails.join(' '),
+      ),
+  );
+  const reasonCounts = useMemo(() => {
+    const m = new Map<RuleReasonCode, number>();
+    filteredDated.forEach((e) =>
+      e.reasons.forEach((r) => m.set(r, (m.get(r) ?? 0) + 1)),
+    );
+    return m;
+  }, [filteredDated]);
+  const shownCount =
+    activeTab === 'speed'
+      ? speedRows.length
+      : activeTab === 'nights'
+        ? nightRows.length
+        : activeTab === 'continuous'
+          ? contRows.length
+          : filteredRows.length;
 
   const underestimatedCount = contRows.filter((e) => e.underestimated).length;
 
@@ -957,16 +1085,17 @@ const FilteredEventsPanel = ({
             onClick={() => {
               if (activeTab === 'speed') downloadFilteredSpeedCsv(speedDated);
               else if (activeTab === 'nights') downloadFilteredNightsCsv(nightsDated);
-              else downloadFilteredContinuousCsv(contDated);
+              else if (activeTab === 'continuous') downloadFilteredContinuousCsv(contDated);
+              else downloadRuleFilteredCsv(filteredRows);
             }}
-            disabled={counts[activeTab] === 0}
+            disabled={activeTab === 'filtered' ? filteredRows.length === 0 : counts[activeTab] === 0}
             className="btn-primary !px-3 !py-1.5 !text-xs"
           >
             <Download size={13} />
             Download {TAB_META[activeTab].label} CSV
-            {counts[activeTab] > 0 && (
+            {(activeTab === 'filtered' ? filteredRows.length : counts[activeTab]) > 0 && (
               <span className="ml-1 rounded-full bg-ink-900/10 px-1.5 py-0.5 text-[10px] font-semibold dark:bg-white/10">
-                {counts[activeTab]}
+                {activeTab === 'filtered' ? filteredRows.length : counts[activeTab]}
               </span>
             )}
           </button>
@@ -1038,17 +1167,46 @@ const FilteredEventsPanel = ({
       </div>
 
       <p className="mt-3 text-[11px] text-ink-500 dark:text-ink-400">
-        Threshold: {formatThreshold(thresholds[activeTab])} · Showing{' '}
-        {activeTab === 'speed'
-          ? speedRows.length
-          : activeTab === 'nights'
-            ? nightRows.length
-            : contRows.length}{' '}
-        of {counts[activeTab]}
+        {activeTab === 'filtered'
+          ? 'Every event a Rules-page rule removed or tagged'
+          : `Threshold: ${formatThreshold(thresholds[activeTab])}`}{' '}
+        · Showing {shownCount} of {counts[activeTab]}
         {activeTab === 'continuous' && underestimatedRule && (
           <> · {underestimatedCount} under-estimated (not counted)</>
         )}
       </p>
+
+      {activeTab === 'filtered' && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-ink-100 bg-ink-50/60 px-3 py-2.5 text-xs dark:border-ink-800 dark:bg-ink-900/40">
+          <span className="font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+            Rule
+          </span>
+          {(['all', ...REASON_ORDER] as const).map((r) => {
+            const active = reasonFilter === r;
+            const n = r === 'all' ? filteredDated.length : (reasonCounts.get(r) ?? 0);
+            if (r !== 'all' && n === 0) return null;
+            return (
+              <button
+                key={r}
+                type="button"
+                onClick={() => {
+                  setReasonFilter(r);
+                  setFilteredShown(FILTERED_PAGE);
+                }}
+                className={
+                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ' +
+                  (active
+                    ? 'border-brand-blue bg-brand-blue text-white'
+                    : 'border-ink-200 bg-white text-ink-600 hover:border-ink-400 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-300')
+                }
+              >
+                {r === 'all' ? 'All rules' : RULE_REASON_LABEL[r]}
+                <span className="opacity-70">{n.toLocaleString()}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {activeTab === 'nights' && (
         <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-brand-blue-line bg-brand-blue-soft/50 px-3 py-2.5 text-xs">
@@ -1344,6 +1502,96 @@ const FilteredEventsPanel = ({
                     </td>
                   </tr>
                 ))
+              )}
+            </tbody>
+          </table>
+        )}
+
+        {activeTab === 'filtered' && (
+          <table className="min-w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-ink-50 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-500 shadow-[0_1px_0_rgba(0,0,0,0.05)] dark:bg-ink-900 dark:text-ink-400">
+              <tr>
+                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">VID</th>
+                <th className="px-4 py-3">Driver</th>
+                <th className="px-4 py-3">Transporter</th>
+                <th className="px-4 py-3">Start / Time A</th>
+                <th className="px-4 py-3">End / Time B</th>
+                <th className="px-4 py-3">Duration</th>
+                <th className="px-4 py-3">Speed / Length</th>
+                <th className="px-4 py-3">Position</th>
+                <th className="px-4 py-3">Filtered by rule</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
+              {filteredRows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={10}
+                    className="px-4 py-8 text-center text-sm text-ink-500 dark:text-ink-400"
+                  >
+                    No events are affected by a rule.
+                  </td>
+                </tr>
+              ) : (
+                filteredRows.slice(0, filteredShown).map((e) => (
+                  <tr key={`${e.kind}-${e.id}`} className={reasonRowClass(e)}>
+                    <td className="px-4 py-2.5">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-800 dark:text-ink-100">
+                        <KindIcon kind={e.kind} /> {KIND_LABEL[e.kind]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">{e.vid}</td>
+                    <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                      {e.driverName || <span className="text-ink-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                      {e.transporter || <span className="text-ink-400">—</span>}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
+                      {e.from}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-ink-700 dark:text-ink-200">
+                      {e.to}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2.5 font-mono text-ink-800 dark:text-ink-100">
+                      {e.duration}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-ink-800 dark:text-ink-100">
+                      {e.metric || <span className="text-ink-400">—</span>}
+                    </td>
+                    <td className="min-w-[200px] px-4 py-2.5 text-xs text-ink-700 dark:text-ink-200">
+                      {[e.positionA, e.positionB].filter(Boolean).join(' → ') || (
+                        <span className="text-ink-400">—</span>
+                      )}
+                    </td>
+                    <td className="min-w-[240px] px-4 py-2.5">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex flex-wrap gap-1">
+                          {e.reasons.map((code, i) => (
+                            <RuleReasonBadge key={code} reason={code} title={e.reasonDetails[i]} />
+                          ))}
+                        </div>
+                        <span className="text-[11px] text-ink-500 dark:text-ink-400">
+                          {e.reasonDetails.join(' · ')}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+              {filteredRows.length > filteredShown && (
+                <tr>
+                  <td colSpan={10} className="px-4 py-3 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setFilteredShown((n) => n + FILTERED_PAGE)}
+                      className="btn-secondary !py-1.5 !text-xs"
+                    >
+                      Show {Math.min(FILTERED_PAGE, filteredRows.length - filteredShown).toLocaleString()} more
+                    </button>
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
