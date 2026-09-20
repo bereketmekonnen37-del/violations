@@ -43,13 +43,13 @@ export interface AllowedLocationLists {
 
 /**
  * Continuous "under-estimated" rule. A Continuous event whose duration is
- * `<= maxDurationSeconds` AND whose distance is `>= minKm` is NOT a violation:
+ * `>= minDurationSeconds` AND whose distance is `<= maxKm` is NOT a violation:
  * it is left out of every count and ranking, and instead appears on the
  * Master Fleet Continuous list under an "Under-estimated" tag.
  */
 export interface UnderestimatedRule {
-  maxDurationSeconds: number;
-  minKm: number;
+  minDurationSeconds: number;
+  maxKm: number;
 }
 
 export interface RulesState {
@@ -177,7 +177,7 @@ const rulesSlice = createSlice({
     ) {
       const rule = action.payload;
       state.underestimatedRule =
-        rule && rule.maxDurationSeconds > 0 && rule.minKm > 0 ? rule : null;
+        rule && rule.minDurationSeconds > 0 && rule.maxKm > 0 ? rule : null;
     },
 
     /* ── VIDs ─────────────────────────────────────────────────────── */

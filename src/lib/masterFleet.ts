@@ -177,7 +177,7 @@ interface AggregateInput {
    *  dropped entirely — from Speed, Nights and Continuous alike. Set on
    *  the Rules page; `null`/`undefined` means no cap. */
   maxDurationSeconds?: number | null;
-  /** Continuous under-estimated rule (duration <= X and distance >= Y km).
+  /** Continuous under-estimated rule (duration >= X and distance <= Y km).
    *  Matching rows are tagged and excluded from every count/ranking. */
   underestimatedRule?: UnderestimatedRule | null;
 }

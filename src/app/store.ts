@@ -194,12 +194,26 @@ const migrations = {
       },
     } as unknown as PersistedState;
   },
+  // Migration 7: the under-estimated rule flipped from "duration <= X and
+  // distance >= Y" (maxDurationSeconds/minKm) to "duration >= X and distance
+  // <= Y" (minDurationSeconds/maxKm). A rule saved in the old shape would mean
+  // something different now, so drop it and let the boss set it again.
+  7: (persisted: PersistedState): PersistedState => {
+    if (!persisted) return persisted;
+    const anyState = persisted as unknown as Record<string, unknown>;
+    const rules = anyState.rules as Record<string, unknown> | undefined;
+    if (!rules) return persisted;
+    return {
+      ...anyState,
+      rules: { ...rules, underestimatedRule: null },
+    } as unknown as PersistedState;
+  },
 };
 
 const persistedReducer = persistReducer(
   {
     key: 'fleetwatch',
-    version: 6,
+    version: 7,
     storage,
     whitelist: [
       'theme',

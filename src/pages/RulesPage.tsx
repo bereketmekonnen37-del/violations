@@ -734,9 +734,6 @@ const UnderestimatedRuleCard = ({
   onChange,
 }: UnderestimatedRuleCardProps) => {
   const [modalOpen, setModalOpen] = useState(false);
-  // A rule shorter than the Continuous minimum can never match, because
-  // events under the minimum are dropped before the rule is checked.
-  const neverMatches = rule != null && rule.maxDurationSeconds < continuousThreshold;
 
   return (
     <section className="surface rounded-2xl p-5 sm:p-7">
@@ -746,8 +743,8 @@ const UnderestimatedRuleCard = ({
             <Ruler size={16} /> Under-estimated continuous rule
           </h2>
           <p className="mt-1 max-w-2xl text-xs text-ink-500 dark:text-ink-400">
-            A Continuous event whose duration is at most the hours you set{' '}
-            <em>and</em> whose distance is at least the km you set is not a
+            A Continuous event whose duration is at least the hours you set{' '}
+            <em>and</em> whose distance is at most the km you set is not a
             violation: it is not counted or ranked. It still shows on the Master
             Fleet Continuous list, tagged as an under-estimated violation with
             its VID, time and location.
@@ -785,18 +782,10 @@ const UnderestimatedRuleCard = ({
               }}
             >
               <AlertTriangle size={14} />
-              Duration ≤{' '}
-              <span className="font-mono">{formatThreshold(rule.maxDurationSeconds)}</span>{' '}
-              and distance ≥ <span className="font-mono">{rule.minKm} km</span>
+              Duration ≥{' '}
+              <span className="font-mono">{formatThreshold(rule.minDurationSeconds)}</span>{' '}
+              and distance ≤ <span className="font-mono">{rule.maxKm} km</span>
             </div>
-            {neverMatches && (
-              <p className="text-xs text-amber-700 dark:text-amber-300">
-                Heads up: the Continuous minimum is{' '}
-                {formatThreshold(continuousThreshold)}, which is longer than this
-                rule's duration, so no event can match it. Raise the duration to
-                at least {formatThreshold(continuousThreshold)}.
-              </p>
-            )}
           </div>
         ) : (
           <p
@@ -841,10 +830,10 @@ const SetUnderestimatedModal = ({
   onSubmit,
   onClose,
 }: SetUnderestimatedModalProps) => {
-  const start = splitHM(initial?.maxDurationSeconds ?? continuousThreshold);
+  const start = splitHM(initial?.minDurationSeconds ?? continuousThreshold);
   const [h, setH] = useState(start.h);
   const [m, setM] = useState(start.m);
-  const [km, setKm] = useState(initial?.minKm ?? 100);
+  const [km, setKm] = useState(initial?.maxKm ?? 100);
 
   const seconds = h * 3600 + m * 60;
   const valid = seconds > 0 && km > 0;
@@ -854,14 +843,14 @@ const SetUnderestimatedModal = ({
       open
       onClose={onClose}
       title="Under-estimated continuous rule"
-      subtitle="Duration at most the time below AND distance at least the km below."
+      subtitle="Duration at least the time below AND distance at most the km below."
       widthClassName="w-[92vw] max-w-[480px]"
     >
       <div className="flex flex-col gap-5">
         <div className="grid grid-cols-3 gap-2">
-          <NumberStepper label="Hours ≤" value={h} min={0} max={72} onChange={setH} />
+          <NumberStepper label="Hours ≥" value={h} min={0} max={72} onChange={setH} />
           <NumberStepper label="Minutes" value={m} min={0} max={59} onChange={setM} />
-          <NumberStepper label="Distance ≥ km" value={km} min={0} max={100000} onChange={setKm} />
+          <NumberStepper label="Distance ≤ km" value={km} min={0} max={100000} onChange={setKm} />
         </div>
         <p
           className="rounded-xl px-3 py-2.5 text-xs"
@@ -872,7 +861,7 @@ const SetUnderestimatedModal = ({
           }}
         >
           {valid
-            ? `Continuous events of ${formatThreshold(seconds)} or less that cover ${km} km or more will not count as violations. They are listed on Master Fleet as under-estimated.`
+            ? `Continuous events of ${formatThreshold(seconds)} or more that cover ${km} km or less will not count as violations. They are listed on Master Fleet as under-estimated.`
             : 'Enter a duration and a distance greater than zero.'}
         </p>
         <div className="flex flex-col-reverse items-stretch justify-end gap-2 border-t border-ink-100 pt-4 dark:border-ink-800 sm:flex-row sm:items-center">
@@ -881,7 +870,7 @@ const SetUnderestimatedModal = ({
           </button>
           <button
             type="button"
-            onClick={() => valid && onSubmit({ maxDurationSeconds: seconds, minKm: km })}
+            onClick={() => valid && onSubmit({ minDurationSeconds: seconds, maxKm: km })}
             disabled={!valid}
             className="btn-primary"
           >

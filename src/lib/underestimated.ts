@@ -18,16 +18,16 @@ export const parseKm = (raw: string): number | null => {
   return isMeters ? n / 1000 : n;
 };
 
-/** True when a Continuous event is "under-estimated": short enough
- *  (duration <= rule hours) yet long enough (distance >= rule km). */
+/** True when a Continuous event is "under-estimated": long enough
+ *  (duration >= rule hours) yet short on distance (distance <= rule km). */
 export const isUnderestimated = (
   rule: UnderestimatedRule | null | undefined,
   durationSeconds: number,
   lengthRaw: string,
 ): boolean => {
-  if (!rule || rule.maxDurationSeconds <= 0 || rule.minKm <= 0) return false;
+  if (!rule || !(rule.minDurationSeconds > 0) || !(rule.maxKm > 0)) return false;
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return false;
-  if (durationSeconds > rule.maxDurationSeconds) return false;
+  if (durationSeconds < rule.minDurationSeconds) return false;
   const km = parseKm(lengthRaw);
-  return km != null && km >= rule.minKm;
+  return km != null && km <= rule.maxKm;
 };

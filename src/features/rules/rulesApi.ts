@@ -35,7 +35,13 @@ const toPayload = (row: AppRulesRow): AppRulesPayload => {
     allowedVidsByType: row.allowed_vids,
     allowedLocationsByType: row.allowed_locations,
     maxDurationSeconds: row.max_duration_seconds,
-    underestimatedRule: underestimated ?? null,
+    // Rules saved before the logic flip used different field names; ignore them.
+    underestimatedRule:
+      underestimated &&
+      underestimated.minDurationSeconds > 0 &&
+      underestimated.maxKm > 0
+        ? underestimated
+        : null,
   };
 };
 
