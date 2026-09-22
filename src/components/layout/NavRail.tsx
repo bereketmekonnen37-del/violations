@@ -16,7 +16,6 @@ import {
   Sparkles,
   Trophy,
   Truck,
-  Upload,
   UserCog,
   Users,
 } from 'lucide-react';
@@ -32,12 +31,18 @@ interface Item {
   icon: LucideIcon;
 }
 
-const LEGACY_STAFF_ITEMS: Item[] = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/upload', label: 'Upload Data', icon: Upload },
+// Every staff account — whether or not they're scoped to specific
+// transporters — sees the same three uploaders. Boss decides what to do
+// with the data afterwards; staff never see the raw "Uploaded Data" table.
+const STAFF_UPLOAD_ITEMS: Item[] = [
   { to: '/unfiltered', label: 'Unfiltered Speed', icon: Sparkles },
   { to: '/unfiltered-nights', label: 'Unfiltered Nights', icon: Moon },
   { to: '/unfiltered-continuous', label: 'Unfiltered Continuous', icon: Route },
+];
+
+const LEGACY_STAFF_ITEMS: Item[] = [
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  ...STAFF_UPLOAD_ITEMS,
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -54,16 +59,15 @@ const BOSS_ITEMS: Item[] = [
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
-// Boss-created staff: shares Master Fleet with the boss, can upload their
-// own data, and browses the scoped views. No Rules, no User Management,
-// no Drivers Data (that upload is boss-only).
+// Boss-created staff: shares Master Fleet with the boss and can browse the
+// scoped views. They upload with the same three uploaders as legacy staff.
+// No Rules, no User Management, no Drivers Data, no Uploaded Data table.
 const TRANSPORTER_STAFF_ITEMS: Item[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/upload', label: 'Upload Data', icon: Upload },
+  ...STAFF_UPLOAD_ITEMS,
   { to: '/violations', label: 'Filtered Violations', icon: FileStack },
   { to: '/master-fleet', label: 'Master Fleet', icon: Trophy },
   { to: '/transporters', label: 'Transporters', icon: Truck },
-  { to: '/uploaded-data', label: 'Uploaded Data', icon: Database },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 

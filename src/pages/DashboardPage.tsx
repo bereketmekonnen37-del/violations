@@ -234,7 +234,7 @@ export const DashboardPage = () => {
             </Link>
           ) : isTransporterStaff ? (
             <div className="flex flex-wrap items-center gap-2">
-              <Link to="/upload" className="btn-ghost">
+              <Link to="/unfiltered" className="btn-ghost">
                 <Upload size={16} /> Upload data
               </Link>
               <Link to="/master-fleet" className="btn-primary">
@@ -242,7 +242,7 @@ export const DashboardPage = () => {
               </Link>
             </div>
           ) : (
-            <Link to="/upload" className="btn-primary">
+            <Link to="/unfiltered" className="btn-primary">
               <Upload size={16} /> Upload new data
             </Link>
           )
@@ -572,7 +572,7 @@ export const DashboardPage = () => {
             }
             action={
               !hasBossView && (
-                <Link to="/upload" className="btn-primary">
+                <Link to="/unfiltered" className="btn-primary">
                   <Upload size={16} /> Upload data
                 </Link>
               )

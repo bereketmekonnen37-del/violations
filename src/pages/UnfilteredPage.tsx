@@ -384,6 +384,6 @@ const BossView = () => {
 };
 
 export const UnfilteredPage = () => {
-  const { hasBossView } = useUserScope();
-  return hasBossView ? <BossView /> : <StaffView />;
+  const { isBoss } = useUserScope();
+  return isBoss ? <BossView /> : <StaffView />;
 };

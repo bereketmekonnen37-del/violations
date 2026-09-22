@@ -383,6 +383,6 @@ const BossView = () => {
 };
 
 export const UnfilteredContinuousPage = () => {
-  const { hasBossView } = useUserScope();
-  return hasBossView ? <BossView /> : <StaffView />;
+  const { isBoss } = useUserScope();
+  return isBoss ? <BossView /> : <StaffView />;
 };

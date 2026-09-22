@@ -128,7 +128,7 @@ export const AppRoutes = () => {
         <Route
           path="/uploaded-data"
           element={
-            <ProtectedRoute allow={['boss']} allowTransporterStaff>
+            <ProtectedRoute allow={['boss']}>
               <UploadedDataPage />
             </ProtectedRoute>
           }

@@ -12,19 +12,21 @@ import {
   Sparkles,
   Trophy,
   Truck,
-  Upload,
   UserCog,
   Users,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useUserScope } from '../../hooks/useUserScope';
 
-const LEGACY_STAFF = [
-  { to: '/dashboard', label: 'Home', icon: LayoutDashboard },
-  { to: '/upload', label: 'Upload', icon: Upload },
+const STAFF_UPLOADS = [
   { to: '/unfiltered', label: 'Speed', icon: Sparkles },
   { to: '/unfiltered-nights', label: 'Nights', icon: Moon },
   { to: '/unfiltered-continuous', label: 'Continuous', icon: Route },
+];
+
+const LEGACY_STAFF = [
+  { to: '/dashboard', label: 'Home', icon: LayoutDashboard },
+  ...STAFF_UPLOADS,
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -43,11 +45,10 @@ const BOSS = [
 
 const TRANSPORTER_STAFF = [
   { to: '/dashboard', label: 'Home', icon: LayoutDashboard },
-  { to: '/upload', label: 'Upload', icon: Upload },
+  ...STAFF_UPLOADS,
   { to: '/violations', label: 'Files', icon: FileStack },
   { to: '/master-fleet', label: 'Master', icon: Trophy },
   { to: '/transporters', label: 'Transporters', icon: Truck },
-  { to: '/uploaded-data', label: 'Uploaded', icon: Database },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
