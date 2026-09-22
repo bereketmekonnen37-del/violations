@@ -208,12 +208,38 @@ const migrations = {
       rules: { ...rules, underestimatedRule: null },
     } as unknown as PersistedState;
   },
+  // Migration 8: reset the browser-side caches of the data tables we wiped on
+  // Supabase (`upload_batches`, `violation_files`, `driver_roster_records`,
+  // `master_fleet_status`). Without this the boss's persisted redux state
+  // would re-seed those tables from local storage on next login via
+  // `useAppDataBootstrap` — silently undoing the DB wipe. Rules stay because
+  // we deliberately preserved them on the DB side.
+  8: (persisted: PersistedState): PersistedState => {
+    if (!persisted) return persisted;
+    const anyState = persisted as unknown as Record<string, unknown>;
+    return {
+      ...anyState,
+      uploads: { files: [], status: 'idle', error: null },
+      drivers: {
+        period: '',
+        uploadedAt: null,
+        uploaderId: null,
+        uploaderName: null,
+        fileName: null,
+        fileType: null,
+        records: [],
+        status: 'idle',
+        error: null,
+      },
+      masterFleetStatus: { statusByVid: {} },
+    } as unknown as PersistedState;
+  },
 };
 
 const persistedReducer = persistReducer(
   {
     key: 'fleetwatch',
-    version: 7,
+    version: 8,
     storage,
     whitelist: [
       'theme',

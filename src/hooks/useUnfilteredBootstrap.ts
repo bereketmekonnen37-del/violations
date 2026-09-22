@@ -21,6 +21,7 @@ import {
   setContinuousFiles,
   setContinuousStatus,
 } from '../features/unfilteredContinuous/unfilteredContinuousSlice';
+import { useUserScope } from './useUserScope';
 
 /**
  * Mounted once near the app root, alongside `useAuthBootstrap`. Loads all
@@ -30,16 +31,21 @@ import {
  * otherwise stay empty until the raw Unfiltered pages happened to be
  * visited. Clears all three on logout so a shared browser doesn't leak the
  * previous user's cross-device data into the next session.
+ *
+ * Legacy staff never see uploaded data anywhere in the UI, so we don't fetch
+ * it for them — one less RTT on login and no risk of showing their own past
+ * uploads back to them.
  */
 export const useUnfilteredBootstrap = () => {
   const dispatch = useAppDispatch();
   const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
   const initializing = useAppSelector((s) => s.auth.initializing);
+  const { isLegacyStaff } = useUserScope();
 
   useEffect(() => {
     if (initializing) return;
 
-    if (!isAuthenticated) {
+    if (!isAuthenticated || isLegacyStaff) {
       dispatch(clearUnfiltered());
       dispatch(clearNights());
       dispatch(clearContinuous());
@@ -97,5 +103,5 @@ export const useUnfilteredBootstrap = () => {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, initializing, dispatch]);
+  }, [isAuthenticated, initializing, isLegacyStaff, dispatch]);
 };

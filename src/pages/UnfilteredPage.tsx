@@ -8,12 +8,10 @@ import {
   Layers,
   Loader2,
   RefreshCw,
-  Trash2,
   Users,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { FilePickerGrid } from '../components/ui/FilePickerGrid';
 import { StatCard } from '../components/ui/StatCard';
@@ -21,11 +19,8 @@ import { DriverCard } from '../features/unfiltered/DriverCard';
 import { DriverModal } from '../features/unfiltered/DriverModal';
 import { UnfilteredFilters } from '../features/unfiltered/UnfilteredFilters';
 import { UnfilteredUpload } from '../features/unfiltered/UnfilteredUpload';
-import { deleteUnfilteredBatch, fetchUnfilteredFiles } from '../features/unfiltered/unfilteredApi';
-import {
-  removeUnfilteredFile,
-  setUnfilteredFiles,
-} from '../features/unfiltered/unfilteredSlice';
+import { fetchUnfilteredFiles } from '../features/unfiltered/unfilteredApi';
+import { setUnfilteredFiles } from '../features/unfiltered/unfilteredSlice';
 import {
   useUnfilteredData,
   type AggregatedDriver,
@@ -38,129 +33,24 @@ import {
 } from '../lib/exportCsv';
 import { buildDriverProfileLookup } from '../lib/driverLookup';
 import { filterFilesByTransporter } from '../lib/transporterScope';
-import { formatDateTime } from '../lib/utils';
 import { useUserScope } from '../hooks/useUserScope';
 
+/**
+ * Legacy staff (no assigned transporters) can only submit files. They do not
+ * see any history — not even their own — and cannot delete anything. That
+ * responsibility now lives entirely with the boss so nothing accidentally
+ * disappears while the boss is still reviewing it.
+ */
 const StaffView = () => {
-  const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.auth.user)!;
-  const status = useAppSelector((s) => s.unfiltered.status);
-  const { files, totalEvents } = useUnfilteredData(user.id);
-  const [refreshing, setRefreshing] = useState(false);
-  const [listError, setListError] = useState<string | null>(null);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    setListError(null);
-    try {
-      const fresh = await fetchUnfilteredFiles();
-      dispatch(setUnfilteredFiles(fresh));
-    } catch (e) {
-      setListError(e instanceof Error ? e.message : 'Could not refresh files.');
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    setListError(null);
-    try {
-      await deleteUnfilteredBatch(id);
-      dispatch(removeUnfilteredFile(id));
-    } catch (e) {
-      setListError(e instanceof Error ? e.message : 'Could not delete this file.');
-    }
-  };
-
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full max-w-3xl">
       <PageHeader
         eyebrow="Staff workspace"
-        title="Unfiltered speed"
-        subtitle="Upload messy Excel or CSV exports and we'll parse the Object/Group/Period blocks into clean overspeed records."
+        title="Upload speed data"
+        subtitle="Drop a messy Excel or CSV export — we'll parse the Object/Group/Period blocks into clean overspeed records for the boss to review."
       />
-
-      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <UnfilteredUpload user={user} />
-
-        <div className="surface rounded-2xl p-5 sm:p-7">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-ink-900 dark:text-white">
-              Your uploads
-            </h3>
-            <div className="flex items-center gap-2">
-              <Badge tone="neutral">{files.length}</Badge>
-              <button
-                type="button"
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="btn-ghost h-8 w-8 p-0"
-                aria-label="Refresh uploads"
-              >
-                {refreshing ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <RefreshCw size={14} />
-                )}
-              </button>
-            </div>
-          </div>
-          <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-            History of your unfiltered submissions ({totalEvents} parsed events).
-          </p>
-          {listError && (
-            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-              {listError}
-            </div>
-          )}
-          <div className="mt-5 space-y-2">
-            {files.length === 0 && status === 'loading' ? (
-              <EmptyState
-                icon={Loader2}
-                title="Loading your uploads…"
-                description="Fetching your files from the server."
-              />
-            ) : files.length === 0 ? (
-              <EmptyState
-                icon={FileSpreadsheet}
-                title="No uploads yet"
-                description="Drop a raw export to extract drivers and overspeed events."
-              />
-            ) : (
-              files.map((f) => (
-                <div
-                  key={f.id}
-                  className="flex items-start justify-between gap-3 rounded-xl border border-ink-100 bg-white p-3 dark:border-ink-800 dark:bg-ink-900"
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200">
-                      <FileSpreadsheet size={15} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-ink-900 dark:text-white">
-                        {f.title}
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-ink-500 dark:text-ink-400">
-                        {formatDateTime(f.uploadDate)} · {f.drivers.length} drivers ·{' '}
-                        {f.totalEvents} events · {(f.source ?? 'mela').toUpperCase()} (
-                        {f.fileType.toUpperCase()})
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(f.id)}
-                    className="btn-ghost h-8 w-8 p-0 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
-                    aria-label="Delete upload"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
+      <UnfilteredUpload user={user} />
     </div>
   );
 };

@@ -72,7 +72,7 @@ export const AppRoutes = () => {
         <Route
           path="/master-fleet"
           element={
-            <ProtectedRoute allow={['boss']} allowTransporterStaff>
+            <ProtectedRoute allow={['boss']}>
               <MasterFleetPage />
             </ProtectedRoute>
           }

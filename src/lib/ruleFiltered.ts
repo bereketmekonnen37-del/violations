@@ -146,7 +146,7 @@ export const collectRuleFilteredEvents = ({
 
   const evaluate = (c: Candidate) => {
     const q = qualifyDuration(c.duration);
-    const dupKey = duplicateKey(c.vidKey, c.sourceDriverName, q);
+    const dupKey = duplicateKey(c.vidKey, c.sourceDriverName, q, c.from, c.to);
     if (seen[c.kind].has(dupKey)) return;
     seen[c.kind].add(dupKey);
 

@@ -47,7 +47,6 @@ const TRANSPORTER_STAFF = [
   { to: '/dashboard', label: 'Home', icon: LayoutDashboard },
   ...STAFF_UPLOADS,
   { to: '/violations', label: 'Files', icon: FileStack },
-  { to: '/master-fleet', label: 'Master', icon: Trophy },
   { to: '/transporters', label: 'Transporters', icon: Truck },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];

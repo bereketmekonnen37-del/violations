@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
+  AlertTriangle,
   CalendarDays,
   Check,
   ChevronDown,
@@ -325,6 +326,30 @@ export const MasterFleetPage = () => {
     [rows],
   );
 
+  // Raw event counts across every uploaded file (no rules applied). Compared
+  // against `totals` above, this tells us when the current rule set is
+  // dropping every uploaded row — the exact case that just confused the boss:
+  // Master Fleet said Speed = 0 while Uploaded Data showed 230 speed events,
+  // because the Speed threshold was set to 61 minutes and the events were all
+  // 20–72 seconds long.
+  const rawTotals = useMemo(() => {
+    let speed = 0;
+    let nights = 0;
+    let continuous = 0;
+    speedFiles.forEach((f) => f.drivers.forEach((d) => (speed += d.events.length)));
+    nightFiles.forEach((f) => f.drivers.forEach((d) => (nights += d.rows.length)));
+    continuousFiles.forEach((f) => f.drivers.forEach((d) => (continuous += d.rows.length)));
+    return { speed, nights, continuous };
+  }, [speedFiles, nightFiles, continuousFiles]);
+
+  const zeroedKinds = useMemo(
+    () =>
+      (['speed', 'nights', 'continuous'] as const).filter(
+        (k) => rawTotals[k] > 0 && totals[k] === 0,
+      ),
+    [rawTotals, totals],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
@@ -405,6 +430,39 @@ export const MasterFleetPage = () => {
           icon={Layers}
         />
       </div>
+
+      {zeroedKinds.length > 0 && (
+        <div className="mt-6 flex flex-col gap-2 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 sm:p-5 dark:border-amber-800 dark:bg-amber-950/40">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white">
+              <AlertTriangle size={16} />
+            </span>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                Your Rules are hiding {zeroedKinds.length === 1 ? 'a category' : 'categories'} of uploaded data
+              </p>
+              <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+                Uploads exist but every event was dropped by the current threshold, cap or whitelist:{' '}
+                {zeroedKinds
+                  .map(
+                    (k) =>
+                      `${k === 'speed' ? 'Speed' : k === 'nights' ? 'Nights' : 'Continuous'} — ${rawTotals[k].toLocaleString()} uploaded, 0 kept`,
+                  )
+                  .join(' · ')}
+                . Lower the minimum duration on the Rules page (or clear a whitelist) so real events start counting.
+              </p>
+            </div>
+            {!isTransporterStaff && (
+              <Link
+                to="/rules"
+                className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-600"
+              >
+                Open Rules
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
 
       {noUploads ? (
         <div className="mt-8">

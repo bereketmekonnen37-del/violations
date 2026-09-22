@@ -2,21 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   CheckCircle2,
-  FileSpreadsheet,
   FileText,
   Loader2,
-  Trash2,
   Upload as UploadIcon,
   X,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Badge } from '../components/ui/Badge';
-import { EmptyState } from '../components/ui/EmptyState';
-import { addFile, removeFile } from '../features/uploads/uploadsSlice';
-import { createViolationFile, deleteViolationFile } from '../features/uploads/uploadsApi';
+import { addFile } from '../features/uploads/uploadsSlice';
+import { createViolationFile } from '../features/uploads/uploadsApi';
 import { detectFileKind, parseFile } from '../lib/parsers';
-import { cn, formatDateTime } from '../lib/utils';
+import { cn } from '../lib/utils';
 import type { FileKind } from '../types';
 
 interface FormValues {
@@ -25,19 +21,9 @@ interface FormValues {
 
 const acceptString = '.csv,.xlsx,.xls,.pdf';
 
-const FILE_ICON: Record<FileKind, typeof FileText> = {
-  csv: FileSpreadsheet,
-  xls: FileSpreadsheet,
-  xlsx: FileSpreadsheet,
-  pdf: FileText,
-};
-
 export const UploadPage = () => {
   const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.auth.user)!;
-  const myFiles = useAppSelector((s) =>
-    s.uploads.files.filter((f) => f.uploaderId === user.id),
-  );
 
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -106,14 +92,14 @@ export const UploadPage = () => {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full max-w-3xl">
       <PageHeader
         eyebrow="Staff workspace"
         title="Upload violation data"
-        subtitle="Submit daily reports as CSV, XLSX, XLS or PDF. Files are parsed and securely stored in your workspace."
+        subtitle="Submit daily reports as CSV, XLSX, XLS or PDF. Once uploaded, only the boss can review or delete them."
       />
 
-      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <div>
         <form onSubmit={handleSubmit(onSubmit)} className="surface rounded-2xl p-5 sm:p-7">
           <div>
             <label className="text-xs font-medium uppercase tracking-wider text-ink-500 dark:text-ink-400">
@@ -226,7 +212,7 @@ export const UploadPage = () => {
 
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-ink-500 dark:text-ink-400">
-              Files are stored privately in your workspace and visible to managers.
+              Uploaded reports go straight to the boss's dashboard.
             </p>
             <button type="submit" className="btn-primary" disabled={busy || !file}>
               {busy ? (
@@ -241,67 +227,6 @@ export const UploadPage = () => {
             </button>
           </div>
         </form>
-
-        <div className="surface rounded-2xl p-5 sm:p-7">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-ink-900 dark:text-white">
-              Your uploads
-            </h3>
-            <Badge tone="neutral">{myFiles.length}</Badge>
-          </div>
-          <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-            History of all reports you've submitted.
-          </p>
-
-          <div className="mt-5 space-y-2">
-            {myFiles.length === 0 ? (
-              <EmptyState
-                icon={FileText}
-                title="No uploads yet"
-                description="Drop a CSV or PDF in the panel on the left to begin."
-              />
-            ) : (
-              myFiles.map((f) => {
-                const Icon = FILE_ICON[f.fileType];
-                return (
-                  <div
-                    key={f.id}
-                    className="flex items-start justify-between gap-3 rounded-xl border border-ink-100 bg-white p-3 dark:border-ink-800 dark:bg-ink-900"
-                  >
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200">
-                        <Icon size={15} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-ink-900 dark:text-white">
-                          {f.title}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-ink-500 dark:text-ink-400">
-                          {formatDateTime(f.uploadDate)} · {f.rowCount} records ·{' '}
-                          {f.fileType.toUpperCase()}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        dispatch(removeFile(f.id));
-                        deleteViolationFile(f.id).catch(() => {
-                          // Local state already reflects the delete; if the
-                          // remote call failed it'll reappear on next load.
-                        });
-                      }}
-                      className="btn-ghost h-8 w-8 p-0 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
-                      aria-label="Delete upload"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -10,7 +10,6 @@ import {
   Gauge,
   Moon,
   Route as RouteIcon,
-  Trophy,
   Truck,
   Upload,
   Users,
@@ -32,7 +31,66 @@ import { isUnderestimated } from '../lib/underestimated';
 import { DailyViolationsChart } from '../features/dashboard/DailyViolationsChart';
 import { TopOffenderCards } from '../features/dashboard/TopOffenderCards';
 
-export const DashboardPage = () => {
+/**
+ * Legacy staff (no assigned transporters): the dashboard is intentionally a
+ * dead end. Three tiles that link to the three uploaders — no totals, no
+ * charts, no history — so nothing leaks back that they submitted.
+ */
+const LegacyStaffDashboard = () => (
+  <div className="mx-auto w-full max-w-4xl">
+    <PageHeader
+      eyebrow="Welcome"
+      title=""
+      subtitle="Your job here is to upload the three violation exports. Only the boss can review, filter and delete them — you'll never see the parsed data back."
+    />
+    <div className="grid gap-4 sm:grid-cols-3">
+      <Link to="/unfiltered" className="card-base group p-5 transition hover:-translate-y-0.5 hover:shadow-elev">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: 'var(--color-brand-blue)', color: '#fff' }}>
+            <Gauge size={18} />
+          </span>
+          <div>
+            <p className="font-display text-lg font-semibold" style={{ color: 'var(--color-brand-blue-dark)' }}>Speed</p>
+            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Overspeed exports</p>
+          </div>
+        </div>
+        <p className="mt-4 inline-flex items-center gap-1 text-sm font-semibold" style={{ color: 'var(--color-brand-accent)' }}>
+          Upload <ArrowRight size={14} />
+        </p>
+      </Link>
+      <Link to="/unfiltered-nights" className="card-base group p-5 transition hover:-translate-y-0.5 hover:shadow-elev">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: 'var(--color-brand-blue)', color: '#fff' }}>
+            <Moon size={18} />
+          </span>
+          <div>
+            <p className="font-display text-lg font-semibold" style={{ color: 'var(--color-brand-blue-dark)' }}>Nights</p>
+            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Unauthorised time exports</p>
+          </div>
+        </div>
+        <p className="mt-4 inline-flex items-center gap-1 text-sm font-semibold" style={{ color: 'var(--color-brand-accent)' }}>
+          Upload <ArrowRight size={14} />
+        </p>
+      </Link>
+      <Link to="/unfiltered-continuous" className="card-base group p-5 transition hover:-translate-y-0.5 hover:shadow-elev">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: 'var(--color-brand-blue)', color: '#fff' }}>
+            <RouteIcon size={18} />
+          </span>
+          <div>
+            <p className="font-display text-lg font-semibold" style={{ color: 'var(--color-brand-blue-dark)' }}>Continuous</p>
+            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Continuous-driving exports</p>
+          </div>
+        </div>
+        <p className="mt-4 inline-flex items-center gap-1 text-sm font-semibold" style={{ color: 'var(--color-brand-accent)' }}>
+          Upload <ArrowRight size={14} />
+        </p>
+      </Link>
+    </div>
+  </div>
+);
+
+const BossDashboard = () => {
   const user = useAppSelector((s) => s.auth.user);
   const allFiles = useAppSelector((s) => s.uploads.files);
   const rawSpeedFiles = useAppSelector((s) => s.unfiltered.files);
@@ -112,6 +170,29 @@ export const DashboardPage = () => {
   const dailySeries = useMemo(
     () => fillDailyRange(analytics.daily),
     [analytics.daily],
+  );
+
+  // Same "rules hid all my data" detection MasterFleetPage does. Uploaded
+  // events are counted raw here; when a category has raw > 0 but analytics
+  // totals = 0, the current thresholds/whitelists have silently dropped
+  // everything. The banner below flags it so the boss doesn't sit staring
+  // at 0s wondering where the data went.
+  const rawTotals = useMemo(() => {
+    let speed = 0;
+    let nights = 0;
+    let continuous = 0;
+    speedFiles.forEach((f) => f.drivers.forEach((d) => (speed += d.events.length)));
+    nightFiles.forEach((f) => f.drivers.forEach((d) => (nights += d.rows.length)));
+    continuousFiles.forEach((f) => f.drivers.forEach((d) => (continuous += d.rows.length)));
+    return { speed, nights, continuous };
+  }, [speedFiles, nightFiles, continuousFiles]);
+
+  const zeroedKinds = useMemo(
+    () =>
+      (['speed', 'nights', 'continuous'] as const).filter(
+        (k) => rawTotals[k] > 0 && analytics.totals[k] === 0,
+      ),
+    [rawTotals, analytics.totals],
   );
 
   const analyticsTotal =
@@ -224,7 +305,7 @@ export const DashboardPage = () => {
           isBoss
             ? 'Real-time view of uploaded violation reports, drivers and transporters.'
             : isTransporterStaff
-              ? `You are scoped to ${user.assignedTransporters?.length ?? 0} transporter${(user.assignedTransporters?.length ?? 0) === 1 ? '' : 's'}. Upload new reports or jump to the master sheet.`
+              ? `You are scoped to ${user.assignedTransporters?.length ?? 0} transporter${(user.assignedTransporters?.length ?? 0) === 1 ? '' : 's'}. Only their data appears below.`
               : 'Upload new violation reports and track your submission history.'
         }
         actions={
@@ -233,14 +314,9 @@ export const DashboardPage = () => {
               View all files <ArrowRight size={16} />
             </Link>
           ) : isTransporterStaff ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Link to="/unfiltered" className="btn-ghost">
-                <Upload size={16} /> Upload data
-              </Link>
-              <Link to="/master-fleet" className="btn-primary">
-                <Trophy size={16} /> Master sheet
-              </Link>
-            </div>
+            <Link to="/unfiltered" className="btn-primary">
+              <Upload size={16} /> Upload data
+            </Link>
           ) : (
             <Link to="/unfiltered" className="btn-primary">
               <Upload size={16} /> Upload new data
@@ -276,30 +352,51 @@ export const DashboardPage = () => {
         />
       </div>
 
+      {zeroedKinds.length > 0 && (
+        <div className="mt-6 flex items-start gap-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 sm:p-5 dark:border-amber-800 dark:bg-amber-950/40">
+          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white">
+            <AlertTriangle size={16} />
+          </span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+              Your Rules are hiding {zeroedKinds.length === 1 ? 'a category' : 'categories'} of uploaded data
+            </p>
+            <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+              {zeroedKinds
+                .map(
+                  (k) =>
+                    `${k === 'speed' ? 'Speed' : k === 'nights' ? 'Nights' : 'Continuous'} — ${rawTotals[k].toLocaleString()} uploaded, 0 kept`,
+                )
+                .join(' · ')}
+              . Lower the minimum duration on the Rules page (or clear a whitelist) so real events start counting.
+            </p>
+          </div>
+          {isBoss && (
+            <Link
+              to="/rules"
+              className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-600"
+            >
+              Open Rules
+            </Link>
+          )}
+        </div>
+      )}
+
       {isTransporterStaff && (
         <section className="mt-10">
-          <div className="mb-4 flex items-end justify-between">
-            <div>
-              <h2
-                className="text-lg font-semibold tracking-tight"
-                style={{ color: 'var(--color-brand-blue-dark)' }}
-              >
-                Your transporters
-              </h2>
-              <p
-                className="text-sm"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
-                Every upload here is filtered to just these transporters.
-              </p>
-            </div>
-            <Link
-              to="/master-fleet"
-              className="hidden text-sm font-semibold sm:inline-flex sm:items-center sm:gap-1 hover:underline"
-              style={{ color: 'var(--color-brand-accent)' }}
+          <div className="mb-4">
+            <h2
+              className="text-lg font-semibold tracking-tight"
+              style={{ color: 'var(--color-brand-blue-dark)' }}
             >
-              Open master sheet <ArrowUpRight size={14} />
-            </Link>
+              Your transporters
+            </h2>
+            <p
+              className="text-sm"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              Every upload here is filtered to just these transporters.
+            </p>
           </div>
 
           {transporterBreakdown.length === 0 ? (
@@ -687,4 +784,9 @@ export const DashboardPage = () => {
       )}
     </div>
   );
+};
+
+export const DashboardPage = () => {
+  const { isLegacyStaff } = useUserScope();
+  return isLegacyStaff ? <LegacyStaffDashboard /> : <BossDashboard />;
 };

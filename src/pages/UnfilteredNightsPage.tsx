@@ -8,12 +8,10 @@ import {
   Loader2,
   Moon,
   RefreshCw,
-  Trash2,
   Users,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { FilePickerGrid } from '../components/ui/FilePickerGrid';
 import { StatCard } from '../components/ui/StatCard';
@@ -21,11 +19,8 @@ import { NightDriverCard } from '../features/unfilteredNights/NightDriverCard';
 import { NightDriverModal } from '../features/unfilteredNights/NightDriverModal';
 import { NightsFilters } from '../features/unfilteredNights/NightsFilters';
 import { NightsUpload } from '../features/unfilteredNights/NightsUpload';
-import { deleteNightBatch, fetchNightFiles } from '../features/unfilteredNights/unfilteredNightsApi';
-import {
-  removeNightFile,
-  setNightFiles,
-} from '../features/unfilteredNights/unfilteredNightsSlice';
+import { fetchNightFiles } from '../features/unfilteredNights/unfilteredNightsApi';
+import { setNightFiles } from '../features/unfilteredNights/unfilteredNightsSlice';
 import {
   useUnfilteredNightsData,
   type AggregatedNightDriver,
@@ -38,129 +33,18 @@ import {
 } from '../lib/nightsExportCsv';
 import { buildDriverProfileLookup } from '../lib/driverLookup';
 import { filterFilesByTransporter } from '../lib/transporterScope';
-import { formatDateTime } from '../lib/utils';
 import { useUserScope } from '../hooks/useUserScope';
 
 const StaffView = () => {
-  const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.auth.user)!;
-  const status = useAppSelector((s) => s.unfilteredNights.status);
-  const { files, totalRows } = useUnfilteredNightsData(user.id);
-  const [refreshing, setRefreshing] = useState(false);
-  const [listError, setListError] = useState<string | null>(null);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    setListError(null);
-    try {
-      const fresh = await fetchNightFiles();
-      dispatch(setNightFiles(fresh));
-    } catch (e) {
-      setListError(e instanceof Error ? e.message : 'Could not refresh files.');
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    setListError(null);
-    try {
-      await deleteNightBatch(id);
-      dispatch(removeNightFile(id));
-    } catch (e) {
-      setListError(e instanceof Error ? e.message : 'Could not delete this file.');
-    }
-  };
-
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full max-w-3xl">
       <PageHeader
         eyebrow="Staff workspace"
-        title="Unfiltered nights"
-        subtitle="Upload raw “Travel sheet (Unauthorized Time)” exports and we'll parse the Object/Group/Period blocks into clean night records."
+        title="Upload nights data"
+        subtitle="Drop a raw “Travel sheet (Unauthorized Time)” export — we'll parse it into clean night records for the boss to review."
       />
-
-      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <NightsUpload user={user} />
-
-        <div className="surface rounded-2xl p-5 sm:p-7">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-ink-900 dark:text-white">
-              Your uploads
-            </h3>
-            <div className="flex items-center gap-2">
-              <Badge tone="neutral">{files.length}</Badge>
-              <button
-                type="button"
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="btn-ghost h-8 w-8 p-0"
-                aria-label="Refresh uploads"
-              >
-                {refreshing ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <RefreshCw size={14} />
-                )}
-              </button>
-            </div>
-          </div>
-          <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-            History of your night submissions ({totalRows} parsed nights).
-          </p>
-          {listError && (
-            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-              {listError}
-            </div>
-          )}
-          <div className="mt-5 space-y-2">
-            {files.length === 0 && status === 'loading' ? (
-              <EmptyState
-                icon={Loader2}
-                title="Loading your uploads…"
-                description="Fetching your files from the server."
-              />
-            ) : files.length === 0 ? (
-              <EmptyState
-                icon={Moon}
-                title="No uploads yet"
-                description="Drop a raw travel sheet to extract drivers and night events."
-              />
-            ) : (
-              files.map((f) => (
-                <div
-                  key={f.id}
-                  className="flex items-start justify-between gap-3 rounded-xl border border-ink-100 bg-white p-3 dark:border-ink-800 dark:bg-ink-900"
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200">
-                      <Moon size={15} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-ink-900 dark:text-white">
-                        {f.title}
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-ink-500 dark:text-ink-400">
-                        {formatDateTime(f.uploadDate)} · {f.drivers.length} drivers ·{' '}
-                        {f.totalRows} nights · {(f.source ?? 'mela').toUpperCase()} (
-                        {f.fileType.toUpperCase()})
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(f.id)}
-                    className="btn-ghost h-8 w-8 p-0 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
-                    aria-label="Delete upload"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
+      <NightsUpload user={user} />
     </div>
   );
 };

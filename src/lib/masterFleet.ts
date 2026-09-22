@@ -220,17 +220,26 @@ const failsDurationRules = (
   (q.seconds < threshold || exceedsMaxDuration(q.seconds, maxDurationSeconds));
 
 /**
- * Identity used to catch duplicate rows: same VID, same driver name, same
- * duration. When two rows in the same category share all three, only the
- * first one encountered is kept — later ones are treated as re-parsed
- * duplicates (e.g. the same file uploaded twice) rather than distinct events.
+ * Identity used to catch duplicate rows across uploads.
+ *
+ * The dedup was originally `vid|driver|duration` — which was correct for
+ * "the same file was uploaded twice" but silently ate legit second events
+ * whenever a driver happened to have two overspeed events of identical
+ * duration (or two different uploads covered overlapping periods). We now
+ * also fold in the event's start timestamp so two events are only treated
+ * as duplicates when they are the same event down to the second. Falls
+ * back to the end timestamp when the start is missing.
  */
 export const duplicateKey = (
   vidKey: string,
   driverName: string,
   q: DurationQualification,
-): string =>
-  `${vidKey}|${driverName.trim().toLowerCase()}|${q.hasDuration ? q.seconds : 'none'}`;
+  startOrTimeA: string,
+  endOrTimeB: string = '',
+): string => {
+  const time = (startOrTimeA ?? '').trim() || (endOrTimeB ?? '').trim();
+  return `${vidKey}|${driverName.trim().toLowerCase()}|${q.hasDuration ? q.seconds : 'none'}|${time}`;
+};
 
 interface Bucket {
   vid: string;
@@ -294,6 +303,7 @@ export const aggregateMasterFleet = ({
 }: AggregateInput): MasterFleetRow[] => {
   const resolve: DriverProfileLookup = buildDriverProfileLookup(driverRecords);
   const buckets = new Map<string, Bucket>();
+  const rosterSeeded = new Set<string>();
   const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
   const allowedNights = buildAllowedVidMatcher(allowedVidsByType.nights);
   const allowedCont = buildAllowedVidMatcher(allowedVidsByType.continuous);
@@ -303,6 +313,22 @@ export const aggregateMasterFleet = ({
   const seenSpeed = new Set<string>();
   const seenNights = new Set<string>();
   const seenContinuous = new Set<string>();
+
+  // Seed a bucket for every VID the boss uploaded via the Drivers Data
+  // roster, so those drivers appear on Master Fleet next to the transporter
+  // they were assigned — even if none of the three violation uploads carry a
+  // row for them yet. Buckets started this way are tracked so we can keep
+  // them in the result even when their totals stay zero (buckets started
+  // only by a violation row still need `total > 0` to appear).
+  driverRecords.forEach((record) => {
+    const b = getBucket(
+      buckets,
+      record.vid,
+      record.driverName,
+      record.transporter,
+    );
+    if (b) rosterSeeded.add(b.vidKey);
+  });
 
   speedFiles.forEach((file) => {
     file.drivers.forEach((driver) => {
@@ -325,7 +351,13 @@ export const aggregateMasterFleet = ({
           b.speedInAllowedLocations += 1;
           return;
         }
-        const dupKey = duplicateKey(b.vidKey, driver.driverName, q);
+        const dupKey = duplicateKey(
+          b.vidKey,
+          driver.driverName,
+          q,
+          event.start,
+          event.end,
+        );
         if (seenSpeed.has(dupKey)) return;
         seenSpeed.add(dupKey);
         b.speed += 1;
@@ -357,7 +389,13 @@ export const aggregateMasterFleet = ({
         ) {
           return;
         }
-        const dupKey = duplicateKey(b.vidKey, driver.driverName, q);
+        const dupKey = duplicateKey(
+          b.vidKey,
+          driver.driverName,
+          q,
+          row.timeA,
+          row.timeB,
+        );
         if (seenNights.has(dupKey)) return;
         seenNights.add(dupKey);
         b.nights += 1;
@@ -391,7 +429,13 @@ export const aggregateMasterFleet = ({
         ) {
           return;
         }
-        const dupKey = duplicateKey(b.vidKey, driver.driverName, q);
+        const dupKey = duplicateKey(
+          b.vidKey,
+          driver.driverName,
+          q,
+          row.timeA,
+          row.timeB,
+        );
         if (seenContinuous.has(dupKey)) return;
         seenContinuous.add(dupKey);
         if (isUnderestimated(underestimatedRule, q.seconds, row.length)) {
@@ -406,7 +450,11 @@ export const aggregateMasterFleet = ({
   const rows: MasterFleetRow[] = [];
   buckets.forEach((b) => {
     const total = b.speed + b.nights + b.continuous;
-    if (total === 0) return;
+    // Roster-seeded rows are always kept so the boss's uploaded driver list
+    // shows up on Master Fleet even when their violations are still zero.
+    // Buckets that only exist because a violation row named an off-roster
+    // VID still require a positive total to be listed.
+    if (total === 0 && !rosterSeeded.has(b.vidKey)) return;
     const profile = resolve(b.vid);
     // The row-level `allowedVid` flag is a UI badge only — we mark it true
     // whenever the VID appears in any category's whitelist, regardless of
@@ -480,7 +528,13 @@ export const collectFilteredEvents = ({
         if (failsDurationRules(q, thresholds.speed, maxDurationSeconds)) return;
         if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
         const evtKey = eventDateKey(event.start, event.end);
-        const dupKey = duplicateKey(vidKey, driver.driverName, q);
+        const dupKey = duplicateKey(
+          vidKey,
+          driver.driverName,
+          q,
+          event.start,
+          event.end,
+        );
         if (seenSpeed.has(dupKey)) return;
         seenSpeed.add(dupKey);
         speed.push({
@@ -526,7 +580,13 @@ export const collectFilteredEvents = ({
           row.positionB,
           evtKey,
         );
-        const dupKey = duplicateKey(vidKey, driver.driverName, q);
+        const dupKey = duplicateKey(
+          vidKey,
+          driver.driverName,
+          q,
+          row.timeA,
+          row.timeB,
+        );
         if (seenNights.has(dupKey)) return;
         seenNights.add(dupKey);
         nights.push({
@@ -577,7 +637,13 @@ export const collectFilteredEvents = ({
           row.positionB,
           evtKey,
         );
-        const dupKey = duplicateKey(vidKey, driver.driverName, q);
+        const dupKey = duplicateKey(
+          vidKey,
+          driver.driverName,
+          q,
+          row.timeA,
+          row.timeB,
+        );
         if (seenContinuous.has(dupKey)) return;
         seenContinuous.add(dupKey);
         continuous.push({
