@@ -181,7 +181,7 @@ export const MasterFleetPage = () => {
   const rawSpeed = useAppSelector((s) => s.unfiltered.files);
   const rawNights = useAppSelector((s) => s.unfilteredNights.files);
   const rawCont = useAppSelector((s) => s.unfilteredContinuous.files);
-  const driverRecords = useAppSelector((s) => s.drivers.records);
+  const rawDriverRecords = useAppSelector((s) => s.drivers.records);
   const thresholds = useAppSelector((s) => s.rules.thresholds);
   const maxDurationSeconds = useAppSelector((s) => s.rules.maxDurationSeconds);
   const underestimatedRule = useAppSelector(
@@ -223,6 +223,16 @@ export const MasterFleetPage = () => {
   const continuousFiles = useMemo(
     () => filterFilesByTransporter(rawCont, isTransporterStaff, matchesTransporter),
     [rawCont, isTransporterStaff, matchesTransporter],
+  );
+  // Roster is scoped to the staff user's assigned transporters so
+  // "Drivers ranked" only counts their drivers (matching what
+  // "Drivers on file" shows on the Drivers Data page for the same user).
+  const driverRecords = useMemo(
+    () =>
+      isTransporterStaff
+        ? rawDriverRecords.filter((r) => matchesTransporter(r.transporter))
+        : rawDriverRecords,
+    [rawDriverRecords, isTransporterStaff, matchesTransporter],
   );
 
   const rows = useMemo(

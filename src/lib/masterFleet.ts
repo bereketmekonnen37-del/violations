@@ -289,30 +289,269 @@ export const sourceTransporter = (driver: {
   driverName?: string;
 }): string => driver.transporter || driver.driverName || '';
 
-export const aggregateMasterFleet = ({
+/**
+ * A single "counts as +1" event, after dedup, thresholds, cap, whitelists
+ * and the under-estimated rule have been applied. This is the canonical
+ * unit of counting shared by Master Fleet, Dashboard analytics and
+ * Transporter analytics — everything downstream must agree on totals.
+ */
+export interface CountedEvent {
+  kind: 'speed' | 'nights' | 'continuous';
+  /** VID as pulled from the upload block, trimmed. */
+  vid: string;
+  /** Normalized VID (punct-stripped, lowercased) — the canonical id. */
+  vidKey: string;
+  /** Driver name from the upload block (before any roster lookup). */
+  driverName: string;
+  /** Transporter from the upload block (before any roster lookup). */
+  transporter: string;
+  /** Local YYYY-MM-DD or null when the event has no parseable date. */
+  dateKey: string | null;
+  /** Raw row count folded into this event (1 for speed/continuous, ≥1 for
+   *  nights after merging). Nights ranking uses this to show the "merged"
+   *  badge on Master Fleet. */
+  mergedCount: number;
+}
+
+export interface CountedEventsResult {
+  events: CountedEvent[];
+  /** Per-vidKey aux counters used by Master Fleet badges. Not part of the
+   *  counted totals — these events were filtered out by an allowed-location
+   *  match (Speed only) or the under-estimated rule (Continuous only). */
+  speedInAllowedLocations: Map<string, number>;
+  underestimatedContinuous: Map<string, number>;
+  /** Per-vidKey display metadata seen in the uploads, used to fall back to
+   *  a driver/transporter label when the boss's roster has no entry. */
+  displayByVid: Map<
+    string,
+    { vid: string; fallbackName: string; fallbackTransporter: string }
+  >;
+}
+
+const noteDisplay = (
+  map: CountedEventsResult['displayByVid'],
+  vid: string,
+  driverName: string,
+  transporter: string,
+): string | null => {
+  const key = normalizeVid(vid);
+  if (!key) return null;
+  let entry = map.get(key);
+  if (!entry) {
+    entry = {
+      vid: cleanVidDisplay(vid),
+      fallbackName: '',
+      fallbackTransporter: '',
+    };
+    map.set(key, entry);
+  }
+  if (!entry.fallbackName && driverName) entry.fallbackName = driverName;
+  if (!entry.fallbackTransporter && transporter) {
+    entry.fallbackTransporter = transporter;
+  }
+  return key;
+};
+
+/**
+ * The single source of truth for "does this raw row count as a violation."
+ * Applies, in order: thresholds + max-duration cap, mandatory position
+ * (Speed and Continuous), night merging (with `requireDuration=false` so
+ * zero-duration rows still count once they carry a position), per-VID +
+ * per-location whitelists, cross-file dedup by (vid, driver, duration,
+ * time) and the under-estimated rule (Continuous only). Everything the
+ * dashboard, analytics and transporter pages tally is derived from this.
+ */
+export const collectCountedEvents = ({
   speedFiles,
   nightFiles,
   continuousFiles,
-  driverRecords,
   thresholds = DEFAULT_THRESHOLDS,
   allowedVidsByType = EMPTY_ALLOWED,
   allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
   mergeNights = true,
   maxDurationSeconds = null,
   underestimatedRule = null,
-}: AggregateInput): MasterFleetRow[] => {
-  const resolve: DriverProfileLookup = buildDriverProfileLookup(driverRecords);
-  const buckets = new Map<string, Bucket>();
-  const rosterSeeded = new Set<string>();
+}: AggregateInput): CountedEventsResult => {
   const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
   const allowedNights = buildAllowedVidMatcher(allowedVidsByType.nights);
   const allowedCont = buildAllowedVidMatcher(allowedVidsByType.continuous);
   const speedTags = buildAllowedTagMatcher(allowedLocationsByType.speed);
   const nightsTags = buildAllowedTagMatcher(allowedLocationsByType.nights);
   const contTags = buildAllowedTagMatcher(allowedLocationsByType.continuous);
+
+  const events: CountedEvent[] = [];
   const seenSpeed = new Set<string>();
   const seenNights = new Set<string>();
   const seenContinuous = new Set<string>();
+  const speedInAllowedLocations = new Map<string, number>();
+  const underestimatedContinuous = new Map<string, number>();
+  const displayByVid: CountedEventsResult['displayByVid'] = new Map();
+
+  speedFiles.forEach((file) => {
+    file.drivers.forEach((driver) => {
+      const rawTransporter = sourceTransporter(driver);
+      const vidKey = noteDisplay(
+        displayByVid,
+        driver.vid,
+        driver.driverName,
+        rawTransporter,
+      );
+      if (!vidKey) return;
+      driver.events.forEach((event) => {
+        const q = qualifyDuration(event.duration);
+        if (failsDurationRules(q, thresholds.speed, maxDurationSeconds)) return;
+        if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
+        const evtKey = eventDateKey(event.start, event.end);
+        if (allowedSpeed.matches(vidKey, evtKey)) return;
+        if (speedTags.matchesPosition(event.overspeedPosition, evtKey)) {
+          speedInAllowedLocations.set(
+            vidKey,
+            (speedInAllowedLocations.get(vidKey) ?? 0) + 1,
+          );
+          return;
+        }
+        const dupKey = duplicateKey(
+          vidKey,
+          driver.driverName,
+          q,
+          event.start,
+          event.end,
+        );
+        if (seenSpeed.has(dupKey)) return;
+        seenSpeed.add(dupKey);
+        events.push({
+          kind: 'speed',
+          vid: cleanVidDisplay(driver.vid),
+          vidKey,
+          driverName: driver.driverName,
+          transporter: rawTransporter,
+          dateKey: evtKey,
+          mergedCount: 1,
+        });
+      });
+    });
+  });
+
+  nightFiles.forEach((file) => {
+    file.drivers.forEach((driver) => {
+      const rawTransporter = sourceTransporter(driver);
+      const vidKey = noteDisplay(
+        displayByVid,
+        driver.vid,
+        driver.driverName,
+        rawTransporter,
+      );
+      if (!vidKey) return;
+      // requireDuration=false → rows with no duration but a position still
+      // count. This matches the Master Fleet rule that a blank-duration
+      // export still represents a real night event.
+      const merged = mergeNightRows(driver.rows, mergeNights, false);
+      merged.forEach((row) => {
+        const q = qualifyDuration(row.duration);
+        if (failsDurationRules(q, thresholds.nights, maxDurationSeconds)) return;
+        const evtKey = eventDateKey(row.timeA, row.timeB);
+        if (allowedNights.matches(vidKey, evtKey)) return;
+        if (
+          nightsTags.matchesPosition(row.positionA, evtKey) ||
+          nightsTags.matchesPosition(row.positionB, evtKey)
+        ) {
+          return;
+        }
+        const dupKey = duplicateKey(
+          vidKey,
+          driver.driverName,
+          q,
+          row.timeA,
+          row.timeB,
+        );
+        if (seenNights.has(dupKey)) return;
+        seenNights.add(dupKey);
+        events.push({
+          kind: 'nights',
+          vid: cleanVidDisplay(driver.vid),
+          vidKey,
+          driverName: driver.driverName,
+          transporter: rawTransporter,
+          dateKey: evtKey,
+          mergedCount: row.mergedCount,
+        });
+      });
+    });
+  });
+
+  continuousFiles.forEach((file) => {
+    file.drivers.forEach((driver) => {
+      const rawTransporter = sourceTransporter(driver);
+      const vidKey = noteDisplay(
+        displayByVid,
+        driver.vid,
+        driver.driverName,
+        rawTransporter,
+      );
+      if (!vidKey) return;
+      driver.rows.forEach((row) => {
+        const q = qualifyDuration(row.duration);
+        if (failsDurationRules(q, thresholds.continuous, maxDurationSeconds)) return;
+        const hasPosition =
+          Boolean(row.positionA && row.positionA.trim()) ||
+          Boolean(row.positionB && row.positionB.trim());
+        if (!hasPosition) return;
+        const evtKey = eventDateKey(row.timeA, row.timeB);
+        if (allowedCont.matches(vidKey, evtKey)) return;
+        if (
+          contTags.matchesPosition(row.positionA, evtKey) ||
+          contTags.matchesPosition(row.positionB, evtKey)
+        ) {
+          return;
+        }
+        const dupKey = duplicateKey(
+          vidKey,
+          driver.driverName,
+          q,
+          row.timeA,
+          row.timeB,
+        );
+        if (seenContinuous.has(dupKey)) return;
+        seenContinuous.add(dupKey);
+        if (isUnderestimated(underestimatedRule, q.seconds, row.length)) {
+          underestimatedContinuous.set(
+            vidKey,
+            (underestimatedContinuous.get(vidKey) ?? 0) + 1,
+          );
+          return;
+        }
+        events.push({
+          kind: 'continuous',
+          vid: cleanVidDisplay(driver.vid),
+          vidKey,
+          driverName: driver.driverName,
+          transporter: rawTransporter,
+          dateKey: evtKey,
+          mergedCount: 1,
+        });
+      });
+    });
+  });
+
+  return {
+    events,
+    speedInAllowedLocations,
+    underestimatedContinuous,
+    displayByVid,
+  };
+};
+
+export const aggregateMasterFleet = (input: AggregateInput): MasterFleetRow[] => {
+  const { driverRecords, allowedVidsByType = EMPTY_ALLOWED } = input;
+  const resolve: DriverProfileLookup = buildDriverProfileLookup(driverRecords);
+  const {
+    events,
+    speedInAllowedLocations,
+    underestimatedContinuous,
+  } = collectCountedEvents(input);
+
+  const buckets = new Map<string, Bucket>();
+  const rosterSeeded = new Set<string>();
 
   // Seed a bucket for every VID the boss uploaded via the Drivers Data
   // roster, so those drivers appear on Master Fleet next to the transporter
@@ -330,121 +569,20 @@ export const aggregateMasterFleet = ({
     if (b) rosterSeeded.add(b.vidKey);
   });
 
-  speedFiles.forEach((file) => {
-    file.drivers.forEach((driver) => {
-      const b = getBucket(
-        buckets,
-        driver.vid,
-        driver.driverName,
-        sourceTransporter(driver),
-      );
-      if (!b) return;
-      driver.events.forEach((event) => {
-        const q = qualifyDuration(event.duration);
-        if (failsDurationRules(q, thresholds.speed, maxDurationSeconds)) return;
-        // Drop rows that carry no position — a duration with nowhere to point
-        // at isn't useful on the master sheet.
-        if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
-        const evtKey = eventDateKey(event.start, event.end);
-        if (allowedSpeed.matches(b.vidKey, evtKey)) return;
-        if (speedTags.matchesPosition(event.overspeedPosition, evtKey)) {
-          b.speedInAllowedLocations += 1;
-          return;
-        }
-        const dupKey = duplicateKey(
-          b.vidKey,
-          driver.driverName,
-          q,
-          event.start,
-          event.end,
-        );
-        if (seenSpeed.has(dupKey)) return;
-        seenSpeed.add(dupKey);
-        b.speed += 1;
-      });
-    });
+  events.forEach((e) => {
+    const b = getBucket(buckets, e.vid, e.driverName, e.transporter);
+    if (!b) return;
+    b[e.kind] += 1;
+    if (e.kind === 'nights' && e.mergedCount > 1) b.hasMergedNights = true;
   });
 
-  nightFiles.forEach((file) => {
-    file.drivers.forEach((driver) => {
-      const b = getBucket(
-        buckets,
-        driver.vid,
-        driver.driverName,
-        sourceTransporter(driver),
-      );
-      if (!b) return;
-      // Collapse consecutive same-night rows for this VID into one before
-      // applying threshold / whitelist filters (unless the merge toggle is
-      // off). `false` keeps rows with no duration instead of dropping them.
-      const merged = mergeNightRows(driver.rows, mergeNights, false);
-      merged.forEach((row) => {
-        const q = qualifyDuration(row.duration);
-        if (failsDurationRules(q, thresholds.nights, maxDurationSeconds)) return;
-        const evtKey = eventDateKey(row.timeA, row.timeB);
-        if (allowedNights.matches(b.vidKey, evtKey)) return;
-        if (
-          nightsTags.matchesPosition(row.positionA, evtKey) ||
-          nightsTags.matchesPosition(row.positionB, evtKey)
-        ) {
-          return;
-        }
-        const dupKey = duplicateKey(
-          b.vidKey,
-          driver.driverName,
-          q,
-          row.timeA,
-          row.timeB,
-        );
-        if (seenNights.has(dupKey)) return;
-        seenNights.add(dupKey);
-        b.nights += 1;
-        if (row.mergedCount > 1) b.hasMergedNights = true;
-      });
-    });
+  speedInAllowedLocations.forEach((count, vidKey) => {
+    const b = buckets.get(vidKey);
+    if (b) b.speedInAllowedLocations = count;
   });
-
-  continuousFiles.forEach((file) => {
-    file.drivers.forEach((driver) => {
-      const b = getBucket(
-        buckets,
-        driver.vid,
-        driver.driverName,
-        sourceTransporter(driver),
-      );
-      if (!b) return;
-      driver.rows.forEach((row) => {
-        const q = qualifyDuration(row.duration);
-        if (failsDurationRules(q, thresholds.continuous, maxDurationSeconds)) return;
-        // Skip rows with no position on either endpoint.
-        const hasPosition =
-          Boolean(row.positionA && row.positionA.trim()) ||
-          Boolean(row.positionB && row.positionB.trim());
-        if (!hasPosition) return;
-        const evtKey = eventDateKey(row.timeA, row.timeB);
-        if (allowedCont.matches(b.vidKey, evtKey)) return;
-        if (
-          contTags.matchesPosition(row.positionA, evtKey) ||
-          contTags.matchesPosition(row.positionB, evtKey)
-        ) {
-          return;
-        }
-        const dupKey = duplicateKey(
-          b.vidKey,
-          driver.driverName,
-          q,
-          row.timeA,
-          row.timeB,
-        );
-        if (seenContinuous.has(dupKey)) return;
-        seenContinuous.add(dupKey);
-        if (isUnderestimated(underestimatedRule, q.seconds, row.length)) {
-          b.underestimatedContinuous += 1;
-          return;
-        }
-        b.continuous += 1;
-      });
-    });
+  underestimatedContinuous.forEach((count, vidKey) => {
+    const b = buckets.get(vidKey);
+    if (b) b.underestimatedContinuous = count;
   });
 
   const rows: MasterFleetRow[] = [];

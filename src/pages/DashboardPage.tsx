@@ -26,8 +26,7 @@ import {
   fillDailyRange,
 } from '../lib/dashboardAnalytics';
 import { filterFilesByTransporter } from '../lib/transporterScope';
-import { parseDurationSeconds } from '../lib/duration';
-import { isUnderestimated } from '../lib/underestimated';
+import { collectCountedEvents } from '../lib/masterFleet';
 import { DailyViolationsChart } from '../features/dashboard/DailyViolationsChart';
 import { TopOffenderCards } from '../features/dashboard/TopOffenderCards';
 
@@ -199,64 +198,43 @@ const BossDashboard = () => {
     analytics.totals.speed + analytics.totals.nights + analytics.totals.continuous;
 
   // Per-assigned-transporter breakdown (transporter-staff view only).
-  // Counts follow the same rules the Master Fleet page uses: an event or
-  // row is counted only when its duration passes the corresponding
-  // threshold from the Rules page.
+  // Uses the same `collectCountedEvents` engine as Master Fleet + Analytics
+  // so each transporter's Speed / Nights / Continuous count matches every
+  // other page for the exact same underlying uploads.
   const transporterBreakdown = useMemo(() => {
     if (!isTransporterStaff) return [];
     const assigned = user?.assignedTransporters ?? [];
+    const { events } = collectCountedEvents({
+      speedFiles,
+      nightFiles,
+      continuousFiles,
+      driverRecords,
+      thresholds,
+      allowedVidsByType,
+      allowedLocationsByType,
+      mergeNights,
+      maxDurationSeconds,
+      underestimatedRule,
+    });
     return assigned.map((t) => {
-      const norm = t.trim().toLowerCase();
+      const target = t.trim().toLowerCase();
       let speedEvents = 0;
       let nightRows = 0;
       let continuousRows = 0;
       let driverBlocks = 0;
-      speedFiles.forEach((f) =>
-        f.drivers.forEach((d) => {
-          if ((d.transporter ?? '').trim().toLowerCase() !== norm) return;
+      const seenVids = new Set<string>();
+      events.forEach((e) => {
+        if ((e.transporter ?? '').trim().toLowerCase() !== target) return;
+        if (e.vidKey && !seenVids.has(e.vidKey)) {
+          seenVids.add(e.vidKey);
           driverBlocks += 1;
-          d.events.forEach((e) => {
-            const s = parseDurationSeconds(e.duration);
-            if (
-              Number.isFinite(s) &&
-              s >= thresholds.speed &&
-              !(maxDurationSeconds != null && s > maxDurationSeconds)
-            )
-              speedEvents += 1;
-          });
-        }),
-      );
-      nightFiles.forEach((f) =>
-        f.drivers.forEach((d) => {
-          if ((d.transporter ?? '').trim().toLowerCase() !== norm) return;
-          d.rows.forEach((r) => {
-            const s = parseDurationSeconds(r.duration);
-            if (
-              Number.isFinite(s) &&
-              s >= thresholds.nights &&
-              !(maxDurationSeconds != null && s > maxDurationSeconds)
-            )
-              nightRows += 1;
-          });
-        }),
-      );
-      continuousFiles.forEach((f) =>
-        f.drivers.forEach((d) => {
-          if ((d.transporter ?? '').trim().toLowerCase() !== norm) return;
-          d.rows.forEach((r) => {
-            const s = parseDurationSeconds(r.duration);
-            if (
-              Number.isFinite(s) &&
-              s >= thresholds.continuous &&
-              !(maxDurationSeconds != null && s > maxDurationSeconds) &&
-              !isUnderestimated(underestimatedRule, s, r.length)
-            )
-              continuousRows += 1;
-          });
-        }),
-      );
+        }
+        if (e.kind === 'speed') speedEvents += 1;
+        else if (e.kind === 'nights') nightRows += 1;
+        else continuousRows += 1;
+      });
       const driverList = driverRecords.filter(
-        (r) => (r.transporter ?? '').trim().toLowerCase() === norm,
+        (r) => (r.transporter ?? '').trim().toLowerCase() === target,
       );
       return {
         name: t,
@@ -276,6 +254,9 @@ const BossDashboard = () => {
     continuousFiles,
     driverRecords,
     thresholds,
+    allowedVidsByType,
+    allowedLocationsByType,
+    mergeNights,
     maxDurationSeconds,
     underestimatedRule,
   ]);

@@ -9,28 +9,11 @@ import type {
   AllowedVidLists,
   UnderestimatedRule,
 } from '../features/rules/rulesSlice';
-import { parseDurationSeconds } from './duration';
+import { normalizeVid } from './locationRules';
 import {
-  buildAllowedTagMatcher,
-  buildAllowedVidMatcher,
-  eventDateKey,
-  normalizeVid,
-} from './locationRules';
-import type { EventThresholds } from './masterFleet';
-import { mergeNightRows } from './nightsMerger';
-import { isUnderestimated } from './underestimated';
-
-const EMPTY_ALLOWED: AllowedVidLists = {
-  speed: [],
-  nights: [],
-  continuous: [],
-};
-
-const EMPTY_ALLOWED_LOCATIONS: AllowedLocationLists = {
-  speed: [],
-  nights: [],
-  continuous: [],
-};
+  collectCountedEvents,
+  type EventThresholds,
+} from './masterFleet';
 
 /**
  * Canonical list of transporters we always want to surface on the
@@ -103,22 +86,10 @@ interface AnalyticsInput {
   thresholds: EventThresholds;
   allowedVidsByType?: AllowedVidLists;
   allowedLocationsByType?: AllowedLocationLists;
-  /** When true (default), consecutive same-night rows are collapsed via
-   *  `mergeNightRows` before counting. Driven by the "Nights merged"
-   *  toggle — false counts every raw night row uncollapsed. */
   mergeNights?: boolean;
-  /** When set (seconds), any event/row whose duration exceeds this is
-   *  dropped entirely. Set on the Rules page; `null`/`undefined` = no cap. */
   maxDurationSeconds?: number | null;
-  /** Continuous under-estimated rule; matching rows are not violations. */
   underestimatedRule?: UnderestimatedRule | null;
 }
-
-const exceedsMaxDuration = (
-  seconds: number,
-  maxDurationSeconds: number | null | undefined,
-): boolean =>
-  maxDurationSeconds != null && maxDurationSeconds > 0 && seconds > maxDurationSeconds;
 
 interface Bucket {
   displayName: string;
@@ -149,31 +120,19 @@ const getBucket = (
 };
 
 /**
- * Aggregate per-transporter violation counts, applying the same rule
- * thresholds and whitelists used by the Master Fleet + Dashboard.
+ * Aggregate per-transporter violation counts. Consumes the same
+ * `collectCountedEvents` output as Master Fleet and Dashboard analytics
+ * so numbers match category-by-category — no divergent dedup, threshold
+ * or zero-duration handling.
  */
-export const computeTransporterAnalytics = ({
-  speedFiles,
-  nightFiles,
-  continuousFiles,
-  driverRecords,
-  thresholds,
-  allowedVidsByType = EMPTY_ALLOWED,
-  allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
-  mergeNights = true,
-  maxDurationSeconds = null,
-  underestimatedRule = null,
-}: AnalyticsInput): TransporterAnalyticsRow[] => {
-  const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
-  const allowedNights = buildAllowedVidMatcher(allowedVidsByType.nights);
-  const allowedCont = buildAllowedVidMatcher(allowedVidsByType.continuous);
-  const speedTags = buildAllowedTagMatcher(allowedLocationsByType.speed);
-  const nightsTags = buildAllowedTagMatcher(allowedLocationsByType.nights);
-  const contTags = buildAllowedTagMatcher(allowedLocationsByType.continuous);
+export const computeTransporterAnalytics = (
+  input: AnalyticsInput,
+): TransporterAnalyticsRow[] => {
+  const { driverRecords } = input;
 
-  // Prime the lookup from driver records so a VID → transporter mapping
-  // is available even when the upload's driver block has an empty
-  // transporter cell.
+  // Prime the VID → canonical transporter map from the boss's roster so
+  // grouping matches Master Fleet even when the raw upload block has a
+  // shortened or empty transporter cell.
   const vidToTransporter = new Map<string, string>();
   driverRecords.forEach((r) => {
     const key = normalizeVid(r.vid);
@@ -183,105 +142,30 @@ export const computeTransporterAnalytics = ({
     }
   });
 
-  // Same priority as `aggregateMasterFleet` / `collectFilteredEvents`: the
-  // boss's canonical driver-record transporter wins first, falling back to
-  // whatever the raw upload's driver block says, then the driver name.
-  // Previously this prioritized the raw block value instead, so a VID whose
-  // upload cell read e.g. "Yonas" (vs. the canonical "Yonas Mekonen" on
-  // file) landed in a different bucket here than on Master Fleet / the
-  // transporter detail page — inflating this page's count for one name
-  // while the detail page, grouping by the canonical name, showed almost
-  // nothing under it.
   const resolveTransporter = (
-    vid: string,
+    vidKey: string,
     blockTransporter: string,
     driverName: string,
   ): string => {
-    const key = normalizeVid(vid);
-    const canonical = vidToTransporter.get(key);
+    const canonical = vidToTransporter.get(vidKey);
     if (canonical) return canonical.trim();
     if (blockTransporter && blockTransporter.trim()) return blockTransporter.trim();
     return driverName ? driverName.trim() : '';
   };
 
+  const { events } = collectCountedEvents(input);
   const buckets = new Map<string, Bucket>();
 
   // Seed with the fixed transporter list so they always appear.
   KNOWN_TRANSPORTERS.forEach((name) => getBucket(buckets, name));
 
-  speedFiles.forEach((file) =>
-    file.drivers.forEach((driver) => {
-      const t = resolveTransporter(driver.vid, driver.transporter, driver.driverName);
-      const b = getBucket(buckets, t);
-      if (!b) return;
-      const vidKey = normalizeVid(driver.vid);
-      if (driver.vid) b.vids.add(vidKey);
-      driver.events.forEach((event) => {
-        const seconds = parseDurationSeconds(event.duration);
-        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.speed) return;
-        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
-        if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
-        const evtKey = eventDateKey(event.start, event.end);
-        if (speedTags.matchesPosition(event.overspeedPosition, evtKey)) return;
-        if (allowedSpeed.matches(vidKey, evtKey)) return;
-        b.speed += 1;
-      });
-    }),
-  );
-
-  nightFiles.forEach((file) =>
-    file.drivers.forEach((driver) => {
-      const t = resolveTransporter(driver.vid, driver.transporter, driver.driverName);
-      const b = getBucket(buckets, t);
-      if (!b) return;
-      const vidKey = normalizeVid(driver.vid);
-      if (driver.vid) b.vids.add(vidKey);
-      const merged = mergeNightRows(driver.rows, mergeNights);
-      merged.forEach((row) => {
-        const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.nights) return;
-        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
-        const evtKey = eventDateKey(row.timeA, row.timeB);
-        if (allowedNights.matches(vidKey, evtKey)) return;
-        if (
-          nightsTags.matchesPosition(row.positionA, evtKey) ||
-          nightsTags.matchesPosition(row.positionB, evtKey)
-        ) {
-          return;
-        }
-        b.nights += 1;
-      });
-    }),
-  );
-
-  continuousFiles.forEach((file) =>
-    file.drivers.forEach((driver) => {
-      const t = resolveTransporter(driver.vid, driver.transporter, driver.driverName);
-      const b = getBucket(buckets, t);
-      if (!b) return;
-      const vidKey = normalizeVid(driver.vid);
-      if (driver.vid) b.vids.add(vidKey);
-      driver.rows.forEach((row) => {
-        const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.continuous) return;
-        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
-        const hasPosition =
-          Boolean(row.positionA && row.positionA.trim()) ||
-          Boolean(row.positionB && row.positionB.trim());
-        if (!hasPosition) return;
-        const evtKey = eventDateKey(row.timeA, row.timeB);
-        if (allowedCont.matches(vidKey, evtKey)) return;
-        if (
-          contTags.matchesPosition(row.positionA, evtKey) ||
-          contTags.matchesPosition(row.positionB, evtKey)
-        ) {
-          return;
-        }
-        if (isUnderestimated(underestimatedRule, seconds, row.length)) return;
-        b.continuous += 1;
-      });
-    }),
-  );
+  events.forEach((e) => {
+    const t = resolveTransporter(e.vidKey, e.transporter, e.driverName);
+    const b = getBucket(buckets, t);
+    if (!b) return;
+    if (e.vidKey) b.vids.add(e.vidKey);
+    b[e.kind] += 1;
+  });
 
   const knownSet = new Set(KNOWN_TRANSPORTERS.map((n) => norm(n)));
 

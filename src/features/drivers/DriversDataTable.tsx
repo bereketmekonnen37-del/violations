@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Loader2, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../app/store';
+import { useUserScope } from '../../hooks/useUserScope';
 import {
   addDriverRecord,
   removeDriverRecord,
@@ -14,7 +15,15 @@ import {
 
 export const DriversDataTable = () => {
   const dispatch = useAppDispatch();
-  const records = useAppSelector((s) => s.drivers.records);
+  const allRecords = useAppSelector((s) => s.drivers.records);
+  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const records = useMemo(
+    () =>
+      isTransporterStaff
+        ? allRecords.filter((r) => matchesTransporter(r.transporter))
+        : allRecords,
+    [allRecords, isTransporterStaff, matchesTransporter],
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTransporter, setDraftTransporter] = useState('');
   const [draftName, setDraftName] = useState('');

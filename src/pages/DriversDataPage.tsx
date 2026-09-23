@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { CalendarRange, FileSpreadsheet, Trash2, Users } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -13,11 +14,22 @@ export const DriversDataPage = () => {
   const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.auth.user);
   const drivers = useAppSelector((s) => s.drivers);
-  const { isTransporterStaff } = useUserScope();
+  const { isTransporterStaff, matchesTransporter } = useUserScope();
+
+  // Scope the roster to the staff user's assigned transporters so the
+  // "Drivers on file" count on this page matches "Drivers ranked" on
+  // Master Fleet for the same user (both look at the same driver set).
+  const scopedRecords = useMemo(
+    () =>
+      isTransporterStaff
+        ? drivers.records.filter((r) => matchesTransporter(r.transporter))
+        : drivers.records,
+    [drivers.records, isTransporterStaff, matchesTransporter],
+  );
 
   if (!user) return null;
 
-  const hasData = drivers.records.length > 0;
+  const hasData = scopedRecords.length > 0;
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -50,7 +62,7 @@ export const DriversDataPage = () => {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
           label="Drivers on file"
-          value={drivers.records.length}
+          value={scopedRecords.length}
           icon={Users}
         />
         <StatCard

@@ -14,29 +14,12 @@ import {
   NOT_FOUND,
   type DriverProfileLookup,
 } from './driverLookup';
-import { parseDurationSeconds } from './duration';
+import { toDateKey } from './locationRules';
 import {
-  buildAllowedTagMatcher,
-  buildAllowedVidMatcher,
-  normalizeVid,
-  parseEventDate,
-  toDateKey,
-} from './locationRules';
-import type { EventThresholds } from './masterFleet';
-import { mergeNightRows } from './nightsMerger';
-import { isUnderestimated } from './underestimated';
-
-const EMPTY_ALLOWED: AllowedVidLists = {
-  speed: [],
-  nights: [],
-  continuous: [],
-};
-
-const EMPTY_ALLOWED_LOCATIONS: AllowedLocationLists = {
-  speed: [],
-  nights: [],
-  continuous: [],
-};
+  collectCountedEvents,
+  type CountedEvent,
+  type EventThresholds,
+} from './masterFleet';
 
 export type ViolationKind = 'speed' | 'nights' | 'continuous';
 
@@ -72,22 +55,10 @@ interface AnalyticsInput {
   thresholds: EventThresholds;
   allowedVidsByType?: AllowedVidLists;
   allowedLocationsByType?: AllowedLocationLists;
-  /** When true (default), consecutive same-night rows are collapsed via
-   *  `mergeNightRows` before counting. Driven by the "Nights merged"
-   *  toggle — false counts every raw night row uncollapsed. */
   mergeNights?: boolean;
-  /** When set (seconds), any event/row whose duration exceeds this is
-   *  dropped entirely. Set on the Rules page; `null`/`undefined` = no cap. */
   maxDurationSeconds?: number | null;
-  /** Continuous under-estimated rule; matching rows are not violations. */
   underestimatedRule?: UnderestimatedRule | null;
 }
-
-const exceedsMaxDuration = (
-  seconds: number,
-  maxDurationSeconds: number | null | undefined,
-): boolean =>
-  maxDurationSeconds != null && maxDurationSeconds > 0 && seconds > maxDurationSeconds;
 
 interface VioBucket {
   vidKey: string;
@@ -98,36 +69,6 @@ interface VioBucket {
   nights: number;
   continuous: number;
 }
-
-const bumpBucket = (
-  buckets: Map<string, VioBucket>,
-  vidRaw: string,
-  fallbackName: string,
-  fallbackTransporter: string,
-  kind: ViolationKind,
-): VioBucket | null => {
-  const key = normalizeVid(vidRaw);
-  if (!key) return null;
-  let b = buckets.get(key);
-  if (!b) {
-    b = {
-      vidKey: key,
-      vid: vidRaw,
-      fallbackName: '',
-      fallbackTransporter: '',
-      speed: 0,
-      nights: 0,
-      continuous: 0,
-    };
-    buckets.set(key, b);
-  }
-  if (!b.fallbackName && fallbackName) b.fallbackName = fallbackName;
-  if (!b.fallbackTransporter && fallbackTransporter) {
-    b.fallbackTransporter = fallbackTransporter;
-  }
-  b[kind] += 1;
-  return b;
-};
 
 const bucketTop = (
   buckets: Map<string, VioBucket>,
@@ -141,7 +82,6 @@ const bucketTop = (
     if (!best || c > best[kind]) best = b;
   });
   if (!best) return null;
-  // TS can't narrow inside a Map.forEach callback here.
   const winner = best as VioBucket;
   const profile = resolve(winner.vid);
   return {
@@ -190,126 +130,53 @@ interface AnalyticsResult {
 
 /**
  * Aggregate every unfiltered upload into daily buckets and top-offender
- * summaries. Applies thresholds (from Rules) and whitelist rules the same
- * way the Master Fleet page does.
+ * summaries. Consumes `collectCountedEvents` so the totals here match
+ * Master Fleet + Transporter analytics exactly — same dedup, same
+ * threshold + whitelist rules, same treatment of zero-duration rows,
+ * same handling of merged nights and the under-estimated rule.
  */
-export const computeDashboardAnalytics = ({
-  speedFiles,
-  nightFiles,
-  continuousFiles,
-  driverRecords,
-  thresholds,
-  allowedVidsByType = EMPTY_ALLOWED,
-  allowedLocationsByType = EMPTY_ALLOWED_LOCATIONS,
-  mergeNights = true,
-  maxDurationSeconds = null,
-  underestimatedRule = null,
-}: AnalyticsInput): AnalyticsResult => {
-  const resolve = buildDriverProfileLookup(driverRecords);
-  const allowedSpeed = buildAllowedVidMatcher(allowedVidsByType.speed);
-  const allowedNights = buildAllowedVidMatcher(allowedVidsByType.nights);
-  const allowedCont = buildAllowedVidMatcher(allowedVidsByType.continuous);
-  const speedTags = buildAllowedTagMatcher(allowedLocationsByType.speed);
-  const nightsTags = buildAllowedTagMatcher(allowedLocationsByType.nights);
-  const contTags = buildAllowedTagMatcher(allowedLocationsByType.continuous);
+export const computeDashboardAnalytics = (
+  input: AnalyticsInput,
+): AnalyticsResult => {
+  const resolve = buildDriverProfileLookup(input.driverRecords);
+  const { events } = collectCountedEvents(input);
+
   const daily = new Map<string, DailyBucket>();
   const buckets = new Map<string, VioBucket>();
   const totals = { speed: 0, nights: 0, continuous: 0 };
 
-  const bumpDay = (dateKey: string, kind: ViolationKind) => {
-    let bucket = daily.get(dateKey);
-    if (!bucket) {
-      bucket = { date: dateKey, speed: 0, nights: 0, continuous: 0 };
-      daily.set(dateKey, bucket);
+  const addToBucket = (e: CountedEvent) => {
+    let b = buckets.get(e.vidKey);
+    if (!b) {
+      b = {
+        vidKey: e.vidKey,
+        vid: e.vid,
+        fallbackName: '',
+        fallbackTransporter: '',
+        speed: 0,
+        nights: 0,
+        continuous: 0,
+      };
+      buckets.set(e.vidKey, b);
     }
-    bucket[kind] += 1;
-    totals[kind] += 1;
+    if (!b.fallbackName && e.driverName) b.fallbackName = e.driverName;
+    if (!b.fallbackTransporter && e.transporter) {
+      b.fallbackTransporter = e.transporter;
+    }
+    b[e.kind] += 1;
   };
 
-  speedFiles.forEach((file) => {
-    file.drivers.forEach((driver) => {
-      const vidKey = normalizeVid(driver.vid);
-      driver.events.forEach((event) => {
-        const seconds = parseDurationSeconds(event.duration);
-        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.speed) return;
-        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
-        if (!(event.overspeedPosition && event.overspeedPosition.trim())) return;
-        const d = parseEventDate(event.start) ?? parseEventDate(event.end);
-        const evtKey = d ? toDateKey(d) : null;
-        if (speedTags.matchesPosition(event.overspeedPosition, evtKey)) return;
-        if (allowedSpeed.matches(vidKey, evtKey)) return;
-        bumpBucket(
-          buckets,
-          driver.vid,
-          driver.driverName,
-          driver.transporter || driver.driverName || '',
-          'speed',
-        );
-        if (evtKey) bumpDay(evtKey, 'speed');
-      });
-    });
-  });
-
-  nightFiles.forEach((file) => {
-    file.drivers.forEach((driver) => {
-      const vidKey = normalizeVid(driver.vid);
-      const merged = mergeNightRows(driver.rows, mergeNights);
-      merged.forEach((row) => {
-        const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.nights) return;
-        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
-        const d = parseEventDate(row.timeA) ?? parseEventDate(row.timeB);
-        const evtKey = d ? toDateKey(d) : null;
-        if (allowedNights.matches(vidKey, evtKey)) return;
-        if (
-          nightsTags.matchesPosition(row.positionA, evtKey) ||
-          nightsTags.matchesPosition(row.positionB, evtKey)
-        ) {
-          return;
-        }
-        bumpBucket(
-          buckets,
-          driver.vid,
-          driver.driverName,
-          driver.transporter || driver.driverName || '',
-          'nights',
-        );
-        if (evtKey) bumpDay(evtKey, 'nights');
-      });
-    });
-  });
-
-  continuousFiles.forEach((file) => {
-    file.drivers.forEach((driver) => {
-      const vidKey = normalizeVid(driver.vid);
-      driver.rows.forEach((row) => {
-        const seconds = parseDurationSeconds(row.duration);
-        if (!Number.isFinite(seconds) || seconds <= 0 || seconds < thresholds.continuous) return;
-        if (exceedsMaxDuration(seconds, maxDurationSeconds)) return;
-        const hasPosition =
-          Boolean(row.positionA && row.positionA.trim()) ||
-          Boolean(row.positionB && row.positionB.trim());
-        if (!hasPosition) return;
-        const d = parseEventDate(row.timeA) ?? parseEventDate(row.timeB);
-        const evtKey = d ? toDateKey(d) : null;
-        if (allowedCont.matches(vidKey, evtKey)) return;
-        if (
-          contTags.matchesPosition(row.positionA, evtKey) ||
-          contTags.matchesPosition(row.positionB, evtKey)
-        ) {
-          return;
-        }
-        if (isUnderestimated(underestimatedRule, seconds, row.length)) return;
-        bumpBucket(
-          buckets,
-          driver.vid,
-          driver.driverName,
-          driver.transporter || driver.driverName || '',
-          'continuous',
-        );
-        if (evtKey) bumpDay(evtKey, 'continuous');
-      });
-    });
+  events.forEach((e) => {
+    totals[e.kind] += 1;
+    addToBucket(e);
+    if (e.dateKey) {
+      let bucket = daily.get(e.dateKey);
+      if (!bucket) {
+        bucket = { date: e.dateKey, speed: 0, nights: 0, continuous: 0 };
+        daily.set(e.dateKey, bucket);
+      }
+      bucket[e.kind] += 1;
+    }
   });
 
   const sortedDaily = Array.from(daily.values()).sort((a, b) =>
