@@ -1049,24 +1049,39 @@ const FilteredEventsPanel = ({
   const [monthValue, setMonthValue] = useState('');
   const [dayValue, setDayValue] = useState('');
 
+  // Speed/Nights/Continuous tabs must count only events that the Master
+  // Fleet stat cards count. Anything the rules removed (whitelisted VID,
+  // whitelisted location, under-estimated continuous) shows up in the
+  // "Filtered" tab instead — never here — otherwise the top card and this
+  // tab disagree for the same uploads.
   const speedDated = useMemo(
     () =>
-      events.speed.filter((e) =>
-        matchesDateFilter(e.start, e.end, monthValue, dayValue),
+      events.speed.filter(
+        (e) =>
+          !e.allowedVid &&
+          !e.allowedLocation &&
+          matchesDateFilter(e.start, e.end, monthValue, dayValue),
       ),
     [events.speed, monthValue, dayValue],
   );
   const nightsDated = useMemo(
     () =>
-      events.nights.filter((e) =>
-        matchesDateFilter(e.timeA, e.timeB, monthValue, dayValue),
+      events.nights.filter(
+        (e) =>
+          !e.allowedVid &&
+          !e.allowedLocation &&
+          matchesDateFilter(e.timeA, e.timeB, monthValue, dayValue),
       ),
     [events.nights, monthValue, dayValue],
   );
   const contDated = useMemo(
     () =>
-      events.continuous.filter((e) =>
-        matchesDateFilter(e.timeA, e.timeB, monthValue, dayValue),
+      events.continuous.filter(
+        (e) =>
+          !e.allowedVid &&
+          !e.allowedLocation &&
+          !e.underestimated &&
+          matchesDateFilter(e.timeA, e.timeB, monthValue, dayValue),
       ),
     [events.continuous, monthValue, dayValue],
   );
@@ -1128,7 +1143,13 @@ const FilteredEventsPanel = ({
           ? contRows.length
           : filteredRows.length;
 
-  const underestimatedCount = contRows.filter((e) => e.underestimated).length;
+  // Under-estimated continuous events no longer appear on the Continuous
+  // tab — they're moved to the Filtered tab — but the boss still wants a
+  // heads-up count. Read it straight from the full continuous event list.
+  const underestimatedCount = useMemo(
+    () => events.continuous.filter((e) => e.underestimated).length,
+    [events.continuous],
+  );
 
   const clearDateFilter = () => {
     setMonthValue('');

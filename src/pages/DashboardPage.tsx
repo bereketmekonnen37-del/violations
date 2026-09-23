@@ -91,7 +91,6 @@ const LegacyStaffDashboard = () => (
 
 const BossDashboard = () => {
   const user = useAppSelector((s) => s.auth.user);
-  const allFiles = useAppSelector((s) => s.uploads.files);
   const rawSpeedFiles = useAppSelector((s) => s.unfiltered.files);
   const rawNightFiles = useAppSelector((s) => s.unfilteredNights.files);
   const rawContFiles = useAppSelector((s) => s.unfilteredContinuous.files);
@@ -110,22 +109,11 @@ const BossDashboard = () => {
 
   const hasBossView = isBoss || isTransporterStaff;
 
-  const scopedFiles = hasBossView
-    ? allFiles
-    : allFiles.filter((f) => f.uploaderId === user?.id);
-
-  // For transporter staff, keep only files that contain at least one record
-  // from an assigned transporter, and filter down the records themselves.
-  const files = isTransporterStaff
-    ? scopedFiles
-        .map((f) => {
-          const records = f.records.filter((r) => matchesTransporter(r.transporter));
-          return { ...f, records, rowCount: records.length };
-        })
-        .filter((f) => f.records.length > 0)
-    : scopedFiles;
-
-  // Analytics: filter unfiltered files by transporter for scoped staff.
+  // Every top-of-dashboard stat is derived from the three unfiltered slices
+  // so the Overview cards agree with Uploaded Data, Master Fleet and the
+  // Transporter analytics pages. The old `s.uploads.files` slice is legacy
+  // and stays empty for new uploads, which is why these cards used to
+  // render `0` across the board.
   const speedFiles = useMemo(
     () => filterFilesByTransporter(rawSpeedFiles, isTransporterStaff, matchesTransporter),
     [rawSpeedFiles, isTransporterStaff, matchesTransporter],
@@ -263,17 +251,86 @@ const BossDashboard = () => {
 
   if (!user) return null;
 
-  const totalViolations = files.reduce((sum, f) => sum + f.rowCount, 0);
-  const drivers = new Set<string>();
-  const transporters = new Set<string>();
-  files.forEach((f) =>
-    f.records.forEach((r) => {
-      if (r.driverName) drivers.add(r.driverName.trim().toLowerCase());
-      if (r.transporter) transporters.add(r.transporter.trim().toLowerCase());
+  // Same numbers the Uploaded Data page shows: every Speed event, every
+  // Nights row, every Continuous row across all uploaded files. Distinct
+  // drivers/transporters use normalized keys so identical values with
+  // different casing/whitespace don't inflate the counts.
+  const filesCount = speedFiles.length + nightFiles.length + continuousFiles.length;
+  let totalViolations = 0;
+  const driverKeys = new Set<string>();
+  const transporterKeys = new Set<string>();
+  const addDriver = (vid: string, name: string) => {
+    const key = vid.trim().toLowerCase() || name.trim().toLowerCase();
+    if (key) driverKeys.add(key);
+  };
+  const addTransporter = (raw: string) => {
+    const key = (raw ?? '').trim().toLowerCase();
+    if (key) transporterKeys.add(key);
+  };
+  speedFiles.forEach((f) =>
+    f.drivers.forEach((d) => {
+      totalViolations += d.events.length;
+      addDriver(d.vid, d.driverName);
+      addTransporter(d.transporter);
+    }),
+  );
+  nightFiles.forEach((f) =>
+    f.drivers.forEach((d) => {
+      totalViolations += d.rows.length;
+      addDriver(d.vid, d.driverName);
+      addTransporter(d.transporter);
+    }),
+  );
+  continuousFiles.forEach((f) =>
+    f.drivers.forEach((d) => {
+      totalViolations += d.rows.length;
+      addDriver(d.vid, d.driverName);
+      addTransporter(d.transporter);
     }),
   );
 
-  const recent = files.slice(0, 5);
+  interface RecentUpload {
+    id: string;
+    kind: 'speed' | 'nights' | 'continuous';
+    title: string;
+    uploadDate: string;
+    uploaderName: string;
+    fileType: string;
+    records: number;
+  }
+  const recent: RecentUpload[] = [
+    ...speedFiles.map((f) => ({
+      id: f.id,
+      kind: 'speed' as const,
+      title: f.title,
+      uploadDate: f.uploadDate,
+      uploaderName: f.uploaderName,
+      fileType: f.fileType,
+      records: f.drivers.reduce((n, d) => n + d.events.length, 0),
+    })),
+    ...nightFiles.map((f) => ({
+      id: f.id,
+      kind: 'nights' as const,
+      title: f.title,
+      uploadDate: f.uploadDate,
+      uploaderName: f.uploaderName,
+      fileType: f.fileType,
+      records: f.drivers.reduce((n, d) => n + d.rows.length, 0),
+    })),
+    ...continuousFiles.map((f) => ({
+      id: f.id,
+      kind: 'continuous' as const,
+      title: f.title,
+      uploadDate: f.uploadDate,
+      uploaderName: f.uploaderName,
+      fileType: f.fileType,
+      records: f.drivers.reduce((n, d) => n + d.rows.length, 0),
+    })),
+  ]
+    .sort(
+      (a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime(),
+    )
+    .slice(0, 5);
 
   return (
     <div className="mx-auto w-full max-w-7xl">
@@ -291,7 +348,7 @@ const BossDashboard = () => {
         }
         actions={
           isBoss ? (
-            <Link to="/violations" className="btn-primary">
+            <Link to="/uploaded-data" className="btn-primary">
               View all files <ArrowRight size={16} />
             </Link>
           ) : isTransporterStaff ? (
@@ -309,7 +366,7 @@ const BossDashboard = () => {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Uploaded files"
-          value={files.length}
+          value={filesCount}
           delta={`${recent.length} in the last batch`}
           icon={FileStack}
         />
@@ -321,13 +378,13 @@ const BossDashboard = () => {
         />
         <StatCard
           label="Unique drivers"
-          value={drivers.size}
+          value={driverKeys.size}
           delta="Detected from records"
           icon={Users}
         />
         <StatCard
           label="Transporters"
-          value={transporters.size}
+          value={transporterKeys.size}
           delta="Carriers represented"
           icon={Truck}
         />
@@ -628,9 +685,9 @@ const BossDashboard = () => {
               {hasBossView ? 'Latest reports submitted to the platform.' : 'Your latest submissions.'}
             </p>
           </div>
-          {hasBossView && files.length > 0 && (
+          {hasBossView && filesCount > 0 && (
             <Link
-              to="/violations"
+              to="/uploaded-data"
               className="hidden text-sm font-semibold sm:inline-flex sm:items-center sm:gap-1 hover:underline"
               style={{ color: 'var(--color-brand-accent)' }}
             >
@@ -664,7 +721,7 @@ const BossDashboard = () => {
             >
               {recent.map((file) => (
                 <li
-                  key={file.id}
+                  key={`${file.kind}-${file.id}`}
                   className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
                   style={{ borderColor: 'var(--color-brand-blue-line)' }}
                 >
@@ -696,10 +753,22 @@ const BossDashboard = () => {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone="neutral">{file.fileType.toUpperCase()}</Badge>
-                    <Badge tone="info">{file.rowCount} records</Badge>
+                    <Badge
+                      tone={
+                        file.kind === 'speed'
+                          ? 'accent'
+                          : file.kind === 'nights'
+                            ? 'info'
+                            : 'success'
+                      }
+                    >
+                      {file.kind === 'speed'
+                        ? `${file.records} events`
+                        : `${file.records} rows`}
+                    </Badge>
                     {hasBossView && (
                       <Link
-                        to={`/violations/${file.id}`}
+                        to="/uploaded-data"
                         className="btn-secondary !py-1.5 !text-xs"
                       >
                         View <ArrowRight size={13} />
@@ -713,7 +782,7 @@ const BossDashboard = () => {
         )}
       </section>
 
-      {hasBossView && files.length > 0 && (
+      {hasBossView && recent.length > 0 && (
         <section className="mt-10">
           <h2
             className="mb-4 text-lg font-semibold tracking-tight"
@@ -722,10 +791,10 @@ const BossDashboard = () => {
             File summaries
           </h2>
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {files.slice(0, 6).map((f) => (
+            {recent.slice(0, 6).map((f) => (
               <Link
-                key={f.id}
-                to={`/violations/${f.id}`}
+                key={`${f.kind}-${f.id}`}
+                to="/uploaded-data"
                 className="card-base group p-5 transition hover:-translate-y-0.5 hover:shadow-elev"
               >
                 <div className="flex items-center justify-between">
@@ -750,7 +819,9 @@ const BossDashboard = () => {
                     color: 'var(--color-text-muted)',
                   }}
                 >
-                  <span>{f.rowCount} records</span>
+                  <span>
+                    {f.records} {f.kind === 'speed' ? 'events' : 'rows'}
+                  </span>
                   <span
                     className="inline-flex items-center gap-1 font-semibold"
                     style={{ color: 'var(--color-brand-accent)' }}
