@@ -109,8 +109,6 @@ const BossDashboard = () => {
   const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
   const { isBoss, isTransporterStaff, matchesBlock } = useUserScope();
 
-  const hasBossView = isBoss || isTransporterStaff;
-
   // Every top-of-dashboard stat is derived from the three unfiltered slices
   // so the Overview cards agree with Uploaded Data, Master Fleet and the
   // Transporter analytics pages. The old `s.uploads.files` slice is legacy
@@ -228,37 +226,45 @@ const BossDashboard = () => {
       maxDurationSeconds,
       underestimatedRule,
     });
-    return assigned.map((t) => {
-      const target = t.trim().toLowerCase();
-      let speedEvents = 0;
-      let nightRows = 0;
-      let continuousRows = 0;
-      let driverBlocks = 0;
-      const seenVids = new Set<string>();
-      events.forEach((e) => {
-        const resolved = resolveTransporter(e.vidKey, e.transporter, e.driverName);
-        if (resolved.trim().toLowerCase() !== target) return;
-        if (e.vidKey && !seenVids.has(e.vidKey)) {
-          seenVids.add(e.vidKey);
-          driverBlocks += 1;
-        }
-        if (e.kind === 'speed') speedEvents += 1;
-        else if (e.kind === 'nights') nightRows += 1;
-        else continuousRows += 1;
+    // Rank the staff's assigned transporters by their own violation totals
+    // (highest first). Staff never see the boss's global top-offender ranking;
+    // this is the equivalent ranking, scoped to their assignment only.
+    return assigned
+      .map((t) => {
+        const target = t.trim().toLowerCase();
+        let speedEvents = 0;
+        let nightRows = 0;
+        let continuousRows = 0;
+        let driverBlocks = 0;
+        const seenVids = new Set<string>();
+        events.forEach((e) => {
+          const resolved = resolveTransporter(e.vidKey, e.transporter, e.driverName);
+          if (resolved.trim().toLowerCase() !== target) return;
+          if (e.vidKey && !seenVids.has(e.vidKey)) {
+            seenVids.add(e.vidKey);
+            driverBlocks += 1;
+          }
+          if (e.kind === 'speed') speedEvents += 1;
+          else if (e.kind === 'nights') nightRows += 1;
+          else continuousRows += 1;
+        });
+        const driverList = driverRecords.filter(
+          (r) => (r.transporter ?? '').trim().toLowerCase() === target,
+        );
+        return {
+          name: t,
+          driverListCount: driverList.length,
+          driverBlocks,
+          speedEvents,
+          nightRows,
+          continuousRows,
+          total: speedEvents + nightRows + continuousRows,
+        };
+      })
+      .sort((a, b) => {
+        if (b.total !== a.total) return b.total - a.total;
+        return a.name.localeCompare(b.name);
       });
-      const driverList = driverRecords.filter(
-        (r) => (r.transporter ?? '').trim().toLowerCase() === target,
-      );
-      return {
-        name: t,
-        driverListCount: driverList.length,
-        driverBlocks,
-        speedEvents,
-        nightRows,
-        continuousRows,
-        total: speedEvents + nightRows + continuousRows,
-      };
-    });
   }, [
     isTransporterStaff,
     user,
@@ -470,7 +476,7 @@ const BossDashboard = () => {
             />
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {transporterBreakdown.map((t) => (
+              {transporterBreakdown.map((t, idx) => (
                 <Link
                   key={t.name}
                   to={`/transporters/${encodeTransporterSlug(t.name)}`}
@@ -482,7 +488,7 @@ const BossDashboard = () => {
                         className="text-[11px] font-semibold uppercase tracking-[0.18em]"
                         style={{ color: 'var(--color-brand-accent)' }}
                       >
-                        Transporter
+                        #{idx + 1} · Transporter
                       </p>
                       <h3
                         className="mt-1 truncate font-display text-xl font-semibold tracking-tight"
@@ -708,117 +714,106 @@ const BossDashboard = () => {
         </section>
       )}
 
-      <section className="mt-10">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2
-              className="text-lg font-semibold tracking-tight"
-              style={{ color: 'var(--color-brand-blue-dark)' }}
-            >
-              Recent uploads
-            </h2>
-            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              {hasBossView ? 'Latest reports submitted to the platform.' : 'Your latest submissions.'}
-            </p>
+      {isBoss && (
+        <section className="mt-10">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2
+                className="text-lg font-semibold tracking-tight"
+                style={{ color: 'var(--color-brand-blue-dark)' }}
+              >
+                Recent uploads
+              </h2>
+              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                Latest reports submitted to the platform.
+              </p>
+            </div>
+            {filesCount > 0 && (
+              <Link
+                to="/uploaded-data"
+                className="hidden text-sm font-semibold sm:inline-flex sm:items-center sm:gap-1 hover:underline"
+                style={{ color: 'var(--color-brand-accent)' }}
+              >
+                View all <ArrowUpRight size={14} />
+              </Link>
+            )}
           </div>
-          {hasBossView && filesCount > 0 && (
-            <Link
-              to="/uploaded-data"
-              className="hidden text-sm font-semibold sm:inline-flex sm:items-center sm:gap-1 hover:underline"
-              style={{ color: 'var(--color-brand-accent)' }}
-            >
-              View all <ArrowUpRight size={14} />
-            </Link>
-          )}
-        </div>
 
-        {recent.length === 0 ? (
-          <EmptyState
-            icon={FileText}
-            title="No uploads yet"
-            description={
-              hasBossView
-                ? 'Once staff submit violation reports, they will appear here for review.'
-                : 'Upload your first CSV, XLSX or PDF to get started.'
-            }
-            action={
-              !hasBossView && (
-                <Link to="/unfiltered" className="btn-primary">
-                  <Upload size={16} /> Upload data
-                </Link>
-              )
-            }
-          />
-        ) : (
-          <div className="card-base overflow-hidden">
-            <ul
-              className="divide-y"
-              style={{ borderColor: 'var(--color-brand-blue-line)' }}
-            >
-              {recent.map((file) => (
-                <li
-                  key={`${file.kind}-${file.id}`}
-                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
-                  style={{ borderColor: 'var(--color-brand-blue-line)' }}
-                >
-                  <div className="flex items-start gap-4 min-w-0">
-                    <div
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                      style={{
-                        background: 'var(--color-brand-blue-soft)',
-                        color: 'var(--color-brand-blue)',
-                        border: '1px solid var(--color-brand-blue-line)',
-                      }}
-                    >
-                      <FileText size={18} />
-                    </div>
-                    <div className="min-w-0">
-                      <p
-                        className="truncate text-sm font-semibold"
-                        style={{ color: 'var(--color-brand-blue-dark)' }}
+          {recent.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title="No uploads yet"
+              description="Once staff submit violation reports, they will appear here for review."
+            />
+          ) : (
+            <div className="card-base overflow-hidden">
+              <ul
+                className="divide-y"
+                style={{ borderColor: 'var(--color-brand-blue-line)' }}
+              >
+                {recent.map((file) => (
+                  <li
+                    key={`${file.kind}-${file.id}`}
+                    className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+                    style={{ borderColor: 'var(--color-brand-blue-line)' }}
+                  >
+                    <div className="flex items-start gap-4 min-w-0">
+                      <div
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                        style={{
+                          background: 'var(--color-brand-blue-soft)',
+                          color: 'var(--color-brand-blue)',
+                          border: '1px solid var(--color-brand-blue-line)',
+                        }}
                       >
-                        {file.title}
-                      </p>
-                      <p
-                        className="mt-0.5 truncate text-xs"
-                        style={{ color: 'var(--color-text-muted)' }}
-                      >
-                        {formatDateTime(file.uploadDate)} · {file.uploaderName}
-                      </p>
+                        <FileText size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <p
+                          className="truncate text-sm font-semibold"
+                          style={{ color: 'var(--color-brand-blue-dark)' }}
+                        >
+                          {file.title}
+                        </p>
+                        <p
+                          className="mt-0.5 truncate text-xs"
+                          style={{ color: 'var(--color-text-muted)' }}
+                        >
+                          {formatDateTime(file.uploadDate)} · {file.uploaderName}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone="neutral">{file.fileType.toUpperCase()}</Badge>
-                    <Badge
-                      tone={
-                        file.kind === 'speed'
-                          ? 'accent'
-                          : file.kind === 'nights'
-                            ? 'info'
-                            : 'success'
-                      }
-                    >
-                      {file.kind === 'speed'
-                        ? `${file.records} events`
-                        : `${file.records} rows`}
-                    </Badge>
-                    {hasBossView && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone="neutral">{file.fileType.toUpperCase()}</Badge>
+                      <Badge
+                        tone={
+                          file.kind === 'speed'
+                            ? 'accent'
+                            : file.kind === 'nights'
+                              ? 'info'
+                              : 'success'
+                        }
+                      >
+                        {file.kind === 'speed'
+                          ? `${file.records} events`
+                          : `${file.records} rows`}
+                      </Badge>
                       <Link
                         to="/uploaded-data"
                         className="btn-secondary !py-1.5 !text-xs"
                       >
                         View <ArrowRight size={13} />
                       </Link>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </section>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
 
-      {hasBossView && recent.length > 0 && (
+      {isBoss && recent.length > 0 && (
         <section className="mt-10">
           <h2
             className="mb-4 text-lg font-semibold tracking-tight"

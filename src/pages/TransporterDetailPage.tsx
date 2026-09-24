@@ -140,13 +140,30 @@ export const TransporterDetailPage = () => {
 
   const [tab, setTab] = useState<EventTab>('speed');
 
-  const counts = {
+  // "Counted" = the same events the dashboard's transporter card totals
+  // (which come from `collectCountedEvents`). Everything an allow-VID /
+  // allow-location / under-estimated rule touched is still listed below
+  // — with its red badge — but not counted here, so the top StatCards and
+  // tab pills line up with the card that got the user here.
+  const counted = {
+    speed: scoped.speed.filter((e) => !e.allowedVid && !e.allowedLocation).length,
+    nights: scoped.nights.filter((e) => !e.allowedVid && !e.allowedLocation)
+      .length,
+    continuous: scoped.continuous.filter(
+      (e) => !e.allowedVid && !e.allowedLocation && !e.underestimated,
+    ).length,
+  };
+  const listed = {
     speed: scoped.speed.length,
     nights: scoped.nights.length,
     continuous: scoped.continuous.length,
   };
-  const total = counts.speed + counts.nights + counts.continuous;
-  const hasAny = total > 0;
+  const total = counted.speed + counted.nights + counted.continuous;
+  const hiddenByRules =
+    listed.speed - counted.speed +
+    (listed.nights - counted.nights) +
+    (listed.continuous - counted.continuous);
+  const hasAny = listed.speed + listed.nights + listed.continuous > 0;
 
   if (!isAssignedForStaff) {
     return (
@@ -189,11 +206,11 @@ export const TransporterDetailPage = () => {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total violations" value={total} icon={Truck} />
-        <StatCard label="Speed events" value={counts.speed} icon={Gauge} />
-        <StatCard label="Night rows" value={counts.nights} icon={Moon} />
+        <StatCard label="Speed events" value={counted.speed} icon={Gauge} />
+        <StatCard label="Night rows" value={counted.nights} icon={Moon} />
         <StatCard
           label="Continuous rows"
-          value={counts.continuous}
+          value={counted.continuous}
           icon={RouteIcon}
         />
       </div>
@@ -202,6 +219,14 @@ export const TransporterDetailPage = () => {
         <span className="inline-flex items-center gap-1 rounded-full bg-ink-100 px-2.5 py-1 font-semibold text-ink-700 dark:bg-ink-800 dark:text-ink-200">
           <IdCard size={11} /> {vidCount} VID{vidCount === 1 ? '' : 's'}
         </span>
+        {hiddenByRules > 0 && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 font-semibold text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-800"
+            title="Rows still listed below (with red badges) but excluded from the totals because an Allowed VID / Allowed Location / under-estimated rule touched them."
+          >
+            +{hiddenByRules} listed but not counted
+          </span>
+        )}
         <Link
           to="/master-fleet"
           className="ml-auto text-[11px] font-semibold text-ink-500 hover:text-ink-900 dark:text-ink-400 dark:hover:text-white"
@@ -245,8 +270,16 @@ export const TransporterDetailPage = () => {
                         ? 'bg-brand-blue text-white'
                         : 'bg-brand-blue-soft text-brand-blue-dark')
                     }
+                    title={
+                      listed[t] !== counted[t]
+                        ? `${counted[t]} counted · ${listed[t] - counted[t]} listed but excluded by rules`
+                        : undefined
+                    }
                   >
-                    {counts[t]}
+                    {counted[t]}
+                    {listed[t] !== counted[t] && (
+                      <span className="ml-0.5 opacity-70">/{listed[t]}</span>
+                    )}
                   </span>
                 </button>
               );
