@@ -24,19 +24,19 @@ export const TransportersPage = () => {
     (s) => s.rules.allowedLocationsByType,
   );
   const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
-  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isTransporterStaff, matchesTransporter, matchesBlock } = useUserScope();
 
   const speedFiles = useMemo(
-    () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesTransporter),
-    [rawSpeed, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesBlock),
+    [rawSpeed, isTransporterStaff, matchesBlock],
   );
   const nightFiles = useMemo(
-    () => filterFilesByTransporter(rawNights, isTransporterStaff, matchesTransporter),
-    [rawNights, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawNights, isTransporterStaff, matchesBlock),
+    [rawNights, isTransporterStaff, matchesBlock],
   );
   const continuousFiles = useMemo(
-    () => filterFilesByTransporter(rawCont, isTransporterStaff, matchesTransporter),
-    [rawCont, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawCont, isTransporterStaff, matchesBlock),
+    [rawCont, isTransporterStaff, matchesBlock],
   );
 
   const allRows = useMemo(

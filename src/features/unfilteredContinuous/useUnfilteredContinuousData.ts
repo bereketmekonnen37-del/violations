@@ -93,7 +93,7 @@ export const useUnfilteredContinuousData = (
 ) => {
   const allFiles = useAppSelector((s) => s.unfilteredContinuous.files);
   const driverRecords = useAppSelector((s) => s.drivers.records);
-  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isTransporterStaff, matchesBlock } = useUserScope();
   const files = useMemo(
     () =>
       allFiles.filter(
@@ -113,8 +113,10 @@ export const useUnfilteredContinuousData = (
   const drivers = useMemo(() => {
     const flat = flatten(files, resolveProfile);
     if (!isTransporterStaff) return flat;
-    return flat.filter((d) => matchesTransporter(d.transporter));
-  }, [files, resolveProfile, isTransporterStaff, matchesTransporter]);
+    return flat.filter((d) =>
+      matchesBlock({ vid: d.vid, transporter: d.transporter, driverName: d.driverName }),
+    );
+  }, [files, resolveProfile, isTransporterStaff, matchesBlock]);
 
   const transporters = useMemo(() => {
     const set = new Set<string>();

@@ -27,6 +27,8 @@ import {
 } from '../lib/dashboardAnalytics';
 import { filterFilesByTransporter } from '../lib/transporterScope';
 import { collectCountedEvents } from '../lib/masterFleet';
+import { normalizeVid } from '../lib/locationRules';
+import { encodeTransporterSlug } from '../lib/transporterAnalytics';
 import { DailyViolationsChart } from '../features/dashboard/DailyViolationsChart';
 import { TopOffenderCards } from '../features/dashboard/TopOffenderCards';
 
@@ -105,7 +107,7 @@ const BossDashboard = () => {
     (s) => s.rules.allowedLocationsByType,
   );
   const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
-  const { isBoss, isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isBoss, isTransporterStaff, matchesBlock } = useUserScope();
 
   const hasBossView = isBoss || isTransporterStaff;
 
@@ -115,16 +117,16 @@ const BossDashboard = () => {
   // and stays empty for new uploads, which is why these cards used to
   // render `0` across the board.
   const speedFiles = useMemo(
-    () => filterFilesByTransporter(rawSpeedFiles, isTransporterStaff, matchesTransporter),
-    [rawSpeedFiles, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawSpeedFiles, isTransporterStaff, matchesBlock),
+    [rawSpeedFiles, isTransporterStaff, matchesBlock],
   );
   const nightFiles = useMemo(
-    () => filterFilesByTransporter(rawNightFiles, isTransporterStaff, matchesTransporter),
-    [rawNightFiles, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawNightFiles, isTransporterStaff, matchesBlock),
+    [rawNightFiles, isTransporterStaff, matchesBlock],
   );
   const continuousFiles = useMemo(
-    () => filterFilesByTransporter(rawContFiles, isTransporterStaff, matchesTransporter),
-    [rawContFiles, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawContFiles, isTransporterStaff, matchesBlock),
+    [rawContFiles, isTransporterStaff, matchesBlock],
   );
   const analytics = useMemo(
     () =>
@@ -186,12 +188,34 @@ const BossDashboard = () => {
     analytics.totals.speed + analytics.totals.nights + analytics.totals.continuous;
 
   // Per-assigned-transporter breakdown (transporter-staff view only).
-  // Uses the same `collectCountedEvents` engine as Master Fleet + Analytics
-  // so each transporter's Speed / Nights / Continuous count matches every
-  // other page for the exact same underlying uploads.
+  // Uses the same `collectCountedEvents` engine as Master Fleet + Analytics,
+  // and — critically — resolves each event's transporter via the same
+  // VID → roster canonical lookup the boss's Transporters page uses. That
+  // way an event whose raw upload cell is blank or spelled differently is
+  // still credited to the correct assigned transporter.
   const transporterBreakdown = useMemo(() => {
     if (!isTransporterStaff) return [];
     const assigned = user?.assignedTransporters ?? [];
+
+    const vidToTransporter = new Map<string, string>();
+    driverRecords.forEach((r) => {
+      const key = normalizeVid(r.vid);
+      if (!key) return;
+      if (!vidToTransporter.has(key) && r.transporter) {
+        vidToTransporter.set(key, r.transporter.trim());
+      }
+    });
+    const resolveTransporter = (
+      vidKey: string,
+      blockTransporter: string,
+      driverName: string,
+    ): string => {
+      const canonical = vidToTransporter.get(vidKey);
+      if (canonical) return canonical.trim();
+      if (blockTransporter && blockTransporter.trim()) return blockTransporter.trim();
+      return driverName ? driverName.trim() : '';
+    };
+
     const { events } = collectCountedEvents({
       speedFiles,
       nightFiles,
@@ -212,7 +236,8 @@ const BossDashboard = () => {
       let driverBlocks = 0;
       const seenVids = new Set<string>();
       events.forEach((e) => {
-        if ((e.transporter ?? '').trim().toLowerCase() !== target) return;
+        const resolved = resolveTransporter(e.vidKey, e.transporter, e.driverName);
+        if (resolved.trim().toLowerCase() !== target) return;
         if (e.vidKey && !seenVids.has(e.vidKey)) {
           seenVids.add(e.vidKey);
           driverBlocks += 1;
@@ -446,8 +471,9 @@ const BossDashboard = () => {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {transporterBreakdown.map((t) => (
-                <div
+                <Link
                   key={t.name}
+                  to={`/transporters/${encodeTransporterSlug(t.name)}`}
                   className="card-base group relative overflow-hidden p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-elev"
                 >
                   <div className="flex items-start justify-between">
@@ -570,7 +596,17 @@ const BossDashboard = () => {
                       </div>
                     </>
                   )}
-                </div>
+                  <div
+                    className="mt-4 flex items-center justify-end gap-1 text-xs font-semibold transition"
+                    style={{ color: 'var(--color-brand-blue)' }}
+                  >
+                    View details
+                    <ArrowRight
+                      size={13}
+                      className="transition group-hover:translate-x-0.5"
+                    />
+                  </div>
+                </Link>
               ))}
             </div>
           )}

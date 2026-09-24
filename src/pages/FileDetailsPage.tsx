@@ -17,13 +17,13 @@ const PAGE_SIZE = 20;
 export const FileDetailsPage = () => {
   const { fileId } = useParams<{ fileId: string }>();
   const file = useAppSelector((s) => s.uploads.files.find((f) => f.id === fileId));
-  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isTransporterStaff, matchesBlock } = useUserScope();
 
   const records = useMemo(() => {
     const base = file?.records ?? [];
     if (!isTransporterStaff) return base;
-    return base.filter((r) => matchesTransporter(r.transporter));
-  }, [file, isTransporterStaff, matchesTransporter]);
+    return base.filter((r) => matchesBlock(r));
+  }, [file, isTransporterStaff, matchesBlock]);
   const {
     filters,
     setFilters,

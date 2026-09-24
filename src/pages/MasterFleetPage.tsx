@@ -207,22 +207,22 @@ export const MasterFleetPage = () => {
     allowedLocationsByType.speed.length +
     allowedLocationsByType.nights.length +
     allowedLocationsByType.continuous.length;
-  const { isBoss, isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isBoss, isTransporterStaff, matchesBlock } = useUserScope();
   const [query, setQuery] = useState('');
   const [rankingOpen, setRankingOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
 
   const speedFiles = useMemo(
-    () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesTransporter),
-    [rawSpeed, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesBlock),
+    [rawSpeed, isTransporterStaff, matchesBlock],
   );
   const nightFiles = useMemo(
-    () => filterFilesByTransporter(rawNights, isTransporterStaff, matchesTransporter),
-    [rawNights, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawNights, isTransporterStaff, matchesBlock),
+    [rawNights, isTransporterStaff, matchesBlock],
   );
   const continuousFiles = useMemo(
-    () => filterFilesByTransporter(rawCont, isTransporterStaff, matchesTransporter),
-    [rawCont, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawCont, isTransporterStaff, matchesBlock),
+    [rawCont, isTransporterStaff, matchesBlock],
   );
   // Roster is scoped to the staff user's assigned transporters so
   // "Drivers ranked" only counts their drivers (matching what
@@ -230,9 +230,9 @@ export const MasterFleetPage = () => {
   const driverRecords = useMemo(
     () =>
       isTransporterStaff
-        ? rawDriverRecords.filter((r) => matchesTransporter(r.transporter))
+        ? rawDriverRecords.filter((r) => matchesBlock(r))
         : rawDriverRecords,
-    [rawDriverRecords, isTransporterStaff, matchesTransporter],
+    [rawDriverRecords, isTransporterStaff, matchesBlock],
   );
 
   const rows = useMemo(

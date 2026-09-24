@@ -62,7 +62,7 @@ const BossView = () => {
   const [listError, setListError] = useState<string | null>(null);
   const rawFiles = useAppSelector((s) => s.unfiltered.files);
   const status = useAppSelector((s) => s.unfiltered.status);
-  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isTransporterStaff, matchesBlock } = useUserScope();
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -77,8 +77,8 @@ const BossView = () => {
     }
   };
   const allFiles = useMemo(
-    () => filterFilesByTransporter(rawFiles, isTransporterStaff, matchesTransporter),
-    [rawFiles, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawFiles, isTransporterStaff, matchesBlock),
+    [rawFiles, isTransporterStaff, matchesBlock],
   );
   const {
     files,

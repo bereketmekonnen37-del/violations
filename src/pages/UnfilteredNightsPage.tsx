@@ -56,7 +56,7 @@ const BossView = () => {
   const [listError, setListError] = useState<string | null>(null);
   const rawFiles = useAppSelector((s) => s.unfilteredNights.files);
   const status = useAppSelector((s) => s.unfilteredNights.status);
-  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isTransporterStaff, matchesBlock } = useUserScope();
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -71,8 +71,8 @@ const BossView = () => {
     }
   };
   const allFiles = useMemo(
-    () => filterFilesByTransporter(rawFiles, isTransporterStaff, matchesTransporter),
-    [rawFiles, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawFiles, isTransporterStaff, matchesBlock),
+    [rawFiles, isTransporterStaff, matchesBlock],
   );
   const {
     files,

@@ -14,7 +14,7 @@ export const DriversDataPage = () => {
   const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.auth.user);
   const drivers = useAppSelector((s) => s.drivers);
-  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isTransporterStaff, matchesBlock } = useUserScope();
 
   // Scope the roster to the staff user's assigned transporters so the
   // "Drivers on file" count on this page matches "Drivers ranked" on
@@ -22,9 +22,9 @@ export const DriversDataPage = () => {
   const scopedRecords = useMemo(
     () =>
       isTransporterStaff
-        ? drivers.records.filter((r) => matchesTransporter(r.transporter))
+        ? drivers.records.filter((r) => matchesBlock(r))
         : drivers.records,
-    [drivers.records, isTransporterStaff, matchesTransporter],
+    [drivers.records, isTransporterStaff, matchesBlock],
   );
 
   if (!user) return null;

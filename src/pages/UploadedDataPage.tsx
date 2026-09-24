@@ -110,7 +110,7 @@ const KindBadge = ({ kind }: { kind: Kind }) => {
 
 export const UploadedDataPage = () => {
   const dispatch = useAppDispatch();
-  const { isBoss, isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isBoss, isTransporterStaff, matchesBlock } = useUserScope();
 
   const rawSpeed = useAppSelector((s) => s.unfiltered.files);
   const rawNights = useAppSelector((s) => s.unfilteredNights.files);
@@ -128,16 +128,16 @@ export const UploadedDataPage = () => {
   );
 
   const speedFiles = useMemo(
-    () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesTransporter),
-    [rawSpeed, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesBlock),
+    [rawSpeed, isTransporterStaff, matchesBlock],
   );
   const nightFiles = useMemo(
-    () => filterFilesByTransporter(rawNights, isTransporterStaff, matchesTransporter),
-    [rawNights, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawNights, isTransporterStaff, matchesBlock),
+    [rawNights, isTransporterStaff, matchesBlock],
   );
   const contFiles = useMemo(
-    () => filterFilesByTransporter(rawCont, isTransporterStaff, matchesTransporter),
-    [rawCont, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawCont, isTransporterStaff, matchesBlock),
+    [rawCont, isTransporterStaff, matchesBlock],
   );
 
   const uploads = useMemo<UploadRow[]>(() => {

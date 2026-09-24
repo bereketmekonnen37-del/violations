@@ -16,13 +16,13 @@ import {
 export const DriversDataTable = () => {
   const dispatch = useAppDispatch();
   const allRecords = useAppSelector((s) => s.drivers.records);
-  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isTransporterStaff, matchesBlock } = useUserScope();
   const records = useMemo(
     () =>
       isTransporterStaff
-        ? allRecords.filter((r) => matchesTransporter(r.transporter))
+        ? allRecords.filter((r) => matchesBlock(r))
         : allRecords,
-    [allRecords, isTransporterStaff, matchesTransporter],
+    [allRecords, isTransporterStaff, matchesBlock],
   );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTransporter, setDraftTransporter] = useState('');

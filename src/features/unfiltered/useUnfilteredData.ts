@@ -85,7 +85,7 @@ const flattenDrivers = (
 export const useUnfilteredData = (uploaderId?: string, fileId?: string) => {
   const allFiles = useAppSelector((s) => s.unfiltered.files);
   const driverRecords = useAppSelector((s) => s.drivers.records);
-  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isTransporterStaff, matchesBlock } = useUserScope();
   const files = useMemo(
     () =>
       allFiles.filter(
@@ -105,8 +105,10 @@ export const useUnfilteredData = (uploaderId?: string, fileId?: string) => {
   const drivers = useMemo(() => {
     const flat = flattenDrivers(files, resolveProfile);
     if (!isTransporterStaff) return flat;
-    return flat.filter((d) => matchesTransporter(d.transporter));
-  }, [files, resolveProfile, isTransporterStaff, matchesTransporter]);
+    return flat.filter((d) =>
+      matchesBlock({ vid: d.vid, transporter: d.transporter, driverName: d.driverName }),
+    );
+  }, [files, resolveProfile, isTransporterStaff, matchesBlock]);
 
   const eventTypes = useMemo(() => {
     const set = new Set<string>();

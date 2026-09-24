@@ -10,18 +10,18 @@ import { useUserScope } from '../hooks/useUserScope';
 
 export const ViolationFilesPage = () => {
   const allFiles = useAppSelector((s) => s.uploads.files);
-  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isTransporterStaff, matchesBlock } = useUserScope();
   const [query, setQuery] = useState('');
 
   const files = useMemo(() => {
     if (!isTransporterStaff) return allFiles;
     return allFiles
       .map((f) => {
-        const records = f.records.filter((r) => matchesTransporter(r.transporter));
+        const records = f.records.filter((r) => matchesBlock(r));
         return { ...f, records, rowCount: records.length };
       })
       .filter((f) => f.records.length > 0);
-  }, [allFiles, isTransporterStaff, matchesTransporter]);
+  }, [allFiles, isTransporterStaff, matchesBlock]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

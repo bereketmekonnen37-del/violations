@@ -70,19 +70,27 @@ export const TransporterDetailPage = () => {
     (s) => s.rules.allowedLocationsByType,
   );
   const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
-  const { isTransporterStaff, matchesTransporter } = useUserScope();
+  const { isTransporterStaff, matchesBlock, assignedTransporters } = useUserScope();
+
+  // Staff may only open detail pages for transporters that are in their
+  // assigned list. A hand-crafted URL for any other transporter is rejected
+  // outright — even before we compute events — so nothing leaks.
+  const isAssignedForStaff = !isTransporterStaff
+    || assignedTransporters.some(
+      (t) => t.trim().toLowerCase() === target.trim().toLowerCase(),
+    );
 
   const speedFiles = useMemo(
-    () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesTransporter),
-    [rawSpeed, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesBlock),
+    [rawSpeed, isTransporterStaff, matchesBlock],
   );
   const nightFiles = useMemo(
-    () => filterFilesByTransporter(rawNights, isTransporterStaff, matchesTransporter),
-    [rawNights, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawNights, isTransporterStaff, matchesBlock),
+    [rawNights, isTransporterStaff, matchesBlock],
   );
   const continuousFiles = useMemo(
-    () => filterFilesByTransporter(rawCont, isTransporterStaff, matchesTransporter),
-    [rawCont, isTransporterStaff, matchesTransporter],
+    () => filterFilesByTransporter(rawCont, isTransporterStaff, matchesBlock),
+    [rawCont, isTransporterStaff, matchesBlock],
   );
 
   const filteredEvents = useMemo(
@@ -139,6 +147,28 @@ export const TransporterDetailPage = () => {
   };
   const total = counts.speed + counts.nights + counts.continuous;
   const hasAny = total > 0;
+
+  if (!isAssignedForStaff) {
+    return (
+      <div className="mx-auto w-full max-w-3xl">
+        <PageHeader
+          eyebrow="Transporter workspace"
+          title={target || 'Transporter'}
+          subtitle="This transporter is not part of your assigned list."
+          actions={
+            <button type="button" onClick={() => navigate(-1)} className="btn-ghost">
+              <ArrowLeft size={14} /> Back
+            </button>
+          }
+        />
+        <EmptyState
+          icon={Truck}
+          title="Not authorized"
+          description="You can only view details for transporters your manager assigned to you."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl">
