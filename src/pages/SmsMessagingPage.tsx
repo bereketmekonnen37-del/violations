@@ -49,6 +49,27 @@ type SendOutcome = {
   error?: string;
 };
 
+const extractReason = (data: unknown): string | null => {
+  if (!data) return null;
+  if (typeof data === 'string') return data.trim() || null;
+  if (typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+  const direct =
+    (typeof d.error_message === 'string' && d.error_message) ||
+    (typeof d.message === 'string' && d.message) ||
+    (typeof d.error === 'string' && d.error) ||
+    (typeof d.description === 'string' && d.description);
+  if (direct) return String(direct);
+  if (d.response && typeof d.response === 'object') {
+    const r = d.response as Record<string, unknown>;
+    if (Array.isArray(r.errors) && r.errors.length > 0) {
+      return r.errors.map((x) => String(x)).join('; ');
+    }
+    if (typeof r.message === 'string') return r.message;
+  }
+  return null;
+};
+
 export const SmsMessagingPage = () => {
   const heroRef = useRef<HTMLDivElement>(null);
   const senderRef = useRef<HTMLDivElement>(null);
@@ -264,18 +285,26 @@ export const SmsMessagingPage = () => {
             </p>
             {outcome.results && outcome.results.length > 0 && (
               <ul className="sms-trial-outcome-list">
-                {outcome.results.map((r) => (
-                  <li key={r.to}>
-                    <span className="sms-trial-outcome-to">{r.to}</span>
-                    <span
-                      className={`sms-trial-outcome-status${
-                        r.ok ? ' is-ok' : ' is-err'
-                      }`}
-                    >
-                      {r.ok ? 'OK' : `HTTP ${r.status || 'error'}`}
-                    </span>
-                  </li>
-                ))}
+                {outcome.results.map((r) => {
+                  const reason = extractReason(r.data);
+                  return (
+                    <li key={r.to} className="sms-trial-outcome-row">
+                      <div className="sms-trial-outcome-line">
+                        <span className="sms-trial-outcome-to">{r.to}</span>
+                        <span
+                          className={`sms-trial-outcome-status${
+                            r.ok ? ' is-ok' : ' is-err'
+                          }`}
+                        >
+                          {r.ok ? 'OK' : `HTTP ${r.status || 'error'}`}
+                        </span>
+                      </div>
+                      {!r.ok && reason && (
+                        <p className="sms-trial-outcome-reason">{reason}</p>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -633,6 +662,15 @@ export const SmsMessagingPage = () => {
         .sms-trial-outcome-to { font-weight: 600; }
         .sms-trial-outcome-status.is-ok { color: #047857; font-weight: 700; }
         .sms-trial-outcome-status.is-err { color: var(--color-brand-red); font-weight: 700; }
+        .sms-trial-outcome-row { display: flex; flex-direction: column; gap: 3px; }
+        .sms-trial-outcome-line {
+          display: flex; justify-content: space-between;
+        }
+        .sms-trial-outcome-reason {
+          font-size: 11.5px; line-height: 1.4;
+          font-weight: 500;
+          opacity: 0.9;
+        }
       `}</style>
     </div>
   );
