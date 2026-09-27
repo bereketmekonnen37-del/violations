@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const AFRO_URL = 'https://api.afromessage.com/api/send';
+const SMS_URL = 'https://smsethiopia.com/api/sms/send';
 
 type SendResult = {
   to: string;
@@ -22,16 +22,13 @@ export default async function handler(
     return;
   }
 
-  const token = process.env.AFROMESSAGE_API_KEY;
-  if (!token) {
+  const apiKey = process.env.SMS_ETHIOPIA_API_KEY;
+  if (!apiKey) {
     res
       .status(500)
-      .json({ error: 'AFROMESSAGE_API_KEY is not configured on the server' });
+      .json({ error: 'SMS_ETHIOPIA_API_KEY is not configured on the server' });
     return;
   }
-
-  const sender = (process.env.AFROMESSAGE_SENDER_ID ?? '').trim();
-  const identifier = (process.env.AFROMESSAGE_IDENTIFIER_ID ?? '').trim();
 
   const body = (req.body ?? {}) as { to?: unknown; message?: unknown };
   const message = String(body.message ?? '').trim();
@@ -48,7 +45,7 @@ export default async function handler(
   const recipients = Array.from(
     new Set(
       rawList
-        .map((n) => normalizePhone(n))
+        .map((n) => normalizeMsisdn(n))
         .filter((n): n is string => Boolean(n)),
     ),
   );
@@ -60,17 +57,15 @@ export default async function handler(
   }
 
   const results: SendResult[] = await Promise.all(
-    recipients.map(async (to) => {
-      const url = new URL(AFRO_URL);
-      if (identifier) url.searchParams.set('from', identifier);
-      if (sender) url.searchParams.set('sender', sender);
-      url.searchParams.set('to', to);
-      url.searchParams.set('message', message);
-
+    recipients.map(async (msisdn) => {
       try {
-        const r = await fetch(url.toString(), {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
+        const r = await fetch(SMS_URL, {
+          method: 'POST',
+          headers: {
+            KEY: apiKey,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ msisdn, text: message }),
         });
         const text = await r.text();
         let data: unknown = text;
@@ -79,15 +74,11 @@ export default async function handler(
         } catch {
           // keep raw text
         }
-        const ack =
-          data && typeof data === 'object' && 'acknowledge' in data
-            ? (data as { acknowledge?: unknown }).acknowledge
-            : undefined;
-        const ok = r.ok && (ack === undefined || ack === 'success');
-        return { to, ok, status: r.status, data };
+        const ok = r.ok && !hasErrorSignal(data);
+        return { to: msisdn, ok, status: r.status, data };
       } catch (err) {
         return {
-          to,
+          to: msisdn,
           ok: false,
           status: 0,
           data: {
@@ -102,15 +93,25 @@ export default async function handler(
   res.status(allOk ? 200 : 502).json({ ok: allOk, results });
 }
 
-function normalizePhone(input: unknown): string | null {
-  const raw = String(input ?? '').trim();
-  if (!raw) return null;
-  const digits = raw.replace(/\D/g, '');
-  if (!digits) return null;
-  if (digits.startsWith('251') && digits.length >= 11) return `+${digits}`;
-  if (digits.startsWith('0') && digits.length === 10) {
-    return `+251${digits.slice(1)}`;
+function hasErrorSignal(data: unknown): boolean {
+  if (!data || typeof data !== 'object') return false;
+  const d = data as Record<string, unknown>;
+  if (d.error) return true;
+  if (typeof d.status === 'string' && /error|fail/i.test(d.status)) return true;
+  if (d.success === false) return true;
+  if (typeof d.code === 'string' && d.code !== '0' && d.code !== '200') {
+    return true;
   }
-  if (digits.length === 9) return `+251${digits}`;
+  return false;
+}
+
+function normalizeMsisdn(input: unknown): string | null {
+  const digits = String(input ?? '').replace(/\D/g, '');
+  if (!digits) return null;
+  if (digits.startsWith('251') && digits.length === 12) return digits;
+  if (digits.startsWith('0') && digits.length === 10) {
+    return `251${digits.slice(1)}`;
+  }
+  if (digits.length === 9) return `251${digits}`;
   return null;
 }
