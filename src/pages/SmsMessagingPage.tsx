@@ -24,7 +24,8 @@ const NIGHT_ALERT: DriverAlert = {
 type TrialContact = { label: string; phone: string };
 
 const TRIAL_CONTACTS: TrialContact[] = [
-  { label: 'Whitelisted test line', phone: '0965186004' },
+  { label: 'Whitelisted test line A', phone: '0965186004' },
+  { label: 'Whitelisted test line B', phone: '0955344558' },
 ];
 
 const PRESET_MESSAGES: { label: string; text: string }[] = [
