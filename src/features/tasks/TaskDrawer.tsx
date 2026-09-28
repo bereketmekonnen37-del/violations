@@ -24,6 +24,7 @@ import {
 import { CreateTaskForm } from './CreateTaskForm';
 import { CompleteTaskForm } from './CompleteTaskForm';
 import { AttachmentChip } from './AttachmentChip';
+import { toast } from '../toast/toastStore';
 
 type BossTab = 'awaiting_approval' | 'active' | 'completed';
 type StaffTab = 'pending' | 'awaiting_approval' | 'completed';
@@ -283,12 +284,17 @@ const BossTaskCard = ({ task, focusTab }: { task: Task; focusTab: BossTab }) => 
 
   const doApprove = async (a: TaskAssignment) => {
     setBusyId(a.id);
+    const staffLabel = a.staffName || a.staffEmail || 'staff';
     try {
-      const updated = await approveAssignment(a.id, task.id);
+      const updated = await toast.promise(approveAssignment(a.id, task.id), {
+        loading: 'Approving submission…',
+        success: `Approved ${staffLabel}'s submission`,
+        successDescription: `"${task.title}"`,
+        error: 'Could not approve',
+      });
       dispatch(upsertTask(updated));
-    } catch (e) {
-      // eslint-disable-next-line no-alert
-      alert(e instanceof Error ? e.message : String(e));
+    } catch {
+      /* toast surfaces the error */
     } finally {
       setBusyId(null);
     }
@@ -297,14 +303,22 @@ const BossTaskCard = ({ task, focusTab }: { task: Task; focusTab: BossTab }) => 
   const doReject = async (a: TaskAssignment) => {
     if (!rejectReason.trim()) return;
     setBusyId(a.id);
+    const staffLabel = a.staffName || a.staffEmail || 'staff';
     try {
-      const updated = await rejectAssignment(a.id, task.id, rejectReason);
+      const updated = await toast.promise(
+        rejectAssignment(a.id, task.id, rejectReason),
+        {
+          loading: 'Sending back to staff…',
+          success: `Sent back to ${staffLabel}`,
+          successDescription: 'They will get a notification to redo it.',
+          error: 'Could not reject',
+        },
+      );
       dispatch(upsertTask(updated));
       setRejectingId(null);
       setRejectReason('');
-    } catch (e) {
-      // eslint-disable-next-line no-alert
-      alert(e instanceof Error ? e.message : String(e));
+    } catch {
+      /* toast surfaces the error */
     } finally {
       setBusyId(null);
     }
@@ -318,11 +332,15 @@ const BossTaskCard = ({ task, focusTab }: { task: Task; focusTab: BossTab }) => 
     }
     setDeleting(true);
     try {
-      await deleteTask(task.id);
+      await toast.promise(deleteTask(task.id), {
+        loading: 'Deleting task…',
+        success: 'Task deleted',
+        successDescription: `"${task.title}"`,
+        error: 'Could not delete task',
+      });
       dispatch(removeTask(task.id));
-    } catch (e) {
-      // eslint-disable-next-line no-alert
-      alert(e instanceof Error ? e.message : String(e));
+    } catch {
+      /* toast surfaces the error */
     } finally {
       setDeleting(false);
     }
@@ -554,11 +572,18 @@ const StaffTaskCard = ({
   const doReopen = async () => {
     setReopening(true);
     try {
-      const updated = await reopenAssignment(assignment.id, task.id);
+      const updated = await toast.promise(
+        reopenAssignment(assignment.id, task.id),
+        {
+          loading: 'Reopening task…',
+          success: 'Task reopened',
+          successDescription: 'Give it another shot.',
+          error: 'Could not reopen',
+        },
+      );
       dispatch(upsertTask(updated));
-    } catch (e) {
-      // eslint-disable-next-line no-alert
-      alert(e instanceof Error ? e.message : String(e));
+    } catch {
+      /* toast surfaces the error */
     } finally {
       setReopening(false);
     }

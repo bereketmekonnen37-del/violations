@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   ChevronsLeft,
   ChevronsRight,
+  ClipboardList,
   Database,
   FileStack,
   Save,
@@ -43,6 +44,7 @@ const STAFF_UPLOAD_ITEMS: Item[] = [
 const LEGACY_STAFF_ITEMS: Item[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   ...STAFF_UPLOAD_ITEMS,
+  { to: '/tasks', label: 'Task Management', icon: ClipboardList },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -53,6 +55,7 @@ const BOSS_ITEMS: Item[] = [
   { to: '/master-fleet', label: 'Master Fleet', icon: Trophy },
   { to: '/snapshots', label: 'Saved Violations', icon: Save },
   { to: '/transporters', label: 'Transporters', icon: Truck },
+  { to: '/tasks', label: 'Task Management', icon: ClipboardList },
   { to: '/rules', label: 'Rules', icon: ShieldCheck },
   { to: '/user-management', label: 'User Management', icon: UserCog },
   { to: '/uploaded-data', label: 'Uploaded Data', icon: Database },
@@ -68,6 +71,7 @@ const TRANSPORTER_STAFF_ITEMS: Item[] = [
   ...STAFF_UPLOAD_ITEMS,
   { to: '/violations', label: 'Filtered Violations', icon: FileStack },
   { to: '/transporters', label: 'Transporters', icon: Truck },
+  { to: '/tasks', label: 'Task Management', icon: ClipboardList },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 

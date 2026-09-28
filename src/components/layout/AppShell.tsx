@@ -4,6 +4,7 @@ import { NavRail } from './NavRail';
 import { Topbar } from './Topbar';
 import { TaskDrawer } from '../../features/tasks/TaskDrawer';
 import { useTasksLoader } from '../../features/tasks/useTasksLoader';
+import { ToastHost } from '../../features/toast/ToastHost';
 
 export const AppShell = () => {
   useTasksLoader();
@@ -24,6 +25,7 @@ export const AppShell = () => {
         <MobileNav />
       </div>
       <TaskDrawer />
+      <ToastHost />
     </div>
   );
 };

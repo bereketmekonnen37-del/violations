@@ -11,6 +11,7 @@ import { SettingsPage } from '../pages/SettingsPage';
 import { SnapshotDetailPage } from '../pages/SnapshotDetailPage';
 import { SnapshotsPage } from '../pages/SnapshotsPage';
 import { SmsMessagingPage } from '../pages/SmsMessagingPage';
+import { TasksPage } from '../pages/TasksPage';
 import { UnfilteredContinuousPage } from '../pages/UnfilteredContinuousPage';
 import { UnfilteredNightsPage } from '../pages/UnfilteredNightsPage';
 import { UnfilteredPage } from '../pages/UnfilteredPage';
@@ -141,6 +142,7 @@ export const AppRoutes = () => {
         />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/sms-messaging" element={<SmsMessagingPage />} />
+        <Route path="/tasks" element={<TasksPage />} />
       </Route>
 
       <Route

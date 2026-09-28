@@ -4,6 +4,7 @@ import { useAppDispatch } from '../../app/store';
 import type { TaskAssignment } from '../../types';
 import { submitCompletion } from './tasksApi';
 import { upsertTask } from './tasksSlice';
+import { toast } from '../toast/toastStore';
 
 interface Props {
   assignment: TaskAssignment;
@@ -22,13 +23,26 @@ export const CompleteTaskForm = ({ assignment, onDone, onCancel }: Props) => {
     if (submitting) return;
     setSubmitting(true);
     setErr(null);
+    const fileCount = files.length;
     try {
-      const task = await submitCompletion({
-        assignmentId: assignment.id,
-        taskId: assignment.taskId,
-        note,
-        proofFiles: files,
-      });
+      const task = await toast.promise(
+        submitCompletion({
+          assignmentId: assignment.id,
+          taskId: assignment.taskId,
+          note,
+          proofFiles: files,
+        }),
+        {
+          loading:
+            fileCount > 0
+              ? `Uploading ${fileCount} proof file${fileCount === 1 ? '' : 's'}…`
+              : 'Submitting for approval…',
+          success: 'Sent to boss for approval',
+          successDescription:
+            "You'll get a notification when it's approved or sent back.",
+          error: 'Could not submit',
+        },
+      );
       dispatch(upsertTask(task));
       onDone();
     } catch (e) {

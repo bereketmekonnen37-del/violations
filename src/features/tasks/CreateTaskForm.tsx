@@ -9,6 +9,7 @@ import {
 import { fetchStaffUsers } from '../staffUsers/staffUsersApi';
 import { createTask } from './tasksApi';
 import { upsertTask } from './tasksSlice';
+import { toast } from '../toast/toastStore';
 
 interface Props {
   onDone: () => void;
@@ -61,13 +62,26 @@ export const CreateTaskForm = ({ onDone, onCancel }: Props) => {
     if (!canSubmit) return;
     setSubmitting(true);
     setErr(null);
+    const staffCount = selected.length;
+    const fileCount = files.length;
     try {
-      const task = await createTask({
-        title,
-        description,
-        assigneeIds: selected,
-        briefFiles: files,
-      });
+      const task = await toast.promise(
+        createTask({
+          title,
+          description,
+          assigneeIds: selected,
+          briefFiles: files,
+        }),
+        {
+          loading:
+            fileCount > 0
+              ? `Uploading ${fileCount} attachment${fileCount === 1 ? '' : 's'} & assigning…`
+              : 'Assigning task…',
+          success: `Task assigned to ${staffCount} ${staffCount === 1 ? 'person' : 'people'}`,
+          successDescription: (t) => `"${t.title}"`,
+          error: 'Could not assign task',
+        },
+      );
       dispatch(upsertTask(task));
       onDone();
     } catch (e) {
