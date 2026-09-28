@@ -119,6 +119,11 @@ const resolveMessage = <T,>(
   arg: T,
 ): string => (typeof value === 'function' ? value(arg) : value);
 
+const resolveOptionalMessage = <T,>(
+  value: string | ((v: T) => string | undefined),
+  arg: T,
+): string | undefined => (typeof value === 'function' ? value(arg) : value);
+
 export interface PromiseMessages<T> {
   loading: string;
   success: string | ((value: T) => string);
@@ -186,7 +191,7 @@ export const toast = {
       const value = await p;
       const title = resolveMessage(messages.success, value);
       const description = messages.successDescription
-        ? resolveMessage(messages.successDescription, value)
+        ? resolveOptionalMessage(messages.successDescription, value)
         : undefined;
       update(id, {
         kind: 'success',
@@ -199,7 +204,7 @@ export const toast = {
       const e = err instanceof Error ? err : new Error(String(err));
       const title = resolveMessage(messages.error, e);
       const description = messages.errorDescription
-        ? resolveMessage(messages.errorDescription, e)
+        ? resolveOptionalMessage(messages.errorDescription, e)
         : shorten(e.message);
       update(id, {
         kind: 'error',
