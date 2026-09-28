@@ -69,10 +69,11 @@ export const TaskBell = () => {
         <span
           className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
           style={{
-            background: 'var(--color-brand-red)',
+            background: '#000000',
+            color: '#ffffff',
             border: '2px solid #ffffff',
             height: 18,
-            boxShadow: '0 2px 6px rgba(220, 38, 38, 0.45)',
+            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.35)',
           }}
         >
           {unseen > 99 ? '99+' : unseen}

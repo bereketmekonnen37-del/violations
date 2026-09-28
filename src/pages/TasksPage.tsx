@@ -6,6 +6,7 @@ import {
   Clock,
   Loader2,
   Plus,
+  RefreshCw,
   Search,
   Trash2,
   Undo2,
@@ -22,13 +23,19 @@ import type { Task, TaskAssignment, TaskStatus } from '../types';
 import {
   approveAssignment,
   deleteTask,
+  fetchTasks,
   rejectAssignment,
   reopenAssignment,
 } from '../features/tasks/tasksApi';
 import { AttachmentChip } from '../features/tasks/AttachmentChip';
 import { CompleteTaskForm } from '../features/tasks/CompleteTaskForm';
 import { CreateTaskModal } from '../features/tasks/CreateTaskModal';
-import { removeTask, upsertTask } from '../features/tasks/tasksSlice';
+import {
+  removeTask,
+  setError,
+  setTasks,
+  upsertTask,
+} from '../features/tasks/tasksSlice';
 import { toast } from '../features/toast/toastStore';
 import {
   setStaffUsers,
@@ -87,6 +94,25 @@ export const TasksPage = () => {
   const [selectedStaffId, setSelectedStaffId] = useState<string | 'all'>('all');
   const [staffQuery, setStaffQuery] = useState('');
   const [creating, setCreating] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const doRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      const fresh = await toast.promise(fetchTasks(), {
+        loading: 'Refreshing tasks…',
+        success: (list) =>
+          `Refreshed — ${list.length} ${list.length === 1 ? 'task' : 'tasks'}`,
+        error: 'Could not refresh tasks',
+      });
+      dispatch(setTasks(fresh));
+    } catch (e) {
+      dispatch(setError(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Boss needs the staff list; load once when this page mounts.
   useEffect(() => {
@@ -244,7 +270,11 @@ export const TasksPage = () => {
         </div>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
+      <div
+        className={`grid gap-5 ${
+          isBoss ? 'lg:grid-cols-[280px_minmax(0,1fr)]' : 'grid-cols-1'
+        }`}
+      >
         {/* ── Left: staff picker (boss only) ─────────────────── */}
         {isBoss && (
           <aside className="surface flex flex-col gap-3 rounded-2xl p-4">
@@ -382,7 +412,7 @@ export const TasksPage = () => {
         <section className="min-w-0">
           <div className="surface flex flex-col rounded-2xl">
             {/* Tabs */}
-            <div className="flex flex-wrap gap-2 border-b border-brand-blue-line p-3">
+            <div className="flex flex-wrap items-center gap-2 border-b border-brand-blue-line p-3">
               <TabButton
                 label="All"
                 count={counts.all}
@@ -418,6 +448,20 @@ export const TasksPage = () => {
                 onClick={() => setTab('rejected')}
                 tone="red"
               />
+              <button
+                type="button"
+                onClick={doRefresh}
+                disabled={refreshing}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-brand-blue-line bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 transition hover:border-brand-blue hover:bg-brand-blue-tint disabled:cursor-not-allowed disabled:opacity-60"
+                title="Fetch the latest tasks from the server"
+                aria-label="Refresh tasks"
+              >
+                <RefreshCw
+                  size={13}
+                  className={refreshing ? 'animate-spin' : ''}
+                />
+                {refreshing ? 'Refreshing…' : 'Refresh'}
+              </button>
             </div>
 
             {/* Table */}
