@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../app/store';
 import { useAuth } from '../../hooks/useAuth';
 import { Avatar } from '../ui/Avatar';
+import { TaskBell } from '../../features/tasks/TaskBell';
 
 export const Topbar = () => {
   const { user, logout } = useAuth();
@@ -45,6 +46,7 @@ export const Topbar = () => {
       </div>
 
       <div className="flex items-center gap-2">
+        <TaskBell />
         <div className="relative" ref={menuRef}>
           <button
             type="button"

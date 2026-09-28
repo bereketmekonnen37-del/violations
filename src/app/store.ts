@@ -25,6 +25,7 @@ import rulesReducer from '../features/rules/rulesSlice';
 import staffUsersReducer from '../features/staffUsers/staffUsersSlice';
 import nightMergeReducer from '../features/settings/nightMergeSlice';
 import masterFleetStatusReducer from '../features/masterFleet/masterFleetStatusSlice';
+import tasksReducer from '../features/tasks/tasksSlice';
 
 const rootReducer = combineReducers({
   auth: authReducer,
@@ -39,6 +40,7 @@ const rootReducer = combineReducers({
   staffUsers: staffUsersReducer,
   nightMerge: nightMergeReducer,
   masterFleetStatus: masterFleetStatusReducer,
+  tasks: tasksReducer,
 });
 
 // Migration 2: `rules.allowedVids: string[]` became

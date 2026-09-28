@@ -82,6 +82,70 @@ export interface ProfileState {
   };
 }
 
+/* ──────────────── Task management feature ──────────────── */
+
+export type TaskStatus =
+  | 'pending'
+  | 'awaiting_approval'
+  | 'completed'
+  | 'rejected';
+
+export type TaskAttachmentRole = 'brief' | 'proof';
+
+export interface TaskAttachment {
+  id: string;
+  taskId: string;
+  assignmentId: string | null;
+  uploadedBy: string;
+  role: TaskAttachmentRole;
+  storagePath: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+export interface TaskAssignment {
+  id: string;
+  taskId: string;
+  staffId: string;
+  staffName: string;
+  staffEmail: string;
+  status: TaskStatus;
+  staffNote: string;
+  bossResponse: string;
+  submittedAt: string | null;
+  completedAt: string | null;
+  seenByStaffAt: string | null;
+  createdAt: string;
+  proofAttachments: TaskAttachment[];
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  assignedBy: string;
+  assignedByName: string;
+  createdAt: string;
+  seenByBossAt: string | null;
+  briefAttachments: TaskAttachment[];
+  assignments: TaskAssignment[];
+}
+
+export type TasksRemoteStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+export interface TasksState {
+  tasks: Task[];
+  status: TasksRemoteStatus;
+  error: string | null;
+  drawerOpen: boolean;
+  /** Last time the current user opened the drawer — used for
+   *  optimistic unseen-badge count while the async seen_at update
+   *  is in flight. */
+  lastLocalSeenAt: string | null;
+}
+
 /* ──────────────── Unfiltered violations feature ──────────────── */
 
 export interface OverspeedEvent {

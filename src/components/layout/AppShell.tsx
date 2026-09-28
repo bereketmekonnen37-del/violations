@@ -2,8 +2,11 @@ import { Outlet } from 'react-router-dom';
 import { MobileNav } from './MobileNav';
 import { NavRail } from './NavRail';
 import { Topbar } from './Topbar';
+import { TaskDrawer } from '../../features/tasks/TaskDrawer';
+import { useTasksLoader } from '../../features/tasks/useTasksLoader';
 
 export const AppShell = () => {
+  useTasksLoader();
   return (
     <div
       className="flex min-h-screen"
@@ -20,6 +23,7 @@ export const AppShell = () => {
         </main>
         <MobileNav />
       </div>
+      <TaskDrawer />
     </div>
   );
 };
