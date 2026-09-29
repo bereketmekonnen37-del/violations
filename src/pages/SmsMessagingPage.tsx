@@ -26,22 +26,47 @@ type TrialContact = { label: string; phone: string };
 const TRIAL_CONTACTS: TrialContact[] = [
   { label: 'Whitelisted test line A', phone: '0965186004' },
   { label: 'Whitelisted test line B', phone: '0955344558' },
+  { label: 'Owner line', phone: '251939275297' },
 ];
 
-const PRESET_MESSAGES: { label: string; text: string }[] = [
+type PresetMessage = {
+  key: 'speed' | 'nights' | 'continuous';
+  label: string;
+  short: string;
+  text: string;
+};
+
+const PRESET_MESSAGES: PresetMessage[] = [
   {
+    key: 'speed',
     label: 'ፍጥነት (Speed)',
+    short: 'ከተፈቀደው በላይ ፍጥነት',
     text: 'ውድ ሹፌር፣ ከተፈቀደው በላይ ፍጥነት ሲነዱ ተመዝግቧል። እባክዎ ፍጥነትዎን ወዲያውኑ ይቀንሱ። — FleetWatch',
   },
   {
+    key: 'nights',
     label: 'ሌሊት (Nights)',
+    short: 'በሌሊት ሰዓት ማሽከርከር',
     text: 'ውድ ሹፌር፣ በሌሊት ሰዓት (18:00–06:00) ረዥም ጊዜ እያሽከረከሩ ተገኝተዋል። እባክዎ የሌሊት ደንቡን ያክብሩ። — FleetWatch',
   },
   {
+    key: 'continuous',
     label: 'ተከታታይ (Continuous)',
+    short: 'ያለ በቂ እረፍት ተከታታይ ማሽከርከር',
     text: 'ውድ ሹፌር፣ ያለ በቂ እረፍት ተከታታይ ረዥም ሰዓት ሲነዱ ተመዝግቧል። እባክዎ ወዲያውኑ እረፍት ይውሰዱ። — FleetWatch',
   },
 ];
+
+const composeFromPresets = (keys: string[]): string => {
+  if (keys.length === 0) return '';
+  if (keys.length === 1) {
+    return PRESET_MESSAGES.find((p) => p.key === keys[0])?.text ?? '';
+  }
+  const parts = PRESET_MESSAGES
+    .filter((p) => keys.includes(p.key))
+    .map((p) => p.short);
+  return `ውድ ሹፌር፣ የሚከተሉት የመንዳት ጥሰቶች ተመዝግበውብዎታል፦ ${parts.join('፣ ')}። እባክዎ የመንገድ ደንቦችን ያክብሩ። — FleetWatch`;
+};
 
 type SendOutcome = {
   ok: boolean;
@@ -79,6 +104,9 @@ export const SmsMessagingPage = () => {
   const [selected, setSelected] = useState<string[]>(
     TRIAL_CONTACTS.map((c) => c.phone),
   );
+  const [selectedPresets, setSelectedPresets] = useState<string[]>([
+    PRESET_MESSAGES[0].key,
+  ]);
   const [message, setMessage] = useState<string>(PRESET_MESSAGES[0].text);
   const [sending, setSending] = useState(false);
   const [outcome, setOutcome] = useState<SendOutcome | null>(null);
@@ -92,6 +120,21 @@ export const SmsMessagingPage = () => {
     setSelected((prev) =>
       prev.includes(phone) ? prev.filter((p) => p !== phone) : [...prev, phone],
     );
+  };
+
+  const togglePreset = (key: string) => {
+    const next = selectedPresets.includes(key)
+      ? selectedPresets.filter((k) => k !== key)
+      : [...selectedPresets, key];
+    setSelectedPresets(next);
+    setMessage(composeFromPresets(next));
+  };
+
+  const onMessageChange = (value: string) => {
+    setMessage(value);
+    if (value !== composeFromPresets(selectedPresets)) {
+      setSelectedPresets([]);
+    }
   };
 
   const sendTest = async () => {
@@ -217,20 +260,27 @@ export const SmsMessagingPage = () => {
           </div>
 
           <div>
-            <label className="sms-trial-label">Presets</label>
+            <label className="sms-trial-label">
+              Violation presets{' '}
+              <span className="sms-trial-hint">
+                (toggle any — they combine into one message)
+              </span>
+            </label>
             <div className="sms-trial-presets">
-              {PRESET_MESSAGES.map((p) => (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => setMessage(p.text)}
-                  className={`sms-trial-preset${
-                    message === p.text ? ' is-active' : ''
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
+              {PRESET_MESSAGES.map((p) => {
+                const active = selectedPresets.includes(p.key);
+                return (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => togglePreset(p.key)}
+                    className={`sms-trial-preset${active ? ' is-active' : ''}`}
+                    aria-pressed={active}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -241,7 +291,7 @@ export const SmsMessagingPage = () => {
         <textarea
           id="sms-trial-msg"
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => onMessageChange(e.target.value)}
           rows={4}
           maxLength={500}
           className="sms-trial-textarea"
@@ -544,6 +594,11 @@ export const SmsMessagingPage = () => {
           text-transform: uppercase; letter-spacing: 0.05em;
           color: var(--color-text-muted);
           margin-bottom: 8px;
+        }
+        .sms-trial-hint {
+          font-size: 10.5px; font-weight: 500;
+          text-transform: none; letter-spacing: 0;
+          opacity: 0.75;
         }
         .sms-trial-chips {
           display: flex; flex-wrap: wrap; gap: 8px;
