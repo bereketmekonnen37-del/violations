@@ -183,7 +183,7 @@ export const SettingsPage = () => {
           Personal information
         </h2>
         <p className="mt-1 text-sm text-ink-500 dark:text-ink-400">
-          Update the name and email associated with your account.
+          Update the username and email associated with your account.
         </p>
         <form
           onSubmit={profileForm.handleSubmit(onProfileSubmit)}
@@ -191,10 +191,10 @@ export const SettingsPage = () => {
         >
           <label className="block">
             <span className="text-xs font-medium uppercase tracking-wider text-ink-500 dark:text-ink-400">
-              Full name
+              Username
             </span>
             <input
-              {...profileForm.register('name', { required: 'Name is required' })}
+              {...profileForm.register('name', { required: 'Username is required' })}
               className="input-base mt-1.5"
             />
             {profileForm.formState.errors.name && (
