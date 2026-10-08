@@ -29,8 +29,8 @@ import {
   type DailyBucket,
 } from '../features/dashboard/CurrentMonthChart';
 import { fetchSnapshot, listSnapshots } from '../features/snapshots/snapshotsApi';
-import type { SnapshotMeta } from '../lib/snapshots';
-import type { MasterFleetRow } from '../lib/masterFleet';
+import type { SnapshotData, SnapshotMeta } from '../lib/snapshots';
+import { parseEventDate } from '../lib/locationRules';
 
 /**
  * Legacy staff (no assigned transporters): the dashboard is intentionally a
@@ -125,10 +125,13 @@ const BossDashboard = () => {
     [rawContFiles, isTransporterStaff, matchesBlock],
   );
 
-  // Boss landing shows saved violations ("snapshots") for the current
-  // month only. The whole set is fetched once; filtering is done locally so
-  // the daily chart and the stat cards stay in sync.
+  // Boss landing shows saved violations whose event date (not upload date)
+  // falls in the current month. Staff frequently upload September data in
+  // October; those September-dated events must NOT show up here. Every
+  // snapshot's full payload is pulled once so we can inspect each event's
+  // own timestamp instead of relying on `createdAt`.
   const [snapshots, setSnapshots] = useState<SnapshotMeta[] | null>(null);
+  const [snapshotData, setSnapshotData] = useState<SnapshotData[]>([]);
   const [snapshotsLoading, setSnapshotsLoading] = useState(true);
   const [snapshotsError, setSnapshotsError] = useState<string | null>(null);
 
@@ -138,8 +141,11 @@ const BossDashboard = () => {
     setSnapshotsLoading(true);
     setSnapshotsError(null);
     listSnapshots()
-      .then((rows) => {
-        if (!cancelled) setSnapshots(rows);
+      .then(async (metas) => {
+        if (cancelled) return;
+        setSnapshots(metas);
+        const full = await Promise.all(metas.map((m) => fetchSnapshot(m.id)));
+        if (!cancelled) setSnapshotData(full.map((f) => f.data));
       })
       .catch((e: unknown) => {
         if (!cancelled)
@@ -166,110 +172,155 @@ const BossDashboard = () => {
     [now],
   );
 
-  const monthSnapshots = useMemo(() => {
-    if (!snapshots) return [];
+  // One pass over every snapshot's events. We only count events whose own
+  // date is in the current month, deduped by `kind:id` so the same event
+  // appearing in two overlapping snapshots is counted once.
+  const monthEvents = useMemo(() => {
     const y = now.getFullYear();
     const m = now.getMonth();
-    return snapshots.filter((s) => {
-      const d = new Date(s.createdAt);
-      if (Number.isNaN(d.getTime())) return false;
-      return d.getFullYear() === y && d.getMonth() === m;
+    const isCounted = (e: {
+      allowedVid: boolean;
+      allowedLocation: boolean;
+      underestimated?: boolean;
+    }): boolean => !e.allowedVid && !e.allowedLocation && !e.underestimated;
+    interface CountedEvent {
+      kind: 'speed' | 'nights' | 'continuous';
+      day: number;
+      vid: string;
+      driverName: string;
+      transporter: string;
+    }
+    const dedup = new Map<string, CountedEvent>();
+    const add = (
+      kind: 'speed' | 'nights' | 'continuous',
+      id: string,
+      rawDate: string,
+      vid: string,
+      driverName: string,
+      transporter: string,
+    ) => {
+      const d = parseEventDate(rawDate);
+      if (!d) return;
+      if (d.getFullYear() !== y || d.getMonth() !== m) return;
+      const key = `${kind}:${id}`;
+      if (dedup.has(key)) return;
+      dedup.set(key, {
+        kind,
+        day: d.getDate(),
+        vid,
+        driverName,
+        transporter,
+      });
+    };
+    snapshotData.forEach((data) => {
+      data.events.speed.filter(isCounted).forEach((e) =>
+        add('speed', e.id, e.start, e.vid, e.driverName, e.transporter),
+      );
+      data.events.nights.filter(isCounted).forEach((e) =>
+        add('nights', e.id, e.timeA, e.vid, e.driverName, e.transporter),
+      );
+      data.events.continuous.filter(isCounted).forEach((e) =>
+        add('continuous', e.id, e.timeA, e.vid, e.driverName, e.transporter),
+      );
     });
-  }, [snapshots, now]);
+    return Array.from(dedup.values());
+  }, [snapshotData, now]);
 
   const monthDaily = useMemo<DailyBucket[]>(() => {
     const buckets: DailyBucket[] = Array.from(
       { length: daysInMonth },
       (_, i) => ({ day: i + 1, speed: 0, nights: 0, continuous: 0 }),
     );
-    monthSnapshots.forEach((s) => {
-      const d = new Date(s.createdAt);
-      if (Number.isNaN(d.getTime())) return;
-      const idx = d.getDate() - 1;
+    monthEvents.forEach((e) => {
+      const idx = e.day - 1;
       if (idx < 0 || idx >= buckets.length) return;
-      buckets[idx].speed += s.summary.speed;
-      buckets[idx].nights += s.summary.nights;
-      buckets[idx].continuous += s.summary.continuous;
+      buckets[idx][e.kind] += 1;
     });
     return buckets;
-  }, [monthSnapshots, daysInMonth]);
+  }, [monthEvents, daysInMonth]);
 
-  const monthTotals = useMemo(
-    () =>
-      monthSnapshots.reduce(
-        (acc, s) => ({
-          speed: acc.speed + s.summary.speed,
-          nights: acc.nights + s.summary.nights,
-          continuous: acc.continuous + s.summary.continuous,
-          drivers: acc.drivers + s.summary.drivers,
-          transporters: acc.transporters + s.summary.transporters,
-          total: acc.total + s.summary.total,
-        }),
-        { speed: 0, nights: 0, continuous: 0, drivers: 0, transporters: 0, total: 0 },
-      ),
-    [monthSnapshots],
-  );
-
-  const hasMonthData = monthSnapshots.length > 0 && monthTotals.total > 0;
-
-  // Load full snapshot payloads for the current month so we can aggregate
-  // per-driver rows across every snapshot saved since the 1st and rank the
-  // top offenders. Snapshot payload is gzipped — small enough to fetch a
-  // handful per month.
-  const [monthRows, setMonthRows] = useState<MasterFleetRow[]>([]);
-  const [topLoading, setTopLoading] = useState(false);
-  const monthIds = useMemo(
-    () => monthSnapshots.map((s) => s.id).sort().join(','),
-    [monthSnapshots],
-  );
-
-  useEffect(() => {
-    if (!isBoss) return;
-    if (monthSnapshots.length === 0) {
-      setMonthRows([]);
-      return;
-    }
-    let cancelled = false;
-    setTopLoading(true);
-    Promise.all(monthSnapshots.map((s) => fetchSnapshot(s.id)))
-      .then((results) => {
-        if (cancelled) return;
-        const combined = results.flatMap((r) => r.data.rows);
-        setMonthRows(combined);
-      })
-      .catch(() => {
-        if (!cancelled) setMonthRows([]);
-      })
-      .finally(() => {
-        if (!cancelled) setTopLoading(false);
-      });
-    return () => {
-      cancelled = true;
+  const monthTotals = useMemo(() => {
+    const drivers = new Set<string>();
+    const transporters = new Set<string>();
+    const totals = { speed: 0, nights: 0, continuous: 0 };
+    monthEvents.forEach((e) => {
+      totals[e.kind] += 1;
+      const dk = (e.vid || e.driverName).trim().toLowerCase();
+      if (dk) drivers.add(dk);
+      const tk = e.transporter.trim().toLowerCase();
+      if (tk) transporters.add(tk);
+    });
+    return {
+      ...totals,
+      total: totals.speed + totals.nights + totals.continuous,
+      drivers: drivers.size,
+      transporters: transporters.size,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isBoss, monthIds]);
+  }, [monthEvents]);
+
+  const hasMonthData = monthTotals.total > 0;
 
   const topOffenders = useMemo(() => {
-    if (monthRows.length === 0) return [];
-    const byVid = new Map<string, MasterFleetRow>();
-    monthRows.forEach((r) => {
-      const key = (r.vid || r.driverName).trim().toLowerCase();
+    if (monthEvents.length === 0) return [];
+    interface Row {
+      vid: string;
+      driverName: string;
+      transporter: string;
+      speed: number;
+      nights: number;
+      continuous: number;
+      total: number;
+    }
+    const byVid = new Map<string, Row>();
+    monthEvents.forEach((e) => {
+      const key = (e.vid || e.driverName).trim().toLowerCase();
       if (!key) return;
-      const existing = byVid.get(key);
-      if (existing) {
-        existing.speed += r.speed;
-        existing.nights += r.nights;
-        existing.continuous += r.continuous;
-        existing.total += r.total;
-      } else {
-        byVid.set(key, { ...r });
+      let row = byVid.get(key);
+      if (!row) {
+        row = {
+          vid: e.vid,
+          driverName: e.driverName,
+          transporter: e.transporter,
+          speed: 0,
+          nights: 0,
+          continuous: 0,
+          total: 0,
+        };
+        byVid.set(key, row);
       }
+      row[e.kind] += 1;
+      row.total += 1;
     });
     return Array.from(byVid.values())
-      .filter((r) => r.total > 0)
       .sort((a, b) => b.total - a.total || a.driverName.localeCompare(b.driverName))
       .slice(0, 4);
-  }, [monthRows]);
+  }, [monthEvents]);
+
+  const monthSnapshotsCount = useMemo(() => {
+    // How many snapshots actually contributed at least one event dated in
+    // the current month. Keeps the "Saved this month" stat honest when
+    // staff backfill old data in a new month.
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const isCounted = (e: {
+      allowedVid: boolean;
+      allowedLocation: boolean;
+      underestimated?: boolean;
+    }): boolean => !e.allowedVid && !e.allowedLocation && !e.underestimated;
+    const inMonth = (raw: string): boolean => {
+      const d = parseEventDate(raw);
+      return !!d && d.getFullYear() === y && d.getMonth() === m;
+    };
+    return snapshotData.filter((data) => {
+      if (data.events.speed.filter(isCounted).some((e) => inMonth(e.start))) return true;
+      if (data.events.nights.filter(isCounted).some((e) => inMonth(e.timeA))) return true;
+      if (data.events.continuous.filter(isCounted).some((e) => inMonth(e.timeA))) return true;
+      return false;
+    }).length;
+  }, [snapshotData, now]);
+
+  const topLoading = snapshotsLoading;
+  void snapshots;
 
   // Per-assigned-transporter breakdown (transporter-staff view only).
   // Uses the same `collectCountedEvents` engine as Master Fleet + Analytics,
@@ -402,9 +453,9 @@ const BossDashboard = () => {
       {isBoss && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="Saved this month"
-            value={monthSnapshots.length}
-            delta={`${monthLabel} snapshots`}
+            label="Snapshots this month"
+            value={monthSnapshotsCount}
+            delta={`With ${monthLabel}-dated events`}
             icon={FolderArchive}
           />
           <StatCard
