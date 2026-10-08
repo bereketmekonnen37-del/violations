@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -8,7 +8,6 @@ import {
   FolderArchive,
   Gauge,
   IdCard,
-  Loader2,
   Moon,
   Route as RouteIcon,
   Truck,
@@ -19,18 +18,19 @@ import { useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
 import { StatCard } from '../components/ui/StatCard';
 import { useUserScope } from '../hooks/useUserScope';
-import { collectCountedEvents } from '../lib/masterFleet';
-import { normalizeVid } from '../lib/locationRules';
+import {
+  collectCountedEvents,
+  collectFilteredEvents,
+} from '../lib/masterFleet';
+import { normalizeVid, parseEventDate } from '../lib/locationRules';
 import { encodeTransporterSlug } from '../lib/transporterAnalytics';
 import { EmptyState } from '../components/ui/EmptyState';
 import { filterFilesByTransporter } from '../lib/transporterScope';
+import { filterFilesToCurrentMonth } from '../lib/currentMonthFilter';
 import {
   CurrentMonthChart,
   type DailyBucket,
 } from '../features/dashboard/CurrentMonthChart';
-import { fetchSnapshot, listSnapshots } from '../features/snapshots/snapshotsApi';
-import type { SnapshotData, SnapshotMeta } from '../lib/snapshots';
-import { parseEventDate } from '../lib/locationRules';
 
 /**
  * Legacy staff (no assigned transporters): the dashboard is intentionally a
@@ -125,42 +125,10 @@ const BossDashboard = () => {
     [rawContFiles, isTransporterStaff, matchesBlock],
   );
 
-  // Boss landing shows saved violations whose event date (not upload date)
-  // falls in the current month. Staff frequently upload September data in
-  // October; those September-dated events must NOT show up here. Every
-  // snapshot's full payload is pulled once so we can inspect each event's
-  // own timestamp instead of relying on `createdAt`.
-  const [snapshots, setSnapshots] = useState<SnapshotMeta[] | null>(null);
-  const [snapshotData, setSnapshotData] = useState<SnapshotData[]>([]);
-  const [snapshotsLoading, setSnapshotsLoading] = useState(true);
-  const [snapshotsError, setSnapshotsError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isBoss) return;
-    let cancelled = false;
-    setSnapshotsLoading(true);
-    setSnapshotsError(null);
-    listSnapshots()
-      .then(async (metas) => {
-        if (cancelled) return;
-        setSnapshots(metas);
-        const full = await Promise.all(metas.map((m) => fetchSnapshot(m.id)));
-        if (!cancelled) setSnapshotData(full.map((f) => f.data));
-      })
-      .catch((e: unknown) => {
-        if (!cancelled)
-          setSnapshotsError(
-            e instanceof Error ? e.message : 'Could not load saved violations.',
-          );
-      })
-      .finally(() => {
-        if (!cancelled) setSnapshotsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isBoss]);
-
+  // Current-month view sourced from the same uploaded slices Master Fleet
+  // and Transporters already use. We re-filter them by event date so only
+  // this month's events contribute to the stat cards, chart and top
+  // offenders — matching the 928-event dataset the manager sees elsewhere.
   const now = useMemo(() => new Date(), []);
   const monthLabel = useMemo(
     () =>
@@ -172,12 +140,38 @@ const BossDashboard = () => {
     [now],
   );
 
-  // One pass over every snapshot's events. We only count events whose own
-  // date is in the current month, deduped by `kind:id` so the same event
-  // appearing in two overlapping snapshots is counted once.
+  const monthFiltered = useMemo(
+    () => filterFilesToCurrentMonth(speedFiles, nightFiles, continuousFiles, now),
+    [speedFiles, nightFiles, continuousFiles, now],
+  );
+
+  const filteredEvents = useMemo(
+    () =>
+      collectFilteredEvents({
+        speedFiles: monthFiltered.speed,
+        nightFiles: monthFiltered.nights,
+        continuousFiles: monthFiltered.continuous,
+        driverRecords,
+        thresholds,
+        allowedVidsByType,
+        allowedLocationsByType,
+        mergeNights,
+        maxDurationSeconds,
+        underestimatedRule,
+      }),
+    [
+      monthFiltered,
+      driverRecords,
+      thresholds,
+      allowedVidsByType,
+      allowedLocationsByType,
+      mergeNights,
+      maxDurationSeconds,
+      underestimatedRule,
+    ],
+  );
+
   const monthEvents = useMemo(() => {
-    const y = now.getFullYear();
-    const m = now.getMonth();
     const isCounted = (e: {
       allowedVid: boolean;
       allowedLocation: boolean;
@@ -190,10 +184,9 @@ const BossDashboard = () => {
       driverName: string;
       transporter: string;
     }
-    const dedup = new Map<string, CountedEvent>();
-    const add = (
+    const events: CountedEvent[] = [];
+    const push = (
       kind: 'speed' | 'nights' | 'continuous',
-      id: string,
       rawDate: string,
       vid: string,
       driverName: string,
@@ -201,30 +194,19 @@ const BossDashboard = () => {
     ) => {
       const d = parseEventDate(rawDate);
       if (!d) return;
-      if (d.getFullYear() !== y || d.getMonth() !== m) return;
-      const key = `${kind}:${id}`;
-      if (dedup.has(key)) return;
-      dedup.set(key, {
-        kind,
-        day: d.getDate(),
-        vid,
-        driverName,
-        transporter,
-      });
+      events.push({ kind, day: d.getDate(), vid, driverName, transporter });
     };
-    snapshotData.forEach((data) => {
-      data.events.speed.filter(isCounted).forEach((e) =>
-        add('speed', e.id, e.start, e.vid, e.driverName, e.transporter),
-      );
-      data.events.nights.filter(isCounted).forEach((e) =>
-        add('nights', e.id, e.timeA, e.vid, e.driverName, e.transporter),
-      );
-      data.events.continuous.filter(isCounted).forEach((e) =>
-        add('continuous', e.id, e.timeA, e.vid, e.driverName, e.transporter),
-      );
-    });
-    return Array.from(dedup.values());
-  }, [snapshotData, now]);
+    filteredEvents.speed
+      .filter(isCounted)
+      .forEach((e) => push('speed', e.start, e.vid, e.driverName, e.transporter));
+    filteredEvents.nights
+      .filter(isCounted)
+      .forEach((e) => push('nights', e.timeA, e.vid, e.driverName, e.transporter));
+    filteredEvents.continuous
+      .filter(isCounted)
+      .forEach((e) => push('continuous', e.timeA, e.vid, e.driverName, e.transporter));
+    return events;
+  }, [filteredEvents]);
 
   const monthDaily = useMemo<DailyBucket[]>(() => {
     const buckets: DailyBucket[] = Array.from(
@@ -295,32 +277,6 @@ const BossDashboard = () => {
       .sort((a, b) => b.total - a.total || a.driverName.localeCompare(b.driverName))
       .slice(0, 4);
   }, [monthEvents]);
-
-  const monthSnapshotsCount = useMemo(() => {
-    // How many snapshots actually contributed at least one event dated in
-    // the current month. Keeps the "Saved this month" stat honest when
-    // staff backfill old data in a new month.
-    const y = now.getFullYear();
-    const m = now.getMonth();
-    const isCounted = (e: {
-      allowedVid: boolean;
-      allowedLocation: boolean;
-      underestimated?: boolean;
-    }): boolean => !e.allowedVid && !e.allowedLocation && !e.underestimated;
-    const inMonth = (raw: string): boolean => {
-      const d = parseEventDate(raw);
-      return !!d && d.getFullYear() === y && d.getMonth() === m;
-    };
-    return snapshotData.filter((data) => {
-      if (data.events.speed.filter(isCounted).some((e) => inMonth(e.start))) return true;
-      if (data.events.nights.filter(isCounted).some((e) => inMonth(e.timeA))) return true;
-      if (data.events.continuous.filter(isCounted).some((e) => inMonth(e.timeA))) return true;
-      return false;
-    }).length;
-  }, [snapshotData, now]);
-
-  const topLoading = snapshotsLoading;
-  void snapshots;
 
   // Per-assigned-transporter breakdown (transporter-staff view only).
   // Uses the same `collectCountedEvents` engine as Master Fleet + Analytics,
@@ -428,7 +384,7 @@ const BossDashboard = () => {
         title=""
         subtitle={
           isBoss
-            ? `Saved violations snapshotted this month. Everything below is scoped to ${monthLabel} only.`
+            ? `Everything below is scoped to ${monthLabel} only — speed, nights and continuous events dated this month, same as Master fleet.`
             : isTransporterStaff
               ? `You are scoped to ${user.assignedTransporters?.length ?? 0} transporter${(user.assignedTransporters?.length ?? 0) === 1 ? '' : 's'}. Only their data appears below.`
               : 'Upload new violation reports and track your submission history.'
@@ -453,41 +409,30 @@ const BossDashboard = () => {
       {isBoss && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="Snapshots this month"
-            value={monthSnapshotsCount}
-            delta={`With ${monthLabel}-dated events`}
-            icon={FolderArchive}
-          />
-          <StatCard
             label="Total violations"
             value={monthTotals.total.toLocaleString()}
-            delta="From saved snapshots"
+            delta={`${monthLabel} only`}
             icon={AlertTriangle}
             accent
           />
           <StatCard
-            label="Drivers covered"
-            value={monthTotals.drivers.toLocaleString()}
-            delta="Across this month's snapshots"
-            icon={Users}
+            label="Speed flags"
+            value={monthTotals.speed.toLocaleString()}
+            delta="Passing threshold"
+            icon={Gauge}
           />
           <StatCard
-            label="Transporters covered"
-            value={monthTotals.transporters.toLocaleString()}
-            delta="Across this month's snapshots"
-            icon={Truck}
+            label="Night + Continuous"
+            value={(monthTotals.nights + monthTotals.continuous).toLocaleString()}
+            delta={`${monthTotals.nights} nights · ${monthTotals.continuous} cont.`}
+            icon={Moon}
           />
-        </div>
-      )}
-
-      {isBoss && snapshotsError && (
-        <div className="mt-6 flex items-start gap-3 rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 sm:p-5 dark:border-rose-800 dark:bg-rose-950/40">
-          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white">
-            <AlertTriangle size={16} />
-          </span>
-          <p className="flex-1 text-sm font-semibold text-rose-900 dark:text-rose-100">
-            {snapshotsError}
-          </p>
+          <StatCard
+            label="Drivers · Transporters"
+            value={`${monthTotals.drivers} · ${monthTotals.transporters}`}
+            delta="Flagged this month"
+            icon={Users}
+          />
         </div>
       )}
 
@@ -673,17 +618,9 @@ const BossDashboard = () => {
                 className="text-sm"
                 style={{ color: 'var(--color-text-muted)' }}
               >
-                Ranked across every snapshot saved since the 1st of this month.
+                Ranked across every event dated since {monthLabel} 1st.
               </p>
             </div>
-            {topLoading && (
-              <span
-                className="inline-flex items-center gap-1.5 text-xs"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
-                <Loader2 size={14} className="animate-spin" /> Loading
-              </span>
-            )}
           </div>
 
           {topOffenders.length === 0 ? (
@@ -715,8 +652,8 @@ const BossDashboard = () => {
                   className="text-xs"
                   style={{ color: 'var(--color-text-muted)' }}
                 >
-                  Save a Master Fleet snapshot and the top 4 drivers will
-                  appear here.
+                  As soon as a {monthLabel}-dated violation lands, the top 4
+                  drivers will show up here.
                 </p>
               </div>
             </div>
@@ -874,14 +811,14 @@ const BossDashboard = () => {
                     className="text-lg font-semibold tracking-tight"
                     style={{ color: 'var(--color-brand-blue-dark)' }}
                   >
-                    {monthLabel} · Saved violations
+                    {monthLabel} · Daily violations
                   </h2>
                   <p
                     className="text-sm"
                     style={{ color: 'var(--color-text-muted)' }}
                   >
-                    Each bar sums the Speed, Nights and Continuous violations
-                    from snapshots saved on that day.
+                    Each bar stacks the Speed, Nights and Continuous events
+                    whose own timestamp lands on that day.
                   </p>
                 </div>
               </div>
@@ -928,15 +865,7 @@ const BossDashboard = () => {
               </div>
             </div>
 
-            {snapshotsLoading ? (
-              <div
-                className="flex h-[360px] items-center justify-center gap-2 text-sm"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
-                <Loader2 size={16} className="animate-spin" />
-                Loading saved violations…
-              </div>
-            ) : hasMonthData ? (
+            {hasMonthData ? (
               <CurrentMonthChart data={monthDaily} monthLabel={monthLabel} />
             ) : (
               <div
@@ -978,12 +907,12 @@ const BossDashboard = () => {
                         className="mt-1 text-xs"
                         style={{ color: 'var(--color-text-muted)' }}
                       >
-                        Save a Master Fleet snapshot this month and it will
-                        appear right here.
+                        Once a staff upload contains events dated in
+                        {' '}{monthLabel}, they'll appear here automatically.
                       </p>
                     </div>
-                    <Link to="/snapshots" className="btn-primary mt-1">
-                      <FolderArchive size={16} /> Go to saved violations
+                    <Link to="/master-fleet" className="btn-primary mt-1">
+                      <Crown size={16} /> Open Master fleet
                     </Link>
                   </div>
                 </div>
