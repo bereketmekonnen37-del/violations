@@ -21,15 +21,15 @@ import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { formatDate, formatDateTime } from '../lib/utils';
 import { useUserScope } from '../hooks/useUserScope';
-import {
-  computeDashboardAnalytics,
-  fillDailyRange,
-} from '../lib/dashboardAnalytics';
+import { computeDashboardAnalytics } from '../lib/dashboardAnalytics';
 import { filterFilesByTransporter } from '../lib/transporterScope';
 import { collectCountedEvents } from '../lib/masterFleet';
 import { normalizeVid } from '../lib/locationRules';
 import { encodeTransporterSlug } from '../lib/transporterAnalytics';
-import { DailyViolationsChart } from '../features/dashboard/DailyViolationsChart';
+import {
+  MonthlyUploadsChart,
+  type MonthlyUploadBucket,
+} from '../features/dashboard/MonthlyUploadsChart';
 import { TopOffenderCards } from '../features/dashboard/TopOffenderCards';
 
 /**
@@ -154,9 +154,49 @@ const BossDashboard = () => {
     ],
   );
 
-  const dailySeries = useMemo(
-    () => fillDailyRange(analytics.daily),
-    [analytics.daily],
+  // Monthly upload buckets starting January 2026 through the current month.
+  // Each file counts once in the month it was uploaded. Months with zero
+  // uploads render as empty bars so the whole year is visible on the axis.
+  const monthlyUploads = useMemo<MonthlyUploadBucket[]>(() => {
+    const buckets = new Map<string, MonthlyUploadBucket>();
+    const startYear = 2026;
+    const startMonth = 1;
+    const now = new Date();
+    const endYear = Math.max(now.getFullYear(), startYear);
+    const endMonth = now.getFullYear() >= startYear ? now.getMonth() + 1 : 12;
+    for (let y = startYear; y <= endYear; y += 1) {
+      const mMax = y === endYear ? endMonth : 12;
+      for (let m = 1; m <= mMax; m += 1) {
+        const key = `${y}-${String(m).padStart(2, '0')}`;
+        buckets.set(key, { month: key, speed: 0, nights: 0, continuous: 0 });
+      }
+    }
+    const addFile = (uploadDate: string, kind: 'speed' | 'nights' | 'continuous') => {
+      const d = new Date(uploadDate);
+      if (Number.isNaN(d.getTime())) return;
+      if (d.getFullYear() < startYear) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const bucket = buckets.get(key);
+      if (!bucket) return;
+      bucket[kind] += 1;
+    };
+    speedFiles.forEach((f) => addFile(f.uploadDate, 'speed'));
+    nightFiles.forEach((f) => addFile(f.uploadDate, 'nights'));
+    continuousFiles.forEach((f) => addFile(f.uploadDate, 'continuous'));
+    return Array.from(buckets.values());
+  }, [speedFiles, nightFiles, continuousFiles]);
+
+  const monthlyTotals = useMemo(
+    () =>
+      monthlyUploads.reduce(
+        (acc, b) => ({
+          speed: acc.speed + b.speed,
+          nights: acc.nights + b.nights,
+          continuous: acc.continuous + b.continuous,
+        }),
+        { speed: 0, nights: 0, continuous: 0 },
+      ),
+    [monthlyUploads],
   );
 
   // Same "rules hid all my data" detection MasterFleetPage does. Uploaded
@@ -181,9 +221,6 @@ const BossDashboard = () => {
       ),
     [rawTotals, analytics.totals],
   );
-
-  const analyticsTotal =
-    analytics.totals.speed + analytics.totals.nights + analytics.totals.continuous;
 
   // Per-assigned-transporter breakdown (transporter-staff view only).
   // Uses the same `collectCountedEvents` engine as Master Fleet + Analytics,
@@ -656,14 +693,15 @@ const BossDashboard = () => {
                     className="text-lg font-semibold tracking-tight"
                     style={{ color: 'var(--color-brand-blue-dark)' }}
                   >
-                    Daily violations trend
+                    Monthly upload events
                   </h2>
                   <p
                     className="text-sm"
                     style={{ color: 'var(--color-text-muted)' }}
                   >
-                    Every day on record, oldest to newest · Speed, Nights and
-                    Continuous events counted against your rule thresholds.
+                    Starting January 2026 · Speed, Nights and Continuous files
+                    counted in the month staff uploaded them. Empty months stay
+                    at zero.
                   </p>
                 </div>
               </div>
@@ -676,7 +714,7 @@ const BossDashboard = () => {
                     border: '1px solid var(--color-brand-accent-line)',
                   }}
                 >
-                  {analytics.totals.speed} speed
+                  {monthlyTotals.speed} speed
                 </span>
                 <span
                   className="rounded-full px-2.5 py-1 font-semibold"
@@ -686,7 +724,7 @@ const BossDashboard = () => {
                     border: '1px solid var(--color-brand-blue-line)',
                   }}
                 >
-                  {analytics.totals.nights} nights
+                  {monthlyTotals.nights} nights
                 </span>
                 <span
                   className="rounded-full px-2.5 py-1 font-semibold"
@@ -696,7 +734,7 @@ const BossDashboard = () => {
                     border: '1px solid var(--color-brand-blue-line)',
                   }}
                 >
-                  {analytics.totals.continuous} continuous
+                  {monthlyTotals.continuous} continuous
                 </span>
                 <span
                   className="rounded-full px-2.5 py-1 font-semibold"
@@ -705,11 +743,11 @@ const BossDashboard = () => {
                     color: '#ffffff',
                   }}
                 >
-                  {analyticsTotal} total
+                  {monthlyTotals.speed + monthlyTotals.nights + monthlyTotals.continuous} total
                 </span>
               </div>
             </div>
-            <DailyViolationsChart data={dailySeries} />
+            <MonthlyUploadsChart data={monthlyUploads} />
           </div>
         </section>
       )}
