@@ -5,6 +5,7 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { StatCard } from '../components/ui/StatCard';
 import { useUserScope } from '../hooks/useUserScope';
 import { filterFilesByTransporter } from '../lib/transporterScope';
+import { filterFilesToCurrentMonth } from '../lib/currentMonthFilter';
 import { computeTransporterAnalytics } from '../lib/transporterAnalytics';
 import { TransporterAnalytics } from '../features/dashboard/TransporterAnalytics';
 import { TransporterViolationsChart } from '../features/transporters/TransporterViolationsChart';
@@ -26,17 +27,34 @@ export const TransportersPage = () => {
   const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
   const { isTransporterStaff, matchesTransporter, matchesBlock } = useUserScope();
 
-  const speedFiles = useMemo(
+  const scopedSpeed = useMemo(
     () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesBlock),
     [rawSpeed, isTransporterStaff, matchesBlock],
   );
-  const nightFiles = useMemo(
+  const scopedNights = useMemo(
     () => filterFilesByTransporter(rawNights, isTransporterStaff, matchesBlock),
     [rawNights, isTransporterStaff, matchesBlock],
   );
-  const continuousFiles = useMemo(
+  const scopedContinuous = useMemo(
     () => filterFilesByTransporter(rawCont, isTransporterStaff, matchesBlock),
     [rawCont, isTransporterStaff, matchesBlock],
+  );
+  // Current calendar month only: September-dated events uploaded in
+  // October never bleed into this month's Transporters view.
+  const monthFiltered = useMemo(
+    () => filterFilesToCurrentMonth(scopedSpeed, scopedNights, scopedContinuous),
+    [scopedSpeed, scopedNights, scopedContinuous],
+  );
+  const speedFiles = monthFiltered.speed;
+  const nightFiles = monthFiltered.nights;
+  const continuousFiles = monthFiltered.continuous;
+  const monthLabel = useMemo(
+    () =>
+      new Date().toLocaleDateString(undefined, {
+        month: 'long',
+        year: 'numeric',
+      }),
+    [],
   );
 
   const allRows = useMemo(
@@ -78,9 +96,9 @@ export const TransportersPage = () => {
   return (
     <div className="mx-auto w-full max-w-7xl">
       <PageHeader
-        eyebrow="Manager workspace"
+        eyebrow={`Manager workspace · ${monthLabel}`}
         title="Transporters"
-        subtitle="Every transporter's activity in one place — who's clean, who's racking up violations, and where to look next."
+        subtitle={`${monthLabel} only — every transporter's activity for this month. Older-dated events are scoped out.`}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

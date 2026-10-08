@@ -43,6 +43,7 @@ import {
   type MasterFleetRow,
 } from '../lib/masterFleet';
 import { filterFilesByTransporter } from '../lib/transporterScope';
+import { filterFilesToCurrentMonth } from '../lib/currentMonthFilter';
 import { normalizeVid } from '../lib/locationRules';
 import { useUserScope } from '../hooks/useUserScope';
 import {
@@ -212,17 +213,37 @@ export const MasterFleetPage = () => {
   const [rankingOpen, setRankingOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
 
-  const speedFiles = useMemo(
+  // Master Fleet is a "this month only" view: only events whose own
+  // timestamp falls in the current calendar month contribute to the
+  // ranking. Everything else (September uploads landing in October, etc.)
+  // is scoped out at the source so every downstream aggregator here sees
+  // the same month-constrained dataset.
+  const scopedSpeed = useMemo(
     () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesBlock),
     [rawSpeed, isTransporterStaff, matchesBlock],
   );
-  const nightFiles = useMemo(
+  const scopedNights = useMemo(
     () => filterFilesByTransporter(rawNights, isTransporterStaff, matchesBlock),
     [rawNights, isTransporterStaff, matchesBlock],
   );
-  const continuousFiles = useMemo(
+  const scopedContinuous = useMemo(
     () => filterFilesByTransporter(rawCont, isTransporterStaff, matchesBlock),
     [rawCont, isTransporterStaff, matchesBlock],
+  );
+  const monthFiltered = useMemo(
+    () => filterFilesToCurrentMonth(scopedSpeed, scopedNights, scopedContinuous),
+    [scopedSpeed, scopedNights, scopedContinuous],
+  );
+  const speedFiles = monthFiltered.speed;
+  const nightFiles = monthFiltered.nights;
+  const continuousFiles = monthFiltered.continuous;
+  const monthLabel = useMemo(
+    () =>
+      new Date().toLocaleDateString(undefined, {
+        month: 'long',
+        year: 'numeric',
+      }),
+    [],
   );
   // Roster is scoped to the staff user's assigned transporters so
   // "Drivers ranked" only counts their drivers (matching what
@@ -379,15 +400,15 @@ export const MasterFleetPage = () => {
   return (
     <div className="mx-auto w-full max-w-7xl">
       <PageHeader
-        eyebrow="Manager workspace"
+        eyebrow={`Manager workspace · ${monthLabel}`}
         title="Master fleet"
-        subtitle={`Combined ranking by VID across Speed (≥ ${formatThreshold(
+        subtitle={`${monthLabel} only — ranked by VID across Speed (≥ ${formatThreshold(
           thresholds.speed,
         )}), Nights (≥ ${formatThreshold(
           thresholds.nights,
         )}) and Continuous (≥ ${formatThreshold(
           thresholds.continuous,
-        )}). Edit thresholds and whitelists in Rules.`}
+        )}). Only events dated this month count; edit thresholds in Rules.`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {isBoss && (
