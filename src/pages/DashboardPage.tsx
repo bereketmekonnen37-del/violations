@@ -4,8 +4,10 @@ import {
   AlertTriangle,
   ArrowRight,
   BarChart3,
+  Crown,
   FolderArchive,
   Gauge,
+  IdCard,
   Loader2,
   Moon,
   Route as RouteIcon,
@@ -26,8 +28,9 @@ import {
   CurrentMonthChart,
   type DailyBucket,
 } from '../features/dashboard/CurrentMonthChart';
-import { listSnapshots } from '../features/snapshots/snapshotsApi';
+import { fetchSnapshot, listSnapshots } from '../features/snapshots/snapshotsApi';
 import type { SnapshotMeta } from '../lib/snapshots';
+import type { MasterFleetRow } from '../lib/masterFleet';
 
 /**
  * Legacy staff (no assigned transporters): the dashboard is intentionally a
@@ -208,6 +211,65 @@ const BossDashboard = () => {
   );
 
   const hasMonthData = monthSnapshots.length > 0 && monthTotals.total > 0;
+
+  // Load full snapshot payloads for the current month so we can aggregate
+  // per-driver rows across every snapshot saved since the 1st and rank the
+  // top offenders. Snapshot payload is gzipped — small enough to fetch a
+  // handful per month.
+  const [monthRows, setMonthRows] = useState<MasterFleetRow[]>([]);
+  const [topLoading, setTopLoading] = useState(false);
+  const monthIds = useMemo(
+    () => monthSnapshots.map((s) => s.id).sort().join(','),
+    [monthSnapshots],
+  );
+
+  useEffect(() => {
+    if (!isBoss) return;
+    if (monthSnapshots.length === 0) {
+      setMonthRows([]);
+      return;
+    }
+    let cancelled = false;
+    setTopLoading(true);
+    Promise.all(monthSnapshots.map((s) => fetchSnapshot(s.id)))
+      .then((results) => {
+        if (cancelled) return;
+        const combined = results.flatMap((r) => r.data.rows);
+        setMonthRows(combined);
+      })
+      .catch(() => {
+        if (!cancelled) setMonthRows([]);
+      })
+      .finally(() => {
+        if (!cancelled) setTopLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBoss, monthIds]);
+
+  const topOffenders = useMemo(() => {
+    if (monthRows.length === 0) return [];
+    const byVid = new Map<string, MasterFleetRow>();
+    monthRows.forEach((r) => {
+      const key = (r.vid || r.driverName).trim().toLowerCase();
+      if (!key) return;
+      const existing = byVid.get(key);
+      if (existing) {
+        existing.speed += r.speed;
+        existing.nights += r.nights;
+        existing.continuous += r.continuous;
+        existing.total += r.total;
+      } else {
+        byVid.set(key, { ...r });
+      }
+    });
+    return Array.from(byVid.values())
+      .filter((r) => r.total > 0)
+      .sort((a, b) => b.total - a.total || a.driverName.localeCompare(b.driverName))
+      .slice(0, 4);
+  }, [monthRows]);
 
   // Per-assigned-transporter breakdown (transporter-staff view only).
   // Uses the same `collectCountedEvents` engine as Master Fleet + Analytics,
@@ -541,6 +603,195 @@ const BossDashboard = () => {
                   </div>
                 </Link>
               ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {isBoss && (
+        <section className="mt-8">
+          <div className="mb-4 flex items-end justify-between">
+            <div>
+              <h2
+                className="text-lg font-semibold tracking-tight"
+                style={{ color: 'var(--color-brand-blue-dark)' }}
+              >
+                Top offenders · {monthLabel}
+              </h2>
+              <p
+                className="text-sm"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                Ranked across every snapshot saved since the 1st of this month.
+              </p>
+            </div>
+            {topLoading && (
+              <span
+                className="inline-flex items-center gap-1.5 text-xs"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                <Loader2 size={14} className="animate-spin" /> Loading
+              </span>
+            )}
+          </div>
+
+          {topOffenders.length === 0 ? (
+            <div
+              className="card-base flex items-center gap-3 p-5"
+              style={{
+                background:
+                  'linear-gradient(135deg, var(--color-brand-blue-soft) 0%, #ffffff 100%)',
+              }}
+            >
+              <span
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                style={{
+                  background: 'var(--color-brand-blue-soft)',
+                  color: 'var(--color-brand-blue)',
+                  border: '1px solid var(--color-brand-blue-line)',
+                }}
+              >
+                <Crown size={18} />
+              </span>
+              <div>
+                <p
+                  className="text-sm font-semibold"
+                  style={{ color: 'var(--color-brand-blue-dark)' }}
+                >
+                  No offenders ranked yet for {monthLabel}
+                </p>
+                <p
+                  className="text-xs"
+                  style={{ color: 'var(--color-text-muted)' }}
+                >
+                  Save a Master Fleet snapshot and the top 4 drivers will
+                  appear here.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {topOffenders.map((row, idx) => {
+                const palette =
+                  idx === 0
+                    ? {
+                        bar: 'var(--color-brand-accent)',
+                        pipBg: 'var(--color-brand-accent-soft)',
+                        pipColor: 'var(--color-brand-accent-dark)',
+                        pipBorder: 'var(--color-brand-accent-line)',
+                        accent: 'var(--color-brand-accent-dark)',
+                      }
+                    : {
+                        bar: 'var(--color-brand-blue)',
+                        pipBg: 'var(--color-brand-blue-soft)',
+                        pipColor: 'var(--color-brand-blue)',
+                        pipBorder: 'var(--color-brand-blue-line)',
+                        accent: 'var(--color-brand-blue-dark)',
+                      };
+                return (
+                  <div
+                    key={`${row.vid}-${idx}`}
+                    className="group card-base relative overflow-hidden p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-elev"
+                  >
+                    <span
+                      aria-hidden
+                      className="absolute inset-y-0 left-0 w-1"
+                      style={{ background: palette.bar }}
+                    />
+                    <div className="flex items-start justify-between">
+                      <div className="min-w-0">
+                        <p
+                          className="text-[11px] font-semibold uppercase tracking-[0.18em]"
+                          style={{ color: 'var(--color-brand-accent)' }}
+                        >
+                          #{idx + 1} · Offender
+                        </p>
+                        <h3
+                          className="mt-1 truncate font-display text-xl font-semibold tracking-tight"
+                          style={{ color: 'var(--color-brand-blue-dark)' }}
+                        >
+                          {row.driverName || 'Not found'}
+                        </h3>
+                        <p
+                          className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
+                          style={{ color: 'var(--color-text-muted)' }}
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            <IdCard size={12} /> VID {row.vid || '—'}
+                          </span>
+                          {row.transporter && (
+                            <>
+                              <span aria-hidden>·</span>
+                              <span className="inline-flex items-center gap-1 truncate">
+                                <Truck size={12} /> {row.transporter}
+                              </span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <span
+                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition group-hover:scale-105"
+                        style={{
+                          background: palette.pipBg,
+                          color: palette.pipColor,
+                          border: `1px solid ${palette.pipBorder}`,
+                        }}
+                      >
+                        {idx === 0 ? <Crown size={18} /> : <Gauge size={18} />}
+                      </span>
+                    </div>
+
+                    <div className="mt-5 flex items-end justify-between">
+                      <div>
+                        <p
+                          className="font-display text-4xl font-semibold leading-none tracking-tight"
+                          style={{ color: palette.accent }}
+                        >
+                          {row.total}
+                        </p>
+                        <p
+                          className="mt-1 text-[11px] font-semibold uppercase tracking-wider"
+                          style={{ color: 'var(--color-text-muted)' }}
+                        >
+                          combined
+                        </p>
+                      </div>
+                      <div
+                        className="text-right text-[11px] leading-tight"
+                        style={{ color: 'var(--color-text-muted)' }}
+                      >
+                        <p>
+                          <span
+                            className="font-semibold"
+                            style={{ color: 'var(--color-brand-blue-dark)' }}
+                          >
+                            {row.speed}
+                          </span>{' '}
+                          speed
+                        </p>
+                        <p>
+                          <span
+                            className="font-semibold"
+                            style={{ color: 'var(--color-brand-blue-dark)' }}
+                          >
+                            {row.nights}
+                          </span>{' '}
+                          nights
+                        </p>
+                        <p>
+                          <span
+                            className="font-semibold"
+                            style={{ color: 'var(--color-brand-blue-dark)' }}
+                          >
+                            {row.continuous}
+                          </span>{' '}
+                          cont.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
