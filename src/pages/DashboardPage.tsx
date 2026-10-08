@@ -1,13 +1,12 @@
 import { Link } from 'react-router-dom';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
-  ArrowUpRight,
   BarChart3,
-  FileStack,
-  FileText,
+  FolderArchive,
   Gauge,
+  Loader2,
   Moon,
   Route as RouteIcon,
   Truck,
@@ -17,20 +16,18 @@ import {
 import { useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
 import { StatCard } from '../components/ui/StatCard';
-import { Badge } from '../components/ui/Badge';
-import { EmptyState } from '../components/ui/EmptyState';
-import { formatDate, formatDateTime } from '../lib/utils';
 import { useUserScope } from '../hooks/useUserScope';
-import { computeDashboardAnalytics } from '../lib/dashboardAnalytics';
-import { filterFilesByTransporter } from '../lib/transporterScope';
 import { collectCountedEvents } from '../lib/masterFleet';
 import { normalizeVid } from '../lib/locationRules';
 import { encodeTransporterSlug } from '../lib/transporterAnalytics';
+import { EmptyState } from '../components/ui/EmptyState';
+import { filterFilesByTransporter } from '../lib/transporterScope';
 import {
-  MonthlyUploadsChart,
-  type MonthlyUploadBucket,
-} from '../features/dashboard/MonthlyUploadsChart';
-import { TopOffenderCards } from '../features/dashboard/TopOffenderCards';
+  CurrentMonthChart,
+  type DailyBucket,
+} from '../features/dashboard/CurrentMonthChart';
+import { listSnapshots } from '../features/snapshots/snapshotsApi';
+import type { SnapshotMeta } from '../lib/snapshots';
 
 /**
  * Legacy staff (no assigned transporters): the dashboard is intentionally a
@@ -109,11 +106,9 @@ const BossDashboard = () => {
   const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
   const { isBoss, isTransporterStaff, matchesBlock } = useUserScope();
 
-  // Every top-of-dashboard stat is derived from the three unfiltered slices
-  // so the Overview cards agree with Uploaded Data, Master Fleet and the
-  // Transporter analytics pages. The old `s.uploads.files` slice is legacy
-  // and stays empty for new uploads, which is why these cards used to
-  // render `0` across the board.
+  // Transporter-staff view still needs the file slices to compute its
+  // per-transporter breakdown. The boss view below ignores these entirely
+  // and only looks at saved-violation snapshots for the current month.
   const speedFiles = useMemo(
     () => filterFilesByTransporter(rawSpeedFiles, isTransporterStaff, matchesBlock),
     [rawSpeedFiles, isTransporterStaff, matchesBlock],
@@ -126,101 +121,93 @@ const BossDashboard = () => {
     () => filterFilesByTransporter(rawContFiles, isTransporterStaff, matchesBlock),
     [rawContFiles, isTransporterStaff, matchesBlock],
   );
-  const analytics = useMemo(
-    () =>
-      computeDashboardAnalytics({
-        speedFiles,
-        nightFiles,
-        continuousFiles,
-        driverRecords,
-        thresholds,
-        allowedVidsByType,
-        allowedLocationsByType,
-        mergeNights,
-        maxDurationSeconds,
-        underestimatedRule,
-      }),
-    [
-      speedFiles,
-      nightFiles,
-      continuousFiles,
-      driverRecords,
-      thresholds,
-      allowedVidsByType,
-      allowedLocationsByType,
-      mergeNights,
-      maxDurationSeconds,
-      underestimatedRule,
-    ],
-  );
 
-  // Monthly upload buckets starting January 2026 through the current month.
-  // Each file counts once in the month it was uploaded. Months with zero
-  // uploads render as empty bars so the whole year is visible on the axis.
-  const monthlyUploads = useMemo<MonthlyUploadBucket[]>(() => {
-    const buckets = new Map<string, MonthlyUploadBucket>();
-    const startYear = 2026;
-    const startMonth = 1;
-    const now = new Date();
-    const endYear = Math.max(now.getFullYear(), startYear);
-    const endMonth = now.getFullYear() >= startYear ? now.getMonth() + 1 : 12;
-    for (let y = startYear; y <= endYear; y += 1) {
-      const mMax = y === endYear ? endMonth : 12;
-      for (let m = 1; m <= mMax; m += 1) {
-        const key = `${y}-${String(m).padStart(2, '0')}`;
-        buckets.set(key, { month: key, speed: 0, nights: 0, continuous: 0 });
-      }
-    }
-    const addFile = (uploadDate: string, kind: 'speed' | 'nights' | 'continuous') => {
-      const d = new Date(uploadDate);
-      if (Number.isNaN(d.getTime())) return;
-      if (d.getFullYear() < startYear) return;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const bucket = buckets.get(key);
-      if (!bucket) return;
-      bucket[kind] += 1;
+  // Boss landing shows saved violations ("snapshots") for the current
+  // month only. The whole set is fetched once; filtering is done locally so
+  // the daily chart and the stat cards stay in sync.
+  const [snapshots, setSnapshots] = useState<SnapshotMeta[] | null>(null);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(true);
+  const [snapshotsError, setSnapshotsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isBoss) return;
+    let cancelled = false;
+    setSnapshotsLoading(true);
+    setSnapshotsError(null);
+    listSnapshots()
+      .then((rows) => {
+        if (!cancelled) setSnapshots(rows);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled)
+          setSnapshotsError(
+            e instanceof Error ? e.message : 'Could not load saved violations.',
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setSnapshotsLoading(false);
+      });
+    return () => {
+      cancelled = true;
     };
-    speedFiles.forEach((f) => addFile(f.uploadDate, 'speed'));
-    nightFiles.forEach((f) => addFile(f.uploadDate, 'nights'));
-    continuousFiles.forEach((f) => addFile(f.uploadDate, 'continuous'));
-    return Array.from(buckets.values());
-  }, [speedFiles, nightFiles, continuousFiles]);
+  }, [isBoss]);
 
-  const monthlyTotals = useMemo(
+  const now = useMemo(() => new Date(), []);
+  const monthLabel = useMemo(
     () =>
-      monthlyUploads.reduce(
-        (acc, b) => ({
-          speed: acc.speed + b.speed,
-          nights: acc.nights + b.nights,
-          continuous: acc.continuous + b.continuous,
+      now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+    [now],
+  );
+  const daysInMonth = useMemo(
+    () => new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
+    [now],
+  );
+
+  const monthSnapshots = useMemo(() => {
+    if (!snapshots) return [];
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    return snapshots.filter((s) => {
+      const d = new Date(s.createdAt);
+      if (Number.isNaN(d.getTime())) return false;
+      return d.getFullYear() === y && d.getMonth() === m;
+    });
+  }, [snapshots, now]);
+
+  const monthDaily = useMemo<DailyBucket[]>(() => {
+    const buckets: DailyBucket[] = Array.from(
+      { length: daysInMonth },
+      (_, i) => ({ day: i + 1, speed: 0, nights: 0, continuous: 0 }),
+    );
+    monthSnapshots.forEach((s) => {
+      const d = new Date(s.createdAt);
+      if (Number.isNaN(d.getTime())) return;
+      const idx = d.getDate() - 1;
+      if (idx < 0 || idx >= buckets.length) return;
+      buckets[idx].speed += s.summary.speed;
+      buckets[idx].nights += s.summary.nights;
+      buckets[idx].continuous += s.summary.continuous;
+    });
+    return buckets;
+  }, [monthSnapshots, daysInMonth]);
+
+  const monthTotals = useMemo(
+    () =>
+      monthSnapshots.reduce(
+        (acc, s) => ({
+          speed: acc.speed + s.summary.speed,
+          nights: acc.nights + s.summary.nights,
+          continuous: acc.continuous + s.summary.continuous,
+          drivers: acc.drivers + s.summary.drivers,
+          transporters: acc.transporters + s.summary.transporters,
+          total: acc.total + s.summary.total,
         }),
-        { speed: 0, nights: 0, continuous: 0 },
+        { speed: 0, nights: 0, continuous: 0, drivers: 0, transporters: 0, total: 0 },
       ),
-    [monthlyUploads],
+    [monthSnapshots],
   );
 
-  // Same "rules hid all my data" detection MasterFleetPage does. Uploaded
-  // events are counted raw here; when a category has raw > 0 but analytics
-  // totals = 0, the current thresholds/whitelists have silently dropped
-  // everything. The banner below flags it so the boss doesn't sit staring
-  // at 0s wondering where the data went.
-  const rawTotals = useMemo(() => {
-    let speed = 0;
-    let nights = 0;
-    let continuous = 0;
-    speedFiles.forEach((f) => f.drivers.forEach((d) => (speed += d.events.length)));
-    nightFiles.forEach((f) => f.drivers.forEach((d) => (nights += d.rows.length)));
-    continuousFiles.forEach((f) => f.drivers.forEach((d) => (continuous += d.rows.length)));
-    return { speed, nights, continuous };
-  }, [speedFiles, nightFiles, continuousFiles]);
-
-  const zeroedKinds = useMemo(
-    () =>
-      (['speed', 'nights', 'continuous'] as const).filter(
-        (k) => rawTotals[k] > 0 && analytics.totals[k] === 0,
-      ),
-    [rawTotals, analytics.totals],
-  );
+  const hasMonthData = monthSnapshots.length > 0 && monthTotals.total > 0;
 
   // Per-assigned-transporter breakdown (transporter-staff view only).
   // Uses the same `collectCountedEvents` engine as Master Fleet + Analytics,
@@ -319,105 +306,24 @@ const BossDashboard = () => {
 
   if (!user) return null;
 
-  // Same numbers the Uploaded Data page shows: every Speed event, every
-  // Nights row, every Continuous row across all uploaded files. Distinct
-  // drivers/transporters use normalized keys so identical values with
-  // different casing/whitespace don't inflate the counts.
-  const filesCount = speedFiles.length + nightFiles.length + continuousFiles.length;
-  let totalViolations = 0;
-  const driverKeys = new Set<string>();
-  const transporterKeys = new Set<string>();
-  const addDriver = (vid: string, name: string) => {
-    const key = vid.trim().toLowerCase() || name.trim().toLowerCase();
-    if (key) driverKeys.add(key);
-  };
-  const addTransporter = (raw: string) => {
-    const key = (raw ?? '').trim().toLowerCase();
-    if (key) transporterKeys.add(key);
-  };
-  speedFiles.forEach((f) =>
-    f.drivers.forEach((d) => {
-      totalViolations += d.events.length;
-      addDriver(d.vid, d.driverName);
-      addTransporter(d.transporter);
-    }),
-  );
-  nightFiles.forEach((f) =>
-    f.drivers.forEach((d) => {
-      totalViolations += d.rows.length;
-      addDriver(d.vid, d.driverName);
-      addTransporter(d.transporter);
-    }),
-  );
-  continuousFiles.forEach((f) =>
-    f.drivers.forEach((d) => {
-      totalViolations += d.rows.length;
-      addDriver(d.vid, d.driverName);
-      addTransporter(d.transporter);
-    }),
-  );
-
-  interface RecentUpload {
-    id: string;
-    kind: 'speed' | 'nights' | 'continuous';
-    title: string;
-    uploadDate: string;
-    uploaderName: string;
-    fileType: string;
-    records: number;
-  }
-  const recent: RecentUpload[] = [
-    ...speedFiles.map((f) => ({
-      id: f.id,
-      kind: 'speed' as const,
-      title: f.title,
-      uploadDate: f.uploadDate,
-      uploaderName: f.uploaderName,
-      fileType: f.fileType,
-      records: f.drivers.reduce((n, d) => n + d.events.length, 0),
-    })),
-    ...nightFiles.map((f) => ({
-      id: f.id,
-      kind: 'nights' as const,
-      title: f.title,
-      uploadDate: f.uploadDate,
-      uploaderName: f.uploaderName,
-      fileType: f.fileType,
-      records: f.drivers.reduce((n, d) => n + d.rows.length, 0),
-    })),
-    ...continuousFiles.map((f) => ({
-      id: f.id,
-      kind: 'continuous' as const,
-      title: f.title,
-      uploadDate: f.uploadDate,
-      uploaderName: f.uploaderName,
-      fileType: f.fileType,
-      records: f.drivers.reduce((n, d) => n + d.rows.length, 0),
-    })),
-  ]
-    .sort(
-      (a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime(),
-    )
-    .slice(0, 5);
-
   return (
     <div className="mx-auto w-full max-w-7xl">
       <PageHeader
         eyebrow={
-          isBoss ? 'Overview' : isTransporterStaff ? 'Your workspace' : 'Welcome'
+          isBoss ? monthLabel : isTransporterStaff ? 'Your workspace' : 'Welcome'
         }
         title=""
         subtitle={
           isBoss
-            ? 'Real-time view of uploaded violation reports, drivers and transporters.'
+            ? `Saved violations snapshotted this month. Everything below is scoped to ${monthLabel} only.`
             : isTransporterStaff
               ? `You are scoped to ${user.assignedTransporters?.length ?? 0} transporter${(user.assignedTransporters?.length ?? 0) === 1 ? '' : 's'}. Only their data appears below.`
               : 'Upload new violation reports and track your submission history.'
         }
         actions={
           isBoss ? (
-            <Link to="/uploaded-data" className="btn-primary">
-              View all files <ArrowRight size={16} />
+            <Link to="/snapshots" className="btn-primary">
+              <FolderArchive size={16} /> Saved violations
             </Link>
           ) : isTransporterStaff ? (
             <Link to="/unfiltered" className="btn-primary">
@@ -431,60 +337,44 @@ const BossDashboard = () => {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Uploaded files"
-          value={filesCount}
-          delta={`${recent.length} in the last batch`}
-          icon={FileStack}
-        />
-        <StatCard
-          label="Total violations"
-          value={totalViolations.toLocaleString()}
-          delta="Across all uploads"
-          icon={AlertTriangle}
-        />
-        <StatCard
-          label="Unique drivers"
-          value={driverKeys.size}
-          delta="Detected from records"
-          icon={Users}
-        />
-        <StatCard
-          label="Transporters"
-          value={transporterKeys.size}
-          delta="Carriers represented"
-          icon={Truck}
-        />
-      </div>
+      {isBoss && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Saved this month"
+            value={monthSnapshots.length}
+            delta={`${monthLabel} snapshots`}
+            icon={FolderArchive}
+          />
+          <StatCard
+            label="Total violations"
+            value={monthTotals.total.toLocaleString()}
+            delta="From saved snapshots"
+            icon={AlertTriangle}
+            accent
+          />
+          <StatCard
+            label="Drivers covered"
+            value={monthTotals.drivers.toLocaleString()}
+            delta="Across this month's snapshots"
+            icon={Users}
+          />
+          <StatCard
+            label="Transporters covered"
+            value={monthTotals.transporters.toLocaleString()}
+            delta="Across this month's snapshots"
+            icon={Truck}
+          />
+        </div>
+      )}
 
-      {zeroedKinds.length > 0 && (
-        <div className="mt-6 flex items-start gap-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 sm:p-5 dark:border-amber-800 dark:bg-amber-950/40">
-          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white">
+      {isBoss && snapshotsError && (
+        <div className="mt-6 flex items-start gap-3 rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 sm:p-5 dark:border-rose-800 dark:bg-rose-950/40">
+          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white">
             <AlertTriangle size={16} />
           </span>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-              Your Rules are hiding {zeroedKinds.length === 1 ? 'a category' : 'categories'} of uploaded data
-            </p>
-            <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
-              {zeroedKinds
-                .map(
-                  (k) =>
-                    `${k === 'speed' ? 'Speed' : k === 'nights' ? 'Nights' : 'Continuous'} — ${rawTotals[k].toLocaleString()} uploaded, 0 kept`,
-                )
-                .join(' · ')}
-              . Lower the minimum duration on the Rules page (or clear a whitelist) so real events start counting.
-            </p>
-          </div>
-          {isBoss && (
-            <Link
-              to="/rules"
-              className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-600"
-            >
-              Open Rules
-            </Link>
-          )}
+          <p className="flex-1 text-sm font-semibold text-rose-900 dark:text-rose-100">
+            {snapshotsError}
+          </p>
         </div>
       )}
 
@@ -657,32 +547,21 @@ const BossDashboard = () => {
       )}
 
       {isBoss && (
-        <section className="mt-10">
-          <div className="mb-4">
-            <h2
-              className="text-lg font-semibold tracking-tight"
-              style={{ color: 'var(--color-brand-blue-dark)' }}
-            >
-              Top offenders
-            </h2>
-            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              Ranked from unfiltered Speed, Nights and Continuous uploads —
-              scored against the current threshold rules.
-            </p>
-          </div>
-          <TopOffenderCards top={analytics.top} />
-        </section>
-      )}
-
-      {isBoss && (
-        <section className="mt-10">
-          <div className="card-base p-5 sm:p-7">
+        <section className="mt-8">
+          <div
+            className="card-base relative overflow-hidden p-5 sm:p-7"
+            style={{
+              background:
+                'linear-gradient(135deg, var(--color-brand-blue-soft) 0%, #ffffff 55%, var(--color-brand-accent-soft) 100%)',
+            }}
+          >
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex items-start gap-3">
                 <span
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-elev"
                   style={{
-                    background: 'var(--color-brand-blue)',
+                    background:
+                      'linear-gradient(145deg, var(--color-brand-blue) 0%, var(--color-brand-blue-dark) 100%)',
                     color: '#ffffff',
                   }}
                 >
@@ -693,15 +572,14 @@ const BossDashboard = () => {
                     className="text-lg font-semibold tracking-tight"
                     style={{ color: 'var(--color-brand-blue-dark)' }}
                   >
-                    Monthly upload events
+                    {monthLabel} · Saved violations
                   </h2>
                   <p
                     className="text-sm"
                     style={{ color: 'var(--color-text-muted)' }}
                   >
-                    Starting January 2026 · Speed, Nights and Continuous files
-                    counted in the month staff uploaded them. Empty months stay
-                    at zero.
+                    Each bar sums the Speed, Nights and Continuous violations
+                    from snapshots saved on that day.
                   </p>
                 </div>
               </div>
@@ -714,7 +592,7 @@ const BossDashboard = () => {
                     border: '1px solid var(--color-brand-accent-line)',
                   }}
                 >
-                  {monthlyTotals.speed} speed
+                  {monthTotals.speed} speed
                 </span>
                 <span
                   className="rounded-full px-2.5 py-1 font-semibold"
@@ -724,7 +602,7 @@ const BossDashboard = () => {
                     border: '1px solid var(--color-brand-blue-line)',
                   }}
                 >
-                  {monthlyTotals.nights} nights
+                  {monthTotals.nights} nights
                 </span>
                 <span
                   className="rounded-full px-2.5 py-1 font-semibold"
@@ -734,172 +612,81 @@ const BossDashboard = () => {
                     border: '1px solid var(--color-brand-blue-line)',
                   }}
                 >
-                  {monthlyTotals.continuous} continuous
+                  {monthTotals.continuous} continuous
                 </span>
                 <span
-                  className="rounded-full px-2.5 py-1 font-semibold"
+                  className="rounded-full px-2.5 py-1 font-semibold text-white"
                   style={{
-                    background: 'var(--color-brand-blue)',
-                    color: '#ffffff',
+                    background:
+                      'linear-gradient(145deg, var(--color-brand-blue) 0%, var(--color-brand-blue-dark) 100%)',
                   }}
                 >
-                  {monthlyTotals.speed + monthlyTotals.nights + monthlyTotals.continuous} total
+                  {monthTotals.total} total
                 </span>
               </div>
             </div>
-            <MonthlyUploadsChart data={monthlyUploads} />
-          </div>
-        </section>
-      )}
 
-      {isBoss && (
-        <section className="mt-10">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2
-                className="text-lg font-semibold tracking-tight"
-                style={{ color: 'var(--color-brand-blue-dark)' }}
+            {snapshotsLoading ? (
+              <div
+                className="flex h-[360px] items-center justify-center gap-2 text-sm"
+                style={{ color: 'var(--color-text-muted)' }}
               >
-                Recent uploads
-              </h2>
-              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                Latest reports submitted to the platform.
-              </p>
-            </div>
-            {filesCount > 0 && (
-              <Link
-                to="/uploaded-data"
-                className="hidden text-sm font-semibold sm:inline-flex sm:items-center sm:gap-1 hover:underline"
-                style={{ color: 'var(--color-brand-accent)' }}
+                <Loader2 size={16} className="animate-spin" />
+                Loading saved violations…
+              </div>
+            ) : hasMonthData ? (
+              <CurrentMonthChart data={monthDaily} monthLabel={monthLabel} />
+            ) : (
+              <div
+                className="relative overflow-hidden rounded-2xl"
+                style={{
+                  background:
+                    'linear-gradient(145deg, rgba(62,85,165,0.06) 0%, rgba(244,130,33,0.04) 100%)',
+                  minHeight: 360,
+                }}
               >
-                View all <ArrowUpRight size={14} />
-              </Link>
+                <CurrentMonthChart data={monthDaily} monthLabel={monthLabel} />
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div
+                    className="pointer-events-auto flex max-w-sm flex-col items-center gap-3 rounded-2xl p-6 text-center shadow-elev"
+                    style={{
+                      background: 'rgba(255,255,255,0.92)',
+                      border: '1px solid var(--color-brand-blue-line)',
+                      backdropFilter: 'blur(6px)',
+                    }}
+                  >
+                    <span
+                      className="inline-flex h-12 w-12 items-center justify-center rounded-xl"
+                      style={{
+                        background: 'var(--color-brand-blue-soft)',
+                        color: 'var(--color-brand-blue)',
+                        border: '1px solid var(--color-brand-blue-line)',
+                      }}
+                    >
+                      <FolderArchive size={20} />
+                    </span>
+                    <div>
+                      <p
+                        className="text-base font-semibold"
+                        style={{ color: 'var(--color-brand-blue-dark)' }}
+                      >
+                        Nothing uploaded yet for {monthLabel}
+                      </p>
+                      <p
+                        className="mt-1 text-xs"
+                        style={{ color: 'var(--color-text-muted)' }}
+                      >
+                        Save a Master Fleet snapshot this month and it will
+                        appear right here.
+                      </p>
+                    </div>
+                    <Link to="/snapshots" className="btn-primary mt-1">
+                      <FolderArchive size={16} /> Go to saved violations
+                    </Link>
+                  </div>
+                </div>
+              </div>
             )}
-          </div>
-
-          {recent.length === 0 ? (
-            <EmptyState
-              icon={FileText}
-              title="No uploads yet"
-              description="Once staff submit violation reports, they will appear here for review."
-            />
-          ) : (
-            <div className="card-base overflow-hidden">
-              <ul
-                className="divide-y"
-                style={{ borderColor: 'var(--color-brand-blue-line)' }}
-              >
-                {recent.map((file) => (
-                  <li
-                    key={`${file.kind}-${file.id}`}
-                    className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
-                    style={{ borderColor: 'var(--color-brand-blue-line)' }}
-                  >
-                    <div className="flex items-start gap-4 min-w-0">
-                      <div
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                        style={{
-                          background: 'var(--color-brand-blue-soft)',
-                          color: 'var(--color-brand-blue)',
-                          border: '1px solid var(--color-brand-blue-line)',
-                        }}
-                      >
-                        <FileText size={18} />
-                      </div>
-                      <div className="min-w-0">
-                        <p
-                          className="truncate text-sm font-semibold"
-                          style={{ color: 'var(--color-brand-blue-dark)' }}
-                        >
-                          {file.title}
-                        </p>
-                        <p
-                          className="mt-0.5 truncate text-xs"
-                          style={{ color: 'var(--color-text-muted)' }}
-                        >
-                          {formatDateTime(file.uploadDate)} · {file.uploaderName}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone="neutral">{file.fileType.toUpperCase()}</Badge>
-                      <Badge
-                        tone={
-                          file.kind === 'speed'
-                            ? 'accent'
-                            : file.kind === 'nights'
-                              ? 'info'
-                              : 'success'
-                        }
-                      >
-                        {file.kind === 'speed'
-                          ? `${file.records} events`
-                          : `${file.records} rows`}
-                      </Badge>
-                      <Link
-                        to="/uploaded-data"
-                        className="btn-secondary !py-1.5 !text-xs"
-                      >
-                        View <ArrowRight size={13} />
-                      </Link>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </section>
-      )}
-
-      {isBoss && recent.length > 0 && (
-        <section className="mt-10">
-          <h2
-            className="mb-4 text-lg font-semibold tracking-tight"
-            style={{ color: 'var(--color-brand-blue-dark)' }}
-          >
-            File summaries
-          </h2>
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {recent.slice(0, 6).map((f) => (
-              <Link
-                key={`${f.kind}-${f.id}`}
-                to="/uploaded-data"
-                className="card-base group p-5 transition hover:-translate-y-0.5 hover:shadow-elev"
-              >
-                <div className="flex items-center justify-between">
-                  <Badge tone="neutral">{f.fileType.toUpperCase()}</Badge>
-                  <span
-                    className="text-[11px]"
-                    style={{ color: 'var(--color-text-muted)' }}
-                  >
-                    {formatDate(f.uploadDate)}
-                  </span>
-                </div>
-                <p
-                  className="mt-4 line-clamp-2 text-base font-semibold"
-                  style={{ color: 'var(--color-brand-blue-dark)' }}
-                >
-                  {f.title}
-                </p>
-                <div
-                  className="mt-4 flex items-center justify-between pt-4 text-xs"
-                  style={{
-                    borderTop: '1px solid var(--color-brand-blue-line)',
-                    color: 'var(--color-text-muted)',
-                  }}
-                >
-                  <span>
-                    {f.records} {f.kind === 'speed' ? 'events' : 'rows'}
-                  </span>
-                  <span
-                    className="inline-flex items-center gap-1 font-semibold"
-                    style={{ color: 'var(--color-brand-accent)' }}
-                  >
-                    View details <ArrowRight size={13} />
-                  </span>
-                </div>
-              </Link>
-            ))}
           </div>
         </section>
       )}
