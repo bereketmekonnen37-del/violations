@@ -4,6 +4,8 @@ import { useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
 import { StatCard } from '../components/ui/StatCard';
 import { useUserScope } from '../hooks/useUserScope';
+import { useAppDataLoading } from '../hooks/useAppDataLoading';
+import { PageSkeleton } from '../components/ui/PageSkeleton';
 import { filterFilesByTransporter } from '../lib/transporterScope';
 import { filterFilesToCurrentMonth } from '../lib/currentMonthFilter';
 import { computeTransporterAnalytics } from '../lib/transporterAnalytics';
@@ -26,6 +28,7 @@ export const TransportersPage = () => {
   );
   const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
   const { isTransporterStaff, matchesTransporter, matchesBlock } = useUserScope();
+  const isLoading = useAppDataLoading();
 
   const scopedSpeed = useMemo(
     () => filterFilesByTransporter(rawSpeed, isTransporterStaff, matchesBlock),
@@ -92,6 +95,16 @@ export const TransportersPage = () => {
   const withData = rows.filter((r) => r.total > 0);
   const totalViolations = rows.reduce((sum, r) => sum + r.total, 0);
   const topOffender = rows[0] && rows[0].total > 0 ? rows[0] : null;
+
+  if (isLoading) {
+    return (
+      <PageSkeleton
+        eyebrow={`Manager workspace · ${monthLabel}`}
+        title="Transporters"
+        subtitle="Loading this month's transporter activity…"
+      />
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-7xl">

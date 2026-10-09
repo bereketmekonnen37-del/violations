@@ -18,6 +18,8 @@ import { useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
 import { StatCard } from '../components/ui/StatCard';
 import { useUserScope } from '../hooks/useUserScope';
+import { useAppDataLoading } from '../hooks/useAppDataLoading';
+import { PageSkeleton } from '../components/ui/PageSkeleton';
 import {
   collectCountedEvents,
   collectFilteredEvents,
@@ -927,5 +929,17 @@ const BossDashboard = () => {
 
 export const DashboardPage = () => {
   const { isLegacyStaff } = useUserScope();
-  return isLegacyStaff ? <LegacyStaffDashboard /> : <BossDashboard />;
+  const isLoading = useAppDataLoading();
+  if (isLegacyStaff) return <LegacyStaffDashboard />;
+  if (isLoading) {
+    return (
+      <PageSkeleton
+        eyebrow="Dashboard"
+        title="Dashboard"
+        subtitle="Loading the latest numbers…"
+        withTabs
+      />
+    );
+  }
+  return <BossDashboard />;
 };

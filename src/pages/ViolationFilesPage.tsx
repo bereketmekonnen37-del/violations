@@ -7,11 +7,15 @@ import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { formatDate } from '../lib/utils';
 import { useUserScope } from '../hooks/useUserScope';
+import { PageSkeleton } from '../components/ui/PageSkeleton';
 
 export const ViolationFilesPage = () => {
   const allFiles = useAppSelector((s) => s.uploads.files);
+  const uploadsStatus = useAppSelector((s) => s.uploads.status);
   const { isTransporterStaff, matchesBlock } = useUserScope();
   const [query, setQuery] = useState('');
+  const isLoading =
+    allFiles.length === 0 && (uploadsStatus === 'idle' || uploadsStatus === 'loading');
 
   const files = useMemo(() => {
     if (!isTransporterStaff) return allFiles;
@@ -33,6 +37,17 @@ export const ViolationFilesPage = () => {
         f.fileType.toLowerCase().includes(q),
     );
   }, [files, query]);
+
+  if (isLoading) {
+    return (
+      <PageSkeleton
+        eyebrow="Manager workspace"
+        title="Violation files"
+        subtitle="Loading uploaded reports…"
+        statCount={0}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-7xl">

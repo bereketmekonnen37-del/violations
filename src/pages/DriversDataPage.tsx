@@ -9,6 +9,7 @@ import { clearDrivers } from '../features/drivers/driversSlice';
 import { clearDriverRosterRemote } from '../features/drivers/driversApi';
 import { formatDateTime } from '../lib/utils';
 import { useUserScope } from '../hooks/useUserScope';
+import { PageSkeleton } from '../components/ui/PageSkeleton';
 
 export const DriversDataPage = () => {
   const dispatch = useAppDispatch();
@@ -30,6 +31,20 @@ export const DriversDataPage = () => {
   if (!user) return null;
 
   const hasData = scopedRecords.length > 0;
+  const isLoading =
+    drivers.records.length === 0 &&
+    (drivers.status === 'idle' || drivers.status === 'loading');
+
+  if (isLoading) {
+    return (
+      <PageSkeleton
+        eyebrow="Manager workspace"
+        title="Drivers data"
+        subtitle="Loading the monthly drivers list…"
+        statCount={3}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl">

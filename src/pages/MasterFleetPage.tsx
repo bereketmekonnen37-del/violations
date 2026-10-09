@@ -46,6 +46,8 @@ import { filterFilesByTransporter } from '../lib/transporterScope';
 import { filterFilesToCurrentMonth } from '../lib/currentMonthFilter';
 import { normalizeVid } from '../lib/locationRules';
 import { useUserScope } from '../hooks/useUserScope';
+import { useAppDataLoading } from '../hooks/useAppDataLoading';
+import { PageSkeleton } from '../components/ui/PageSkeleton';
 import {
   setRecommendedAction,
   RECOMMENDED_ACTION_LABEL,
@@ -209,6 +211,7 @@ export const MasterFleetPage = () => {
     allowedLocationsByType.nights.length +
     allowedLocationsByType.continuous.length;
   const { isBoss, isTransporterStaff, matchesBlock } = useUserScope();
+  const isLoadingAppData = useAppDataLoading();
   const [query, setQuery] = useState('');
   const [rankingOpen, setRankingOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -396,6 +399,18 @@ export const MasterFleetPage = () => {
     speedFiles.length === 0 &&
     nightFiles.length === 0 &&
     continuousFiles.length === 0;
+
+  if (isLoadingAppData) {
+    return (
+      <PageSkeleton
+        eyebrow={`Master fleet · ${monthLabel}`}
+        title="Master fleet"
+        subtitle="Loading this month's events…"
+        withPodium={!isTransporterStaff}
+        withTabs
+      />
+    );
+  }
 
   if (isTransporterStaff) {
     return (
