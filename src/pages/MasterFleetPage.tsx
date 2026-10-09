@@ -397,6 +397,39 @@ export const MasterFleetPage = () => {
     nightFiles.length === 0 &&
     continuousFiles.length === 0;
 
+  if (isTransporterStaff) {
+    return (
+      <div className="mx-auto w-full max-w-7xl">
+        <PageHeader
+          eyebrow={`Master fleet · ${monthLabel}`}
+          title="Master fleet"
+          subtitle={`${monthLabel} only — Speed, Nights and Continuous events for your assigned transporters. Filter by date or search by VID.`}
+        />
+        {noUploads ? (
+          <div className="mt-8">
+            <EmptyState
+              icon={Users}
+              title="No uploads yet"
+              description="Nothing has been uploaded for your assigned transporters this month yet."
+            />
+          </div>
+        ) : (
+          <FilteredEventsPanel
+            activeTab={activeTab === 'filtered' ? 'speed' : activeTab}
+            setActiveTab={setActiveTab}
+            query={eventQuery}
+            setQuery={setEventQuery}
+            events={filteredEvents}
+            ruleFiltered={ruleFiltered}
+            thresholds={thresholds}
+            underestimatedRule={underestimatedRule}
+            staffMode
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-7xl">
       <PageHeader
@@ -1053,6 +1086,8 @@ interface FilteredEventsPanelProps {
   ruleFiltered: RuleFilteredEvent[];
   thresholds: EventThresholds;
   underestimatedRule: UnderestimatedRule | null;
+  /** Staff view: hide the Filtered tab and download button. */
+  staffMode?: boolean;
 }
 
 const FilteredEventsPanel = ({
@@ -1064,6 +1099,7 @@ const FilteredEventsPanel = ({
   ruleFiltered,
   thresholds,
   underestimatedRule,
+  staffMode = false,
 }: FilteredEventsPanelProps) => {
   const dispatch = useAppDispatch();
   const mergeNights = useAppSelector((s) => s.nightMerge.enabled);
@@ -1190,25 +1226,27 @@ const FilteredEventsPanel = ({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (activeTab === 'speed') downloadFilteredSpeedCsv(speedDated);
-              else if (activeTab === 'nights') downloadFilteredNightsCsv(nightsDated);
-              else if (activeTab === 'continuous') downloadFilteredContinuousCsv(contDated);
-              else downloadRuleFilteredCsv(filteredRows);
-            }}
-            disabled={activeTab === 'filtered' ? filteredRows.length === 0 : counts[activeTab] === 0}
-            className="btn-primary !px-3 !py-1.5 !text-xs"
-          >
-            <Download size={13} />
-            Download {TAB_META[activeTab].label} CSV
-            {(activeTab === 'filtered' ? filteredRows.length : counts[activeTab]) > 0 && (
-              <span className="ml-1 rounded-full bg-ink-900/10 px-1.5 py-0.5 text-[10px] font-semibold dark:bg-white/10">
-                {activeTab === 'filtered' ? filteredRows.length : counts[activeTab]}
-              </span>
-            )}
-          </button>
+          {!staffMode && (
+            <button
+              type="button"
+              onClick={() => {
+                if (activeTab === 'speed') downloadFilteredSpeedCsv(speedDated);
+                else if (activeTab === 'nights') downloadFilteredNightsCsv(nightsDated);
+                else if (activeTab === 'continuous') downloadFilteredContinuousCsv(contDated);
+                else downloadRuleFilteredCsv(filteredRows);
+              }}
+              disabled={activeTab === 'filtered' ? filteredRows.length === 0 : counts[activeTab] === 0}
+              className="btn-primary !px-3 !py-1.5 !text-xs"
+            >
+              <Download size={13} />
+              Download {TAB_META[activeTab].label} CSV
+              {(activeTab === 'filtered' ? filteredRows.length : counts[activeTab]) > 0 && (
+                <span className="ml-1 rounded-full bg-ink-900/10 px-1.5 py-0.5 text-[10px] font-semibold dark:bg-white/10">
+                  {activeTab === 'filtered' ? filteredRows.length : counts[activeTab]}
+                </span>
+              )}
+            </button>
+          )}
           <div className="relative sm:w-64">
             <Search
               size={14}
@@ -1244,7 +1282,9 @@ const FilteredEventsPanel = ({
       </div>
 
       <div className="mt-4 inline-flex rounded-xl border border-ink-100 bg-ink-50 p-1 dark:border-ink-800 dark:bg-ink-900">
-        {(Object.keys(TAB_META) as EventTab[]).map((t) => {
+        {(Object.keys(TAB_META) as EventTab[])
+          .filter((t) => !(staffMode && t === 'filtered'))
+          .map((t) => {
           const { label, icon: Icon } = TAB_META[t];
           const active = t === activeTab;
           return (

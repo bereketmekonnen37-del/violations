@@ -63,13 +63,13 @@ const BOSS_ITEMS: Item[] = [
 ];
 
 // Boss-created staff: can upload with the same three uploaders as legacy
-// staff, plus browse the boss's Filtered Violations and Transporters pages
-// scoped to their own transporters. Master Fleet is boss-only — the
-// dashboard's per-transporter breakdown is what they get instead.
+// staff, plus browse the boss's Filtered Violations, Transporters, and
+// Master Fleet pages scoped to their assigned transporters.
 const TRANSPORTER_STAFF_ITEMS: Item[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   ...STAFF_UPLOAD_ITEMS,
   { to: '/violations', label: 'Filtered Violations', icon: FileStack },
+  { to: '/master-fleet', label: 'Master Fleet', icon: Trophy },
   { to: '/transporters', label: 'Transporters', icon: Truck },
   { to: '/tasks', label: 'Task Management', icon: ClipboardList },
   { to: '/settings', label: 'Settings', icon: Settings },
