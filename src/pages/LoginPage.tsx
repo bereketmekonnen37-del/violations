@@ -42,7 +42,7 @@ export const LoginPage = () => {
     <div className="relative min-h-screen w-full overflow-hidden">
       {/* ── Full-bleed background image ───────────────────────── */}
       <img
-        src="/loginimg.jpg"
+        src="/loginimg.png"
         alt=""
         className="absolute inset-0 h-full w-full object-cover"
         aria-hidden="true"
