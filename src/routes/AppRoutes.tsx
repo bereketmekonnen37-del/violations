@@ -29,6 +29,7 @@ import { UserManagementPage } from '../pages/UserManagementPage';
 import { ViolationFilesPage } from '../pages/ViolationFilesPage';
 import { TransporterDetailPage } from '../pages/TransporterDetailPage';
 import { TransportersPage } from '../pages/TransportersPage';
+import { TransporterLandingPage } from '../pages/transporter/TransporterLandingPage';
 import { ProtectedRoute } from './ProtectedRoute';
 
 export const AppRoutes = () => {
@@ -38,6 +39,9 @@ export const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+
+      {/* Public transporter marketing landing — standalone layout, no shell */}
+      <Route path="/transporters-portal" element={<TransporterLandingPage />} />
 
       {/* ── Superadmin console — sidebar layout ───────────────── */}
       <Route
