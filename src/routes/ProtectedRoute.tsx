@@ -41,6 +41,11 @@ export const ProtectedRoute = ({
     user.role === 'staff' && (user.assignedTransporters?.length ?? 0) > 0;
 
   if (allow && !allow.includes(user.role)) {
+    // Superadmin always has access to their own console; for all other routes,
+    // redirect to their console instead of /dashboard.
+    if (user.role === 'superadmin') {
+      return <Navigate to="/admin" replace />;
+    }
     if (!(allowTransporterStaff && isTransporterStaff)) {
       return <Navigate to="/dashboard" replace />;
     }

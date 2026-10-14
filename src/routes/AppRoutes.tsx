@@ -1,6 +1,14 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAppSelector } from '../app/store';
 import { AppShell } from '../components/layout/AppShell';
+import { AdminShell } from '../features/adminDashboard/AdminShell';
+import { AdminOverviewPage } from '../pages/admin/AdminOverviewPage';
+import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
+import { AdminUserDetailPage } from '../pages/admin/AdminUserDetailPage';
+import { AdminUploadsPage } from '../pages/admin/AdminUploadsPage';
+import { AdminActivityPage } from '../pages/admin/AdminActivityPage';
+import { AdminRulesPage } from '../pages/admin/AdminRulesPage';
+import { AdminDataHealthPage } from '../pages/admin/AdminDataHealthPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { DriversDataPage } from '../pages/DriversDataPage';
 import { FileDetailsPage } from '../pages/FileDetailsPage';
@@ -25,10 +33,32 @@ import { ProtectedRoute } from './ProtectedRoute';
 
 export const AppRoutes = () => {
   const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
+  const user = useAppSelector((s) => s.auth.user);
 
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+
+      {/* ── Superadmin console — sidebar layout ───────────────── */}
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute allow={['superadmin']}>
+            <AdminShell />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<AdminOverviewPage />} />
+        <Route path="users" element={<AdminUsersPage />} />
+        <Route path="users/:userId" element={<AdminUserDetailPage />} />
+        <Route path="uploads" element={<AdminUploadsPage />} />
+        <Route path="activity" element={<AdminActivityPage />} />
+        <Route path="rules" element={<AdminRulesPage />} />
+        <Route path="data" element={<AdminDataHealthPage />} />
+      </Route>
+
+      {/* Legacy path — redirect to new admin console */}
+      <Route path="/admin-dashboard" element={<Navigate to="/admin" replace />} />
 
       <Route
         element={
@@ -147,7 +177,18 @@ export const AppRoutes = () => {
 
       <Route
         path="*"
-        element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />}
+        element={
+          <Navigate
+            to={
+              isAuthenticated
+                ? user?.role === 'superadmin'
+                  ? '/admin'
+                  : '/dashboard'
+                : '/login'
+            }
+            replace
+          />
+        }
       />
     </Routes>
   );

@@ -12,7 +12,7 @@ interface FormValues {
 }
 
 export const LoginPage = () => {
-  const { isAuthenticated, login } = useAuth();
+  const { isAuthenticated, user, login } = useAuth();
   const navigate = useNavigate();
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,13 +24,16 @@ export const LoginPage = () => {
     defaultValues: { email: '', password: '' },
   });
 
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  if (isAuthenticated) {
+    return <Navigate to={user?.role === 'superadmin' ? '/admin' : '/dashboard'} replace />;
+  }
 
   const onSubmit = async (values: FormValues) => {
     setError(null);
     try {
-      await login(values);
-      navigate('/dashboard', { replace: true });
+      const signedIn = await login(values);
+      const role = signedIn?.role ?? user?.role;
+      navigate(role === 'superadmin' ? '/admin' : '/dashboard', { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to sign in');
     }
