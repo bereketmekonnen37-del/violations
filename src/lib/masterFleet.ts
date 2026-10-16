@@ -952,6 +952,107 @@ export const downloadFilteredNightsCsv = (
   triggerCsvDownload(XLSX.utils.sheet_to_csv(ws), filename);
 };
 
+export type IndividualScope = 'vid' | 'transporter';
+
+const matchesIndividualScope = (
+  scope: IndividualScope,
+  needle: string,
+  evt: { vid: string; transporter: string },
+): boolean => {
+  if (scope === 'vid') {
+    return normalizeVid(evt.vid) === normalizeVid(needle);
+  }
+  const n = needle.trim().toLowerCase();
+  if (!n) return false;
+  return (evt.transporter ?? '').trim().toLowerCase().includes(n);
+};
+
+export const filterEventsForIndividual = (
+  events: FilteredEvents,
+  scope: IndividualScope,
+  needle: string,
+): FilteredEvents => ({
+  speed: events.speed.filter(
+    (e) => !e.allowedVid && !e.allowedLocation && matchesIndividualScope(scope, needle, e),
+  ),
+  nights: events.nights.filter(
+    (e) => !e.allowedVid && !e.allowedLocation && matchesIndividualScope(scope, needle, e),
+  ),
+  continuous: events.continuous.filter(
+    (e) =>
+      !e.allowedVid &&
+      !e.allowedLocation &&
+      !e.underestimated &&
+      matchesIndividualScope(scope, needle, e),
+  ),
+});
+
+/**
+ * Combined per-VID or per-transporter report. Writes a single CSV with three
+ * labelled sections (Speed / Nights / Continuous) so the boss can hand one
+ * file to a driver's manager instead of three separate downloads.
+ */
+export const downloadIndividualReportCsv = (
+  scope: IndividualScope,
+  needle: string,
+  events: FilteredEvents,
+  filename?: string,
+): number => {
+  const scoped = filterEventsForIndividual(events, scope, needle);
+  const rows: (string | number)[][] = [];
+  const scopeLabel = scope === 'vid' ? 'VID' : 'Transporter';
+  rows.push([`FleetWatch individual report — ${scopeLabel}: ${needle}`]);
+  rows.push([`Generated: ${new Date().toISOString()}`]);
+  rows.push([]);
+
+  rows.push(['=== SPEED EVENTS ===', `${scoped.speed.length} row(s)`]);
+  rows.push([
+    'VID', 'Driver Name', 'Transporter', 'Period',
+    'Start', 'End', 'Duration', 'Top Speed', 'Overspeed Position',
+  ]);
+  scoped.speed.forEach((e) => {
+    rows.push([
+      e.vid, e.driverName, e.transporter, e.period,
+      e.start, e.end, e.duration, e.topSpeed, e.overspeedPosition,
+    ]);
+  });
+  rows.push([]);
+
+  rows.push(['=== NIGHT EVENTS ===', `${scoped.nights.length} row(s)`]);
+  rows.push([
+    'VID', 'Driver Name', 'Transporter', 'Period',
+    'Time A', 'Time B', 'Duration', 'Position A', 'Position B',
+  ]);
+  scoped.nights.forEach((e) => {
+    rows.push([
+      e.vid, e.driverName, e.transporter, e.period,
+      e.timeA, e.timeB, e.duration, e.positionA, e.positionB,
+    ]);
+  });
+  rows.push([]);
+
+  rows.push(['=== CONTINUOUS EVENTS ===', `${scoped.continuous.length} row(s)`]);
+  rows.push([
+    'VID', 'Driver Name', 'Transporter', 'Period',
+    'Time A', 'Time B', 'Duration', 'Length', 'Position A', 'Position B',
+  ]);
+  scoped.continuous.forEach((e) => {
+    rows.push([
+      e.vid, e.driverName, e.transporter, e.period,
+      e.timeA, e.timeB, e.duration, e.length, e.positionA, e.positionB,
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const csv = XLSX.utils.sheet_to_csv(ws);
+  const slug = needle.replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40) || 'individual';
+  const name =
+    filename ??
+    `fleetwatch-${scope}-${slug}-${new Date().toISOString().slice(0, 10)}.csv`;
+  triggerCsvDownload(csv, name);
+  return scoped.speed.length + scoped.nights.length + scoped.continuous.length;
+};
+
 export const downloadFilteredContinuousCsv = (
   rows: FilteredContinuousEvent[],
   filename = `fleetwatch-filtered-continuous-${new Date().toISOString().slice(0, 10)}.csv`,

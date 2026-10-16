@@ -38,8 +38,11 @@ import {
   downloadFilteredSpeedCsv,
   downloadFilteredNightsCsv,
   downloadFilteredContinuousCsv,
+  downloadIndividualReportCsv,
+  filterEventsForIndividual,
   type EventThresholds,
   type FilteredEvents,
+  type IndividualScope,
   type MasterFleetRow,
 } from '../lib/masterFleet';
 import { filterFilesByTransporter } from '../lib/transporterScope';
@@ -215,6 +218,7 @@ export const MasterFleetPage = () => {
   const [query, setQuery] = useState('');
   const [rankingOpen, setRankingOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
+  const [individualOpen, setIndividualOpen] = useState(false);
 
   // Master Fleet is a "this month only" view: only events whose own
   // timestamp falls in the current calendar month contribute to the
@@ -419,6 +423,21 @@ export const MasterFleetPage = () => {
           eyebrow={`Master fleet · ${monthLabel}`}
           title="Master fleet"
           subtitle={`${monthLabel} only — Speed, Nights and Continuous events for your assigned transporters. Filter by date or search by VID.`}
+          actions={
+            <button
+              type="button"
+              onClick={() => setIndividualOpen(true)}
+              disabled={noUploads}
+              className="btn-ghost"
+            >
+              <IdCard size={16} /> Individual
+            </button>
+          }
+        />
+        <IndividualReportModal
+          open={individualOpen}
+          onClose={() => setIndividualOpen(false)}
+          events={filteredEvents}
         />
         {noUploads ? (
           <div className="mt-8">
@@ -457,47 +476,57 @@ export const MasterFleetPage = () => {
         )}) and Continuous (≥ ${formatThreshold(
           thresholds.continuous,
         )}). Only events dated this month count; edit thresholds in Rules.`}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {isBoss && (
-              <button
-                type="button"
-                onClick={() => setSaveOpen(true)}
-                disabled={noUploads}
-                className="btn-accent"
-              >
-                <Save size={16} /> Save current violations
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setRankingOpen(true)}
-              disabled={rows.length === 0}
-              className="btn-ghost"
-            >
-              <Layers size={16} /> View full ranking
-              {rows.length > 0 && (
-                <span className="ml-1 rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-semibold text-ink-700 dark:bg-ink-800 dark:text-ink-200">
-                  {rows.length}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => downloadMasterFleetCsv(rows, statusByVid)}
-              disabled={rows.length === 0}
-              className="btn-primary"
-            >
-              <Download size={16} /> Download master fleet CSV
-              {rows.length > 0 && (
-                <span className="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold dark:bg-ink-900/20">
-                  {rows.length}
-                </span>
-              )}
-            </button>
-          </div>
-        }
       />
+
+      <div className="surface mb-6 flex flex-col gap-3 rounded-2xl p-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-stretch gap-2">
+          <button
+            type="button"
+            onClick={() => setIndividualOpen(true)}
+            disabled={noUploads}
+            className="inline-flex h-12 items-center gap-2 rounded-xl bg-brand-orange px-5 text-sm font-semibold text-white shadow-card transition hover:brightness-110 disabled:opacity-40 disabled:hover:brightness-100"
+          >
+            <IdCard size={18} /> Individual
+          </button>
+          <button
+            type="button"
+            onClick={() => setRankingOpen(true)}
+            disabled={rows.length === 0}
+            className="inline-flex h-12 items-center gap-2 rounded-xl bg-brand-blue px-5 text-sm font-semibold text-white shadow-card transition hover:bg-brand-blue-hover disabled:opacity-40 disabled:hover:bg-brand-blue"
+          >
+            <Layers size={18} /> Full ranking
+            {rows.length > 0 && (
+              <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold">
+                {rows.length}
+              </span>
+            )}
+          </button>
+          {isBoss && (
+            <button
+              type="button"
+              onClick={() => setSaveOpen(true)}
+              disabled={noUploads}
+              className="inline-flex h-12 items-center gap-2 rounded-xl bg-ink-900 px-5 text-sm font-semibold text-white shadow-card transition hover:bg-ink-800 disabled:opacity-40 disabled:hover:bg-ink-900 dark:bg-ink-950 dark:hover:bg-ink-800"
+            >
+              <Save size={18} /> Save violations
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => downloadMasterFleetCsv(rows, statusByVid)}
+          disabled={rows.length === 0}
+          className="btn-primary inline-flex h-12 shrink-0 items-center gap-2 !px-5 !text-sm"
+        >
+          <Download size={18} /> Download master fleet CSV
+          {rows.length > 0 && (
+            <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold">
+              {rows.length}
+            </span>
+          )}
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Drivers ranked" value={rows.length} icon={Users} />
@@ -672,6 +701,12 @@ export const MasterFleetPage = () => {
           }}
         />
       )}
+
+      <IndividualReportModal
+        open={individualOpen}
+        onClose={() => setIndividualOpen(false)}
+        events={filteredEvents}
+      />
 
       <Modal
         open={rankingOpen}
@@ -1986,6 +2021,186 @@ const DateFilterPopover = ({
         </div>
       )}
     </div>
+  );
+};
+
+interface IndividualReportModalProps {
+  open: boolean;
+  onClose: () => void;
+  events: FilteredEvents;
+}
+
+const IndividualReportModal = ({
+  open,
+  onClose,
+  events,
+}: IndividualReportModalProps) => {
+  const [scope, setScope] = useState<IndividualScope>('vid');
+  const [input, setInput] = useState('');
+  const [submitted, setSubmitted] = useState<{ scope: IndividualScope; needle: string } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!open) {
+      setInput('');
+      setSubmitted(null);
+    }
+  }, [open]);
+
+  const scoped = useMemo(() => {
+    if (!submitted) return null;
+    return filterEventsForIndividual(events, submitted.scope, submitted.needle);
+  }, [events, submitted]);
+
+  const total = scoped
+    ? scoped.speed.length + scoped.nights.length + scoped.continuous.length
+    : 0;
+
+  const handleSearch = () => {
+    const n = input.trim();
+    if (!n) return;
+    setSubmitted({ scope, needle: n });
+  };
+
+  const handleDownload = () => {
+    if (!submitted) return;
+    downloadIndividualReportCsv(submitted.scope, submitted.needle, events);
+  };
+
+  const sampleRow = scoped?.speed[0] ?? scoped?.nights[0] ?? scoped?.continuous[0] ?? null;
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Individual report"
+      subtitle="Download Speed, Nights and Continuous events for a single VID or Transporter in one CSV."
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <select
+            value={scope}
+            onChange={(e) => {
+              setScope(e.target.value as IndividualScope);
+              setSubmitted(null);
+            }}
+            className="input-base sm:w-40"
+          >
+            <option value="vid">VID</option>
+            <option value="transporter">Transporter</option>
+          </select>
+          <div className="relative flex-1">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
+            />
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSearch();
+              }}
+              placeholder={
+                scope === 'vid' ? 'Enter exact VID…' : 'Enter transporter name (partial ok)…'
+              }
+              className="input-base !pl-9"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleSearch}
+            disabled={!input.trim()}
+            className="btn-primary"
+          >
+            <Search size={14} /> Search
+          </button>
+        </div>
+
+        {submitted && scoped && (
+          <div className="surface-2 rounded-xl p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+                  Results for {submitted.scope === 'vid' ? 'VID' : 'Transporter'}
+                </p>
+                <h4 className="mt-0.5 truncate font-display text-lg font-semibold text-ink-900 dark:text-white">
+                  {submitted.needle}
+                </h4>
+                {sampleRow && (
+                  <p className="mt-1 text-xs text-ink-600 dark:text-ink-300">
+                    {submitted.scope === 'vid' ? (
+                      <>
+                        {sampleRow.driverName || '—'}
+                        {sampleRow.transporter ? ` · ${sampleRow.transporter}` : ''}
+                      </>
+                    ) : (
+                      <>Matched events across this transporter's fleet</>
+                    )}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={total === 0}
+                className="btn-primary"
+              >
+                <Download size={14} /> Download CSV
+                {total > 0 && (
+                  <span className="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold dark:bg-ink-900/20">
+                    {total}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-ink-100 bg-white p-3 dark:border-ink-800 dark:bg-ink-950">
+                <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+                  <Gauge size={12} /> Speed
+                </p>
+                <p className="mt-1 font-display text-2xl font-semibold text-ink-900 dark:text-white">
+                  {scoped.speed.length}
+                </p>
+              </div>
+              <div className="rounded-xl border border-ink-100 bg-white p-3 dark:border-ink-800 dark:bg-ink-950">
+                <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+                  <Moon size={12} /> Nights
+                </p>
+                <p className="mt-1 font-display text-2xl font-semibold text-ink-900 dark:text-white">
+                  {scoped.nights.length}
+                </p>
+              </div>
+              <div className="rounded-xl border border-ink-100 bg-white p-3 dark:border-ink-800 dark:bg-ink-950">
+                <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+                  <RouteIcon size={12} /> Continuous
+                </p>
+                <p className="mt-1 font-display text-2xl font-semibold text-ink-900 dark:text-white">
+                  {scoped.continuous.length}
+                </p>
+              </div>
+            </div>
+
+            {total === 0 && (
+              <p className="mt-3 text-xs text-ink-500 dark:text-ink-400">
+                No events found for this {submitted.scope === 'vid' ? 'VID' : 'transporter'} this
+                month. Try a different value or check your spelling.
+              </p>
+            )}
+          </div>
+        )}
+
+        {!submitted && (
+          <p className="text-xs text-ink-500 dark:text-ink-400">
+            Pick <strong>VID</strong> for an exact match, or <strong>Transporter</strong> to pull
+            every driver whose transporter contains your text. The download bundles Speed, Nights
+            and Continuous events into a single CSV.
+          </p>
+        )}
+      </div>
+    </Modal>
   );
 };
 
