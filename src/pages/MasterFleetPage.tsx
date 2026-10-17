@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   Trophy,
   Users,
+  X,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../app/store';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -2030,6 +2031,12 @@ interface IndividualReportModalProps {
   events: FilteredEvents;
 }
 
+interface IndividualOption {
+  value: string;
+  label: string;
+  sub: string;
+}
+
 const IndividualReportModal = ({
   open,
   onClose,
@@ -2037,109 +2044,393 @@ const IndividualReportModal = ({
 }: IndividualReportModalProps) => {
   const [scope, setScope] = useState<IndividualScope>('vid');
   const [input, setInput] = useState('');
-  const [submitted, setSubmitted] = useState<{ scope: IndividualScope; needle: string } | null>(
+  const [selected, setSelected] = useState<string[]>([]);
+  const [focused, setFocused] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const comboRef = useRef<HTMLDivElement | null>(null);
+  const anchorRef = useRef<HTMLDivElement | null>(null);
+  const [menuRect, setMenuRect] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(
     null,
   );
 
   useEffect(() => {
     if (!open) {
       setInput('');
-      setSubmitted(null);
+      setSelected([]);
+      setFocused(false);
     }
   }, [open]);
 
+  // Close suggestions on outside click. The menu is portaled so we must
+  // treat clicks inside the menu (data-combo-menu) as "inside" too.
+  useEffect(() => {
+    if (!focused) return;
+    const onDocDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (comboRef.current?.contains(target as Node)) return;
+      if (target?.closest('[data-combo-menu="individual"]')) return;
+      setFocused(false);
+    };
+    document.addEventListener('mousedown', onDocDown);
+    return () => document.removeEventListener('mousedown', onDocDown);
+  }, [focused]);
+
+  // Position the portaled suggestions panel directly below the input.
+  // Recomputes on open, resize, and scroll so it stays anchored while the
+  // modal body scrolls underneath.
+  useEffect(() => {
+    if (!focused) {
+      setMenuRect(null);
+      return;
+    }
+    const update = () => {
+      const el = anchorRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const gap = 6;
+      const available = Math.max(window.innerHeight - r.bottom - gap - 12, 180);
+      setMenuRect({
+        left: r.left,
+        top: r.bottom + gap,
+        width: r.width,
+        maxHeight: Math.min(available, 420),
+      });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [focused, selected.length, input, scope]);
+
+  // Full catalog of pickable VIDs / transporters, deduped and sorted.
+  const options = useMemo<IndividualOption[]>(() => {
+    const all = [...events.speed, ...events.nights, ...events.continuous];
+    if (scope === 'vid') {
+      const seen = new Map<string, IndividualOption>();
+      all.forEach((e) => {
+        const key = normalizeVid(e.vid);
+        if (!key || seen.has(key)) return;
+        const parts: string[] = [];
+        if (e.driverName && e.driverName !== '—') parts.push(e.driverName);
+        if (e.transporter) parts.push(e.transporter);
+        seen.set(key, {
+          value: e.vid,
+          label: e.vid,
+          sub: parts.join(' · '),
+        });
+      });
+      return [...seen.values()].sort((a, b) => a.value.localeCompare(b.value));
+    }
+    const seen = new Map<string, IndividualOption>();
+    const vidCounts = new Map<string, Set<string>>();
+    all.forEach((e) => {
+      const t = (e.transporter ?? '').trim();
+      if (!t) return;
+      const key = t.toLowerCase();
+      if (!vidCounts.has(key)) vidCounts.set(key, new Set());
+      vidCounts.get(key)!.add(normalizeVid(e.vid));
+      if (seen.has(key)) return;
+      seen.set(key, { value: t, label: t, sub: '' });
+    });
+    return [...seen.values()]
+      .map((o) => {
+        const count = vidCounts.get(o.value.toLowerCase())?.size ?? 0;
+        return { ...o, sub: `${count} VID${count === 1 ? '' : 's'}` };
+      })
+      .sort((a, b) => a.value.localeCompare(b.value));
+  }, [events, scope]);
+
+  // Live-filtered suggestions. Keeps already-selected items out of the list.
+  const suggestions = useMemo(() => {
+    const q = input.trim().toLowerCase();
+    const selectedKeys = new Set(
+      selected.map((s) => (scope === 'vid' ? normalizeVid(s) : s.trim().toLowerCase())),
+    );
+    const matches = options.filter((o) => {
+      const key = scope === 'vid' ? normalizeVid(o.value) : o.value.trim().toLowerCase();
+      if (selectedKeys.has(key)) return false;
+      if (!q) return true;
+      return (
+        o.value.toLowerCase().includes(q) ||
+        o.sub.toLowerCase().includes(q)
+      );
+    });
+    return matches.slice(0, 50);
+  }, [options, input, selected, scope]);
+
+  useEffect(() => {
+    setHighlightIndex(0);
+  }, [input, scope, selected.length]);
+
   const scoped = useMemo(() => {
-    if (!submitted) return null;
-    return filterEventsForIndividual(events, submitted.scope, submitted.needle);
-  }, [events, submitted]);
+    if (selected.length === 0) return null;
+    return filterEventsForIndividual(events, scope, selected);
+  }, [events, scope, selected]);
 
   const total = scoped
     ? scoped.speed.length + scoped.nights.length + scoped.continuous.length
     : 0;
 
-  const handleSearch = () => {
-    const n = input.trim();
-    if (!n) return;
-    setSubmitted({ scope, needle: n });
+  const addSelection = (value: string) => {
+    const v = value.trim();
+    if (!v) return;
+    const key = scope === 'vid' ? normalizeVid(v) : v.toLowerCase();
+    const dupe = selected.some(
+      (s) => (scope === 'vid' ? normalizeVid(s) : s.toLowerCase()) === key,
+    );
+    if (dupe) return;
+    setSelected((prev) => [...prev, v]);
+    setInput('');
+  };
+
+  const removeSelection = (value: string) => {
+    setSelected((prev) => prev.filter((s) => s !== value));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocused(true);
+      setHighlightIndex((i) => Math.min(i + 1, Math.max(suggestions.length - 1, 0)));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (suggestions[highlightIndex]) {
+        addSelection(suggestions[highlightIndex].value);
+      } else if (input.trim()) {
+        addSelection(input);
+      }
+    } else if (e.key === 'Backspace' && !input && selected.length > 0) {
+      // Pop last chip with backspace when the input is empty.
+      setSelected((prev) => prev.slice(0, -1));
+    } else if (e.key === 'Escape') {
+      setFocused(false);
+    }
   };
 
   const handleDownload = () => {
-    if (!submitted) return;
-    downloadIndividualReportCsv(submitted.scope, submitted.needle, events);
+    if (selected.length === 0) return;
+    downloadIndividualReportCsv(scope, selected, events);
   };
 
-  const sampleRow = scoped?.speed[0] ?? scoped?.nights[0] ?? scoped?.continuous[0] ?? null;
+  const scopeNoun = scope === 'vid' ? 'VID' : 'Transporter';
+  const scopeNounLower = scope === 'vid' ? 'VID' : 'transporter';
 
   return (
     <Modal
       open={open}
       onClose={onClose}
+      widthClassName="w-[92vw] max-w-[960px]"
       title="Individual report"
-      subtitle="Download Speed, Nights and Continuous events for a single VID or Transporter in one CSV."
+      subtitle="Pick one or more VIDs or Transporters — Speed, Nights and Continuous events ship in a single CSV."
     >
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <select
-            value={scope}
-            onChange={(e) => {
-              setScope(e.target.value as IndividualScope);
-              setSubmitted(null);
-            }}
-            className="input-base sm:w-40"
-          >
-            <option value="vid">VID</option>
-            <option value="transporter">Transporter</option>
-          </select>
-          <div className="relative flex-1">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
-            />
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSearch();
+      <div className="flex flex-col gap-5">
+        {/* Scope + multi-select combobox */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <div className="flex flex-col gap-1.5 sm:w-44">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+              Report by
+            </label>
+            <select
+              value={scope}
+              onChange={(e) => {
+                setScope(e.target.value as IndividualScope);
+                setSelected([]);
+                setInput('');
               }}
-              placeholder={
-                scope === 'vid' ? 'Enter exact VID…' : 'Enter transporter name (partial ok)…'
-              }
-              className="input-base !pl-9"
-            />
+              className="input-base"
+            >
+              <option value="vid">VID</option>
+              <option value="transporter">Transporter</option>
+            </select>
           </div>
-          <button
-            type="button"
-            onClick={handleSearch}
-            disabled={!input.trim()}
-            className="btn-primary"
-          >
-            <Search size={14} /> Search
-          </button>
+
+          <div className="flex-1" ref={comboRef}>
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+              {scopeNoun}s to download ({options.length} available)
+            </label>
+            <div className="relative mt-1.5" ref={anchorRef}>
+              <div
+                className="flex min-h-[44px] flex-wrap items-center gap-1.5 rounded-xl border bg-white px-2 py-1.5 focus-within:ring-2 dark:bg-ink-950"
+                style={{
+                  borderColor: 'var(--color-brand-blue-line)',
+                }}
+                onClick={() => {
+                  comboRef.current?.querySelector('input')?.focus();
+                }}
+              >
+                {selected.map((s) => (
+                  <span
+                    key={s}
+                    className="inline-flex max-w-full items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold"
+                    style={{
+                      background: 'var(--color-brand-blue-soft)',
+                      color: 'var(--color-brand-blue-dark)',
+                      border: '1px solid var(--color-brand-blue-line)',
+                    }}
+                  >
+                    {scope === 'vid' ? <IdCard size={11} /> : <Users size={11} />}
+                    <span className="truncate">{s}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSelection(s);
+                      }}
+                      className="rounded-full p-0.5 hover:bg-white/60"
+                      aria-label={`Remove ${s}`}
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+                <div className="relative flex min-w-[180px] flex-1 items-center">
+                  <Search
+                    size={13}
+                    className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-ink-400"
+                  />
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => {
+                      setInput(e.target.value);
+                      setFocused(true);
+                    }}
+                    onFocus={() => setFocused(true)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={
+                      selected.length === 0
+                        ? `Type to search ${scopeNounLower}s…`
+                        : `Add another ${scopeNounLower}…`
+                    }
+                    className="w-full bg-transparent py-1 pl-7 pr-2 text-sm text-ink-900 outline-none placeholder:text-ink-400 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Suggestions dropdown — portaled to <body> with fixed
+                   positioning so it escapes the modal's scroll clip and
+                   can grow tall enough to show the full list. */}
+              {focused && menuRect && (suggestions.length > 0 || input.trim())
+                ? createPortal(
+                    <div
+                      data-combo-menu="individual"
+                      className="overflow-auto rounded-xl bg-white shadow-elev"
+                      style={{
+                        position: 'fixed',
+                        left: menuRect.left,
+                        top: menuRect.top,
+                        width: menuRect.width,
+                        maxHeight: menuRect.maxHeight,
+                        zIndex: 100,
+                        border: '1px solid var(--color-brand-blue-line)',
+                      }}
+                    >
+                      {suggestions.length > 0 ? (
+                        <>
+                          <div
+                            className="sticky top-0 z-10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-500"
+                            style={{
+                              background: 'var(--color-brand-blue-soft)',
+                              borderBottom:
+                                '1px solid var(--color-brand-blue-line)',
+                            }}
+                          >
+                            {suggestions.length} {scopeNounLower}
+                            {suggestions.length === 1 ? '' : 's'} available
+                          </div>
+                          {suggestions.map((o, i) => (
+                            <button
+                              key={o.value}
+                              type="button"
+                              onMouseEnter={() => setHighlightIndex(i)}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                addSelection(o.value);
+                              }}
+                              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition"
+                              style={{
+                                background:
+                                  i === highlightIndex
+                                    ? 'var(--color-brand-blue-soft)'
+                                    : 'transparent',
+                              }}
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                {scope === 'vid' ? (
+                                  <IdCard
+                                    size={13}
+                                    style={{
+                                      color: 'var(--color-brand-blue)',
+                                    }}
+                                  />
+                                ) : (
+                                  <Users
+                                    size={13}
+                                    style={{
+                                      color: 'var(--color-brand-blue)',
+                                    }}
+                                  />
+                                )}
+                                <span className="min-w-0 truncate">
+                                  <span
+                                    className="font-semibold"
+                                    style={{
+                                      color: 'var(--color-brand-blue-dark)',
+                                    }}
+                                  >
+                                    {o.label}
+                                  </span>
+                                  {o.sub && (
+                                    <span className="ml-2 text-xs text-ink-500 dark:text-ink-400">
+                                      {o.sub}
+                                    </span>
+                                  )}
+                                </span>
+                              </span>
+                              <Check size={13} className="opacity-0" />
+                            </button>
+                          ))}
+                        </>
+                      ) : (
+                        <div className="px-3 py-2 text-xs text-ink-500">
+                          No {scopeNounLower}s match "{input.trim()}".
+                        </div>
+                      )}
+                    </div>,
+                    document.body,
+                  )
+                : null}
+            </div>
+            <p className="mt-1.5 text-[11px] text-ink-500 dark:text-ink-400">
+              Click a suggestion or hit <kbd className="rounded border px-1">Enter</kbd> to
+              add it. <kbd className="rounded border px-1">Backspace</kbd> in an empty box
+              removes the last chip.
+            </p>
+          </div>
         </div>
 
-        {submitted && scoped && (
-          <div className="surface-2 rounded-xl p-4">
+        {/* Summary card */}
+        {scoped && (
+          <div className="surface-2 rounded-2xl p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
-                  Results for {submitted.scope === 'vid' ? 'VID' : 'Transporter'}
+                  Selected {scopeNoun.toLowerCase()}s
                 </p>
-                <h4 className="mt-0.5 truncate font-display text-lg font-semibold text-ink-900 dark:text-white">
-                  {submitted.needle}
+                <h4 className="mt-0.5 font-display text-lg font-semibold text-ink-900 dark:text-white">
+                  {selected.length} {scopeNoun.toLowerCase()}
+                  {selected.length === 1 ? '' : 's'} · {total} event
+                  {total === 1 ? '' : 's'}
                 </h4>
-                {sampleRow && (
-                  <p className="mt-1 text-xs text-ink-600 dark:text-ink-300">
-                    {submitted.scope === 'vid' ? (
-                      <>
-                        {sampleRow.driverName || '—'}
-                        {sampleRow.transporter ? ` · ${sampleRow.transporter}` : ''}
-                      </>
-                    ) : (
-                      <>Matched events across this transporter's fleet</>
-                    )}
-                  </p>
-                )}
+                <p className="mt-1 text-xs text-ink-600 dark:text-ink-300">
+                  Bundled into one CSV with Speed, Nights and Continuous sections.
+                </p>
               </div>
               <button
                 type="button"
@@ -2185,18 +2476,17 @@ const IndividualReportModal = ({
 
             {total === 0 && (
               <p className="mt-3 text-xs text-ink-500 dark:text-ink-400">
-                No events found for this {submitted.scope === 'vid' ? 'VID' : 'transporter'} this
-                month. Try a different value or check your spelling.
+                No events found for the current selection. Try different {scopeNounLower}s.
               </p>
             )}
           </div>
         )}
 
-        {!submitted && (
+        {!scoped && (
           <p className="text-xs text-ink-500 dark:text-ink-400">
-            Pick <strong>VID</strong> for an exact match, or <strong>Transporter</strong> to pull
-            every driver whose transporter contains your text. The download bundles Speed, Nights
-            and Continuous events into a single CSV.
+            Add one or more <strong>{scopeNoun.toLowerCase()}s</strong> above to preview the
+            event counts. The download bundles Speed, Nights and Continuous events into a
+            single CSV.
           </p>
         )}
       </div>

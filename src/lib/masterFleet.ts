@@ -954,38 +954,46 @@ export const downloadFilteredNightsCsv = (
 
 export type IndividualScope = 'vid' | 'transporter';
 
-const matchesIndividualScope = (
+const matchesAnyNeedle = (
   scope: IndividualScope,
-  needle: string,
+  needles: string[],
   evt: { vid: string; transporter: string },
 ): boolean => {
+  if (needles.length === 0) return false;
   if (scope === 'vid') {
-    return normalizeVid(evt.vid) === normalizeVid(needle);
+    const vidKey = normalizeVid(evt.vid);
+    return needles.some((n) => normalizeVid(n) === vidKey);
   }
-  const n = needle.trim().toLowerCase();
-  if (!n) return false;
-  return (evt.transporter ?? '').trim().toLowerCase().includes(n);
+  const transporter = (evt.transporter ?? '').trim().toLowerCase();
+  if (!transporter) return false;
+  return needles.some((n) => {
+    const needle = n.trim().toLowerCase();
+    return needle.length > 0 && transporter.includes(needle);
+  });
 };
 
 export const filterEventsForIndividual = (
   events: FilteredEvents,
   scope: IndividualScope,
-  needle: string,
-): FilteredEvents => ({
-  speed: events.speed.filter(
-    (e) => !e.allowedVid && !e.allowedLocation && matchesIndividualScope(scope, needle, e),
-  ),
-  nights: events.nights.filter(
-    (e) => !e.allowedVid && !e.allowedLocation && matchesIndividualScope(scope, needle, e),
-  ),
-  continuous: events.continuous.filter(
-    (e) =>
-      !e.allowedVid &&
-      !e.allowedLocation &&
-      !e.underestimated &&
-      matchesIndividualScope(scope, needle, e),
-  ),
-});
+  needles: string | string[],
+): FilteredEvents => {
+  const list = Array.isArray(needles) ? needles : [needles];
+  return {
+    speed: events.speed.filter(
+      (e) => !e.allowedVid && !e.allowedLocation && matchesAnyNeedle(scope, list, e),
+    ),
+    nights: events.nights.filter(
+      (e) => !e.allowedVid && !e.allowedLocation && matchesAnyNeedle(scope, list, e),
+    ),
+    continuous: events.continuous.filter(
+      (e) =>
+        !e.allowedVid &&
+        !e.allowedLocation &&
+        !e.underestimated &&
+        matchesAnyNeedle(scope, list, e),
+    ),
+  };
+};
 
 /**
  * Combined per-VID or per-transporter report. Writes a single CSV with three
@@ -994,14 +1002,16 @@ export const filterEventsForIndividual = (
  */
 export const downloadIndividualReportCsv = (
   scope: IndividualScope,
-  needle: string,
+  needles: string | string[],
   events: FilteredEvents,
   filename?: string,
 ): number => {
-  const scoped = filterEventsForIndividual(events, scope, needle);
+  const list = (Array.isArray(needles) ? needles : [needles]).filter((n) => n.trim());
+  const scoped = filterEventsForIndividual(events, scope, list);
   const rows: (string | number)[][] = [];
   const scopeLabel = scope === 'vid' ? 'VID' : 'Transporter';
-  rows.push([`FleetWatch individual report — ${scopeLabel}: ${needle}`]);
+  const needleLabel = list.join(', ');
+  rows.push([`FleetWatch individual report — ${scopeLabel}: ${needleLabel}`]);
   rows.push([`Generated: ${new Date().toISOString()}`]);
   rows.push([]);
 
@@ -1045,7 +1055,8 @@ export const downloadIndividualReportCsv = (
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const csv = XLSX.utils.sheet_to_csv(ws);
-  const slug = needle.replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40) || 'individual';
+  const slugSource = list.length === 1 ? list[0] : `${list.length}-${scope}s`;
+  const slug = slugSource.replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40) || 'individual';
   const name =
     filename ??
     `fleetwatch-${scope}-${slug}-${new Date().toISOString().slice(0, 10)}.csv`;
