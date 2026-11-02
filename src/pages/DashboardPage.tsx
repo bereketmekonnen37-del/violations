@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
   BarChart3,
+  CalendarDays,
+  Check,
   Crown,
   FolderArchive,
   Gauge,
@@ -33,6 +35,8 @@ import {
   CurrentMonthChart,
   type DailyBucket,
 } from '../features/dashboard/CurrentMonthChart';
+import { SaveSnapshotModal } from '../features/snapshots/SaveSnapshotModal';
+import { listSnapshots } from '../features/snapshots/snapshotsApi';
 
 /**
  * Legacy staff (no assigned transporters): the dashboard is intentionally a
@@ -127,25 +131,115 @@ const BossDashboard = () => {
     [rawContFiles, isTransporterStaff, matchesBlock],
   );
 
-  // Current-month view sourced from the same uploaded slices Master Fleet
-  // and Transporters already use. We re-filter them by event date so only
-  // this month's events contribute to the stat cards, chart and top
-  // offenders — matching the 928-event dataset the manager sees elsewhere.
+  const [prevMonthSaveOpen, setPrevMonthSaveOpen] = useState(false);
+  const [prevMonthAlreadySaved, setPrevMonthAlreadySaved] = useState<boolean | null>(null);
+
   const now = useMemo(() => new Date(), []);
-  const monthLabel = useMemo(
-    () =>
-      now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
-    [now],
-  );
-  const daysInMonth = useMemo(
-    () => new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
+  // First day of the previous calendar month — used to detect "month rollover"
+  const prevMonthRef = useMemo(
+    () => new Date(now.getFullYear(), now.getMonth() - 1, 1),
     [now],
   );
 
-  const monthFiltered = useMemo(
+  const currentMonthFiltered = useMemo(
     () => filterFilesToCurrentMonth(speedFiles, nightFiles, continuousFiles, now),
     [speedFiles, nightFiles, continuousFiles, now],
   );
+
+  // Any uploaded files exist regardless of what month their events fall in.
+  const hasAnyUploadedFiles =
+    speedFiles.length > 0 ||
+    nightFiles.length > 0 ||
+    continuousFiles.length > 0;
+
+  // Count ACTUAL violations for the current calendar month (after rules).
+  // Raw events that exist but are all whitelisted / below threshold must not
+  // flip the dashboard to an empty current-month view.
+  const currentMonthViolationCount = useMemo(() => {
+    if (
+      currentMonthFiltered.speed.length === 0 &&
+      currentMonthFiltered.nights.length === 0 &&
+      currentMonthFiltered.continuous.length === 0
+    ) return 0;
+    const fe = collectFilteredEvents({
+      speedFiles: currentMonthFiltered.speed,
+      nightFiles: currentMonthFiltered.nights,
+      continuousFiles: currentMonthFiltered.continuous,
+      driverRecords,
+      thresholds,
+      allowedVidsByType,
+      allowedLocationsByType,
+      mergeNights,
+      maxDurationSeconds,
+      underestimatedRule,
+    });
+    const isCounted = (e: {
+      allowedVid: boolean;
+      allowedLocation: boolean;
+      underestimated?: boolean;
+    }) => !e.allowedVid && !e.allowedLocation && !e.underestimated;
+    return (
+      fe.speed.filter(isCounted).length +
+      fe.nights.filter(isCounted).length +
+      fe.continuous.filter(isCounted).length
+    );
+  }, [
+    currentMonthFiltered,
+    driverRecords,
+    thresholds,
+    allowedVidsByType,
+    allowedLocationsByType,
+    mergeNights,
+    maxDurationSeconds,
+    underestimatedRule,
+  ]);
+
+  // Stay on the previous-month view until the current month has REAL violations.
+  // This prevents a whitelisted/empty November upload from hiding October data.
+  const showingPrevMonth = currentMonthViolationCount === 0 && hasAnyUploadedFiles;
+  const displayMonth = useMemo(
+    () => (showingPrevMonth ? prevMonthRef : now),
+    [showingPrevMonth, prevMonthRef, now],
+  );
+  // When in prev-month mode, show ALL uploaded files (no date filter) so nothing
+  // is hidden from the boss before they archive it.
+  const monthFiltered = showingPrevMonth
+    ? { speed: speedFiles, nights: nightFiles, continuous: continuousFiles }
+    : currentMonthFiltered;
+
+  const monthLabel = useMemo(
+    () => displayMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+    [displayMonth],
+  );
+  const currentMonthLabel = useMemo(
+    () => now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+    [now],
+  );
+  // Always refers to the previous calendar month regardless of which month is displayed.
+  const prevMonthLabel = useMemo(
+    () => prevMonthRef.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+    [prevMonthRef],
+  );
+  const daysInMonth = useMemo(
+    () => new Date(displayMonth.getFullYear(), displayMonth.getMonth() + 1, 0).getDate(),
+    [displayMonth],
+  );
+
+  // Check whether the previous month already has a saved snapshot.
+  // Runs whenever there is prev-month data — not just when showing it —
+  // so the save banner persists even after current-month uploads arrive.
+  useEffect(() => {
+    if (!hasAnyUploadedFiles) {
+      setPrevMonthAlreadySaved(null);
+      return;
+    }
+    const label = prevMonthLabel.toLowerCase();
+    listSnapshots()
+      .then((snaps) => {
+        setPrevMonthAlreadySaved(snaps.some((s) => s.name.toLowerCase().includes(label)));
+      })
+      .catch(() => setPrevMonthAlreadySaved(false));
+  }, [hasAnyUploadedFiles, prevMonthLabel]);
 
   const filteredEvents = useMemo(
     () =>
@@ -386,7 +480,9 @@ const BossDashboard = () => {
         title=""
         subtitle={
           isBoss
-            ? `Everything below is scoped to ${monthLabel} only — speed, nights and continuous events dated this month, same as Master fleet.`
+            ? showingPrevMonth
+              ? `Showing ${monthLabel} data — no ${currentMonthLabel} uploads yet. Save a snapshot before uploading new data.`
+              : `Everything below is scoped to ${monthLabel} only — speed, nights and continuous events dated this month, same as Master fleet.`
             : isTransporterStaff
               ? `You are scoped to ${user.assignedTransporters?.length ?? 0} transporter${(user.assignedTransporters?.length ?? 0) === 1 ? '' : 's'}. Only their data appears below.`
               : 'Upload new violation reports and track your submission history.'
@@ -407,6 +503,41 @@ const BossDashboard = () => {
           )
         }
       />
+
+      {isBoss && hasAnyUploadedFiles && (showingPrevMonth || prevMonthAlreadySaved === false) && (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-800 dark:bg-amber-950/40 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <CalendarDays size={20} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div>
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                {showingPrevMonth
+                  ? `${currentMonthLabel} has started — you're still viewing ${prevMonthLabel} data`
+                  : `${prevMonthLabel} hasn't been saved yet`}
+              </p>
+              <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                {showingPrevMonth
+                  ? (prevMonthAlreadySaved
+                      ? 'This month is already saved as a snapshot. Upload new data to switch to the current month.'
+                      : `Save a snapshot of ${prevMonthLabel} before uploading ${currentMonthLabel} data so nothing is lost.`)
+                  : `You now have ${currentMonthLabel} data but ${prevMonthLabel} hasn't been archived yet — save a snapshot so nothing is lost.`}
+              </p>
+            </div>
+          </div>
+          {prevMonthAlreadySaved ? (
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+              <Check size={13} /> Snapshot saved
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPrevMonthSaveOpen(true)}
+              className="btn-primary shrink-0"
+            >
+              <FolderArchive size={15} /> Save {prevMonthLabel} snapshot
+            </button>
+          )}
+        </div>
+      )}
 
       {isBoss && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -922,6 +1053,26 @@ const BossDashboard = () => {
             )}
           </div>
         </section>
+      )}
+
+      {prevMonthSaveOpen && (
+        <SaveSnapshotModal
+          open={prevMonthSaveOpen}
+          onClose={() => setPrevMonthSaveOpen(false)}
+          speedFiles={speedFiles}
+          nightFiles={nightFiles}
+          continuousFiles={continuousFiles}
+          driverRecords={driverRecords}
+          initialName={`${prevMonthLabel} · Monthly snapshot`}
+          rules={{
+            thresholds,
+            maxDurationSeconds,
+            underestimatedRule,
+            allowedVidsByType,
+            allowedLocationsByType,
+            mergeNights,
+          }}
+        />
       )}
     </div>
   );

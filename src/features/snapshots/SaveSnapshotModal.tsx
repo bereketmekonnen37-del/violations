@@ -29,6 +29,8 @@ interface Props {
   driverRecords: DriverRecord[];
   /** The rules Master Fleet is using right now. */
   rules: RuleSet;
+  /** Pre-filled snapshot name (overrides the auto-generated default). */
+  initialName?: string;
 }
 
 const defaultName = (): string =>
@@ -46,10 +48,11 @@ export const SaveSnapshotModal = ({
   continuousFiles,
   driverRecords,
   rules,
+  initialName,
 }: Props) => {
   const navigate = useNavigate();
   const user = useAppSelector((s) => s.auth.user);
-  const [name, setName] = useState(defaultName);
+  const [name, setName] = useState(() => initialName ?? defaultName());
   const [removed, setRemoved] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
